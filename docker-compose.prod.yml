@@ -30,7 +30,7 @@ services:
     ports:
       - "3003:3003"
     env_file:
-      - ./backend/.env.production
+      - ./backend/.env
     environment:
       NODE_ENV: production
       PORT: 3003
