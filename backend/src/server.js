@@ -7,6 +7,7 @@ const tablesRoutes = require('./routes/tables');
 const mappingsRoutes = require('./routes/mappings');
 const creativePerformanceRoutes = require('./routes/creative-performance');
 const cafe24Routes = require('./routes/cafe24');
+const { startScheduler } = require('./scheduler/syncCafe24Orders');
 
 const app = express();
 const PORT = process.env.PORT || 3003;
@@ -57,5 +58,14 @@ app.listen(PORT, '0.0.0.0', () => {
       console.log('Database connected successfully');
     }
   });
+
+  // Start Cafe24 order sync scheduler (if access token is configured)
+  if (process.env.CAFE24_ACCESS_TOKEN) {
+    console.log('[Cafe24] Access token found, starting order sync scheduler...');
+    startScheduler();
+  } else {
+    console.log('[Cafe24] Access token not configured, scheduler disabled');
+    console.log('[Cafe24] Visit https://marketingzon.com/cafe24/auth to authorize');
+  }
 });
 
