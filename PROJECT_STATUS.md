@@ -155,26 +155,95 @@ docker-compose up
 - **API Version**: 2025-09-01
 - **스케줄러**: 1시간마다 자동 실행 (최근 7일 주문 조회)
 
-### 배포 절차
+### Git 저장소
+- **GitHub**: https://github.com/hongkimwork/moadamda-analytics
+- **브랜치**: main
+- **배포 방식**: Git 기반 자동화
+
+### 배포 절차 (Git 기반)
+
+#### 📋 **사전 준비** (최초 1회만)
 ```bash
-# 1. 서버 SSH 접속
-ssh -i C:\Users\HOTSELLER\Downloads\moadamda-key.pem root@211.188.53.220
+# 로컬에서 GitHub 연결 확인
+cd C:\analysis\moadamda-analytics
+git remote -v
+# origin  https://github.com/hongkimwork/moadamda-analytics.git 확인
 
-# 2. 백업 생성 (선택)
-cd ~
-cp -r moadamda-analytics moadamda-analytics-backup-$(date +%Y%m%d)
+# 서버에서 GitHub 연결 (최초 1회)
+ssh root@211.188.53.220  # 비밀번호: L9=FEcbJN!Yd
+cd /root/moadamda-analytics
+git remote -v
+# origin이 없으면:
+git remote add origin https://github.com/hongkimwork/moadamda-analytics.git
+```
 
-# 3. 코드 수정 후 재배포
-cd ~/moadamda-analytics
-docker-compose -f docker-compose.prod.yml down
+#### 🚀 **배포 프로세스** (코드 변경 시마다)
+
+**1️⃣ 로컬에서 코드 수정 및 GitHub 업로드**
+```bash
+# Windows 로컬 PC
+cd C:\analysis\moadamda-analytics
+
+# 수정한 파일 확인
+git status
+
+# 변경사항 커밋
+git add .
+git commit -m "변경 내용 설명"
+
+# GitHub에 업로드
+git push origin main
+```
+
+**2️⃣ 서버 SSH 접속**
+```bash
+# CMD 또는 PowerShell에서
+ssh root@211.188.53.220
+# 비밀번호: L9=FEcbJN!Yd
+```
+
+**3️⃣ 서버에서 최신 코드 다운로드**
+```bash
+cd /root/moadamda-analytics
+
+# GitHub에서 최신 코드 받기
+git pull origin main
+```
+
+**4️⃣ Docker 재빌드 및 재시작**
+```bash
+# 이미지 재빌드 + 컨테이너 재시작 (필수!)
 docker-compose -f docker-compose.prod.yml up -d --build
+```
 
-# 4. 로그 확인
+**5️⃣ 배포 확인**
+```bash
+# 전체 로그 확인
+docker-compose -f docker-compose.prod.yml logs backend --tail 50
+
+# 실시간 로그 확인
 docker-compose -f docker-compose.prod.yml logs backend -f
 
-# 5. Cafe24 스케줄러 확인
+# Cafe24 스케줄러 확인
 docker-compose -f docker-compose.prod.yml logs backend | grep "Cafe24"
 ```
+
+#### ⚠️ **중요 사항**
+
+1. **코드 변경 시 반드시 `--build` 옵션 사용!**
+   - ❌ `docker-compose restart` (이미지 재빌드 안 됨)
+   - ✅ `docker-compose up -d --build` (이미지 재빌드 됨)
+
+2. **Git 기반 배포의 장점**
+   - ✅ 로컬과 서버 코드가 항상 동기화
+   - ✅ 변경 이력 자동 관리
+   - ✅ 파일 하나하나 수동 수정 불필요
+   - ✅ 롤백 쉬움 (git checkout)
+
+3. **.env 파일은 Git에 포함되지 않음**
+   - `.env` 파일은 `.gitignore`에 등록되어 있음
+   - 서버에서 수동으로 관리해야 함
+   - 위치: `/root/moadamda-analytics/backend/.env`
 
 ### 롤백 방법 (문제 발생 시)
 ```bash

@@ -1,0 +1,254 @@
+# Git 기반 배포 규칙
+
+## 📋 개요
+
+moadamda-analytics 프로젝트는 **Git 기반 배포 방식**을 사용합니다.
+로컬에서 코드 수정 → GitHub 업로드 → 서버에서 pull → Docker 재빌드 순서로 진행합니다.
+
+---
+
+## 🔗 Git 저장소
+
+- **GitHub URL**: https://github.com/hongkimwork/moadamda-analytics
+- **브랜치**: main
+- **접근 권한**: Private 저장소
+
+---
+
+## 🚀 배포 프로세스 (5단계)
+
+### 1️⃣ 로컬에서 코드 수정 및 GitHub 업로드
+
+```bash
+# Windows 로컬 PC (C:\analysis\moadamda-analytics)
+cd C:\analysis\moadamda-analytics
+
+# 변경사항 확인
+git status
+
+# 커밋
+git add .
+git commit -m "변경 내용 설명"
+
+# GitHub에 push
+git push origin main
+```
+
+### 2️⃣ 서버 SSH 접속
+
+```bash
+# CMD 또는 PowerShell
+ssh root@211.188.53.220
+# 비밀번호: L9=FEcbJN!Yd
+```
+
+### 3️⃣ 서버에서 최신 코드 받기
+
+```bash
+cd /root/moadamda-analytics
+git pull origin main
+```
+
+### 4️⃣ Docker 재빌드 및 재시작
+
+```bash
+# 코드 변경 시 반드시 --build 옵션 사용!
+docker-compose -f docker-compose.prod.yml up -d --build
+```
+
+### 5️⃣ 배포 확인
+
+```bash
+# 로그 확인
+docker-compose -f docker-compose.prod.yml logs backend --tail 50
+
+# 실시간 로그
+docker-compose -f docker-compose.prod.yml logs backend -f
+```
+
+---
+
+## ⚠️ 중요 사항
+
+### 1. 코드 변경 시 반드시 `--build` 사용
+
+Docker 이미지 안에 코드가 포함되므로, 코드 변경 시 이미지를 다시 빌드해야 합니다.
+
+- ❌ **잘못된 방법**: `docker-compose restart backend`
+  - 컨테이너만 재시작, 이미지는 재빌드 안 됨
+  - 코드 변경사항이 반영되지 않음!
+
+- ✅ **올바른 방법**: `docker-compose up -d --build`
+  - 이미지 재빌드 → 새 컨테이너 생성
+  - 코드 변경사항이 정상 반영됨
+
+### 2. 파일을 직접 수정하지 말 것
+
+서버에서 파일을 직접 수정하면 Git 이력과 불일치가 발생합니다.
+
+- ❌ **하지 말 것**: 
+  - 서버에서 vim/nano로 파일 직접 수정
+  - 서버에서 cat > 파일 생성
+
+- ✅ **올바른 방법**:
+  - 로컬에서 수정 → Git push → 서버에서 pull
+
+### 3. .env 파일은 예외
+
+`.env` 파일은 Git에 포함되지 않으므로 서버에서 수동 관리합니다.
+
+- 위치: `/root/moadamda-analytics/backend/.env`
+- `.env` 수정 후에도 Docker 재시작 필요:
+  ```bash
+  docker-compose -f docker-compose.prod.yml restart backend
+  ```
+
+---
+
+## 🔄 롤백 방법
+
+### Git 커밋 되돌리기
+
+```bash
+# 서버에서
+cd /root/moadamda-analytics
+
+# 이전 커밋으로 되돌리기
+git log --oneline  # 커밋 해시 확인
+git checkout <commit-hash>
+
+# Docker 재시작
+docker-compose -f docker-compose.prod.yml up -d --build
+```
+
+### Git 태그로 롤백
+
+```bash
+# v042로 롤백
+git checkout v042
+docker-compose -f docker-compose.prod.yml up -d --build
+
+# 최신 버전으로 복귀
+git checkout main
+docker-compose -f docker-compose.prod.yml up -d --build
+```
+
+---
+
+## 📚 Git 기본 명령어
+
+### 자주 사용하는 명령어
+
+```bash
+# 현재 상태 확인
+git status
+
+# 변경 이력 확인
+git log --oneline --graph -10
+
+# 원격 저장소 확인
+git remote -v
+
+# 최신 코드 받기
+git pull origin main
+
+# 변경사항 업로드
+git add .
+git commit -m "메시지"
+git push origin main
+
+# 특정 파일만 커밋
+git add 파일명
+git commit -m "메시지"
+git push origin main
+```
+
+### 문제 해결
+
+```bash
+# 로컬 변경사항 버리기 (주의!)
+git reset --hard HEAD
+
+# 충돌 발생 시 서버 코드 강제 초기화
+git fetch origin
+git reset --hard origin/main
+
+# Git 상태 확인
+git status
+git diff
+```
+
+---
+
+## 🎯 AI 개발자 지침
+
+AI가 코드를 수정할 때는 다음 순서를 따릅니다:
+
+1. **로컬에서 파일 수정** (search_replace, write 도구 사용)
+2. **Git 커밋 및 push** (run_terminal_cmd 도구 사용)
+3. **사용자에게 서버 배포 안내**:
+   - "서버에서 다음 명령어를 실행해주세요"
+   - git pull 명령어 제공
+   - docker-compose up -d --build 명령어 제공
+4. **배포 확인 로그 요청**
+
+### AI가 직접 하지 말아야 할 것
+
+- ❌ 서버 파일 직접 수정
+- ❌ 서버에서 cat > 파일 생성
+- ❌ SSH로 서버 접속해서 코드 수정
+
+### AI가 해야 할 것
+
+- ✅ 로컬 파일 수정
+- ✅ Git 커밋 및 push
+- ✅ 사용자에게 배포 가이드 제공
+
+---
+
+## 📝 배포 체크리스트
+
+배포 전 확인사항:
+
+- [ ] 로컬에서 코드 수정 완료
+- [ ] `git status`로 변경사항 확인
+- [ ] `git add .` 실행
+- [ ] `git commit -m "의미있는 메시지"` 실행
+- [ ] `git push origin main` 실행 (성공 확인)
+- [ ] 서버 SSH 접속
+- [ ] `cd /root/moadamda-analytics` 이동
+- [ ] `git pull origin main` 실행 (Fast-forward 확인)
+- [ ] `docker-compose -f docker-compose.prod.yml up -d --build` 실행
+- [ ] 로그 확인으로 정상 작동 확인
+
+---
+
+## 💡 팁
+
+### 배포 스크립트 (선택사항)
+
+서버에 배포 스크립트를 만들면 더 편리합니다:
+
+```bash
+# 서버에서 실행 (최초 1회)
+cat > /root/deploy.sh << 'EOF'
+#!/bin/bash
+echo "🚀 Starting deployment..."
+cd /root/moadamda-analytics
+git pull origin main
+docker-compose -f docker-compose.prod.yml up -d --build
+echo "✅ Deployment completed!"
+docker-compose -f docker-compose.prod.yml logs backend --tail 20
+EOF
+
+chmod +x /root/deploy.sh
+```
+
+**이후 배포는 한 줄로:**
+```bash
+/root/deploy.sh
+```
+
+---
+
+**마지막 업데이트**: 2025-11-04
