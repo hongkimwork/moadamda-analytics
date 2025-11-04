@@ -340,58 +340,51 @@ function OrderDetailPageContent({ orderId }) {
         background: '#fafafa', 
         padding: '16px', 
         borderBottom: '1px solid #f0f0f0',
-        marginBottom: '20px',
-        display: 'flex',
-        gap: '20px',
-        alignItems: 'flex-start'
+        marginBottom: '20px'
       }}>
-        {/* 좌측: 주문 정보 */}
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', fontSize: '13px' }}>
-            <span><strong>주문번호:</strong> {order.order_id}</span>
-            <span><strong>시간:</strong> {dayjs(order.timestamp).format('YYYY-MM-DD HH:mm:ss')}</span>
-            <span><strong>금액:</strong> <span style={{ color: '#1890ff', fontWeight: 'bold' }}>{order.final_payment.toLocaleString()}원</span></span>
-            <Tag color={order.device_type === 'mobile' ? 'blue' : 'green'}>
-              {order.device_type === 'mobile' ? '📱 Mobile' : '💻 PC'}
-            </Tag>
-            <span><strong>IP:</strong> {order.ip_address}</span>
-            <span><strong>UTM:</strong> {order.utm_source || 'direct'}</span>
-          </div>
-          {order.product_name && (
-            <div style={{ marginTop: '8px', fontSize: '12px', color: '#666' }}>
+        <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', fontSize: '13px', marginBottom: '8px' }}>
+          <span><strong>주문번호:</strong> {order.order_id}</span>
+          <span><strong>시간:</strong> {dayjs(order.timestamp).format('YYYY-MM-DD HH:mm:ss')}</span>
+          <span><strong>금액:</strong> <span style={{ color: '#1890ff', fontWeight: 'bold' }}>{order.final_payment.toLocaleString()}원</span></span>
+          <Tag color={order.device_type === 'mobile' ? 'blue' : 'green'}>
+            {order.device_type === 'mobile' ? '📱 Mobile' : '💻 PC'}
+          </Tag>
+          <span><strong>IP:</strong> {order.ip_address}</span>
+          <span><strong>UTM:</strong> {order.utm_source || 'direct'}</span>
+        </div>
+        {order.product_name && (
+          <div style={{ display: 'flex', gap: '20px', alignItems: 'center', fontSize: '12px', color: '#666' }}>
+            <div>
               <strong>상품:</strong> {order.product_name}
             </div>
-          )}
-        </div>
-
-        {/* 우측: 체류시간 통계 */}
-        <div style={{ 
-          minWidth: '180px',
-          fontSize: '12px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '6px',
-          padding: '4px 0'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ color: '#999' }}>⏱️ 총:</span>
-            <strong>{totalSeconds >= 60 
-              ? `${Math.floor(totalSeconds / 60)}분 ${totalSeconds % 60}초`
-              : `${totalSeconds}초`}</strong>
+            {/* 체류시간 통계 - 가로 배치 */}
+            <div style={{ 
+              display: 'flex', 
+              gap: '16px',
+              fontSize: '11px',
+              marginLeft: 'auto'
+            }}>
+              <span>
+                <span style={{ color: '#999' }}>⏱️ 총:</span>{' '}
+                <strong>{totalSeconds >= 60 
+                  ? `${Math.floor(totalSeconds / 60)}분 ${totalSeconds % 60}초`
+                  : `${totalSeconds}초`}</strong>
+              </span>
+              <span>
+                <span style={{ color: '#999' }}>📊 평균:</span>{' '}
+                <strong>{avgSeconds >= 60 
+                  ? `${Math.floor(avgSeconds / 60)}분 ${avgSeconds % 60}초`
+                  : `${avgSeconds}초`}</strong>
+              </span>
+              <span>
+                <span style={{ color: '#999' }}>🔥 최대:</span>{' '}
+                <strong>{maxSeconds >= 60 
+                  ? `${Math.floor(maxSeconds / 60)}분 ${maxSeconds % 60}초`
+                  : `${maxSeconds}초`}</strong>
+              </span>
+            </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ color: '#999' }}>📊 평균:</span>
-            <strong>{avgSeconds >= 60 
-              ? `${Math.floor(avgSeconds / 60)}분 ${avgSeconds % 60}초`
-              : `${avgSeconds}초`}</strong>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ color: '#999' }}>🔥 최대:</span>
-            <strong>{maxSeconds >= 60 
-              ? `${Math.floor(maxSeconds / 60)}분 ${maxSeconds % 60}초`
-              : `${maxSeconds}초`}</strong>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* 페이지 이동 경로 */}
@@ -419,10 +412,10 @@ function OrderDetailPageContent({ orderId }) {
 
         {/* 다단 타임라인 */}
         {page_path.length > 0 ? (
-          <div style={{ display: 'flex', gap: '30px', alignItems: 'flex-start' }}>
+          <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
             {columns.map((columnItems, colIdx) => (
               <div key={colIdx} style={{ flex: 1 }}>
-                <Timeline>
+                <Timeline style={{ fontSize: '12px' }}>
                   {columnItems.map((page, idx) => {
                     const globalIdx = colIdx * MAX_ITEMS_PER_COLUMN + idx;
                     const urlInfo = urlToKorean(page.page_url);
@@ -433,19 +426,20 @@ function OrderDetailPageContent({ orderId }) {
                       <Timeline.Item
                         key={globalIdx}
                         color={isFirst ? 'green' : isLast ? 'red' : 'blue'}
+                        style={{ paddingBottom: '8px' }}
                       >
-                        <div style={{ minHeight: '68px' }}>
-                          <div style={{ fontWeight: 'bold', marginBottom: '6px', fontSize: '13px' }}>
+                        <div style={{ minHeight: '50px' }}>
+                          <div style={{ fontWeight: 'bold', marginBottom: '4px', fontSize: '12px' }}>
                             {showKoreanUrl ? urlInfo.icon : '📄'} {isFirst ? '진입' : isLast ? '구매 완료' : `${globalIdx}단계`}
-                            <span style={{ marginLeft: '8px', color: '#999', fontWeight: 'normal', fontSize: '12px' }}>
+                            <span style={{ marginLeft: '6px', color: '#999', fontWeight: 'normal', fontSize: '11px' }}>
                               {dayjs(page.timestamp).format('HH:mm:ss')}
                             </span>
                           </div>
                           
                           {page.page_title && page.page_title !== '모아담다 온라인 공식몰' && (
                             <div style={{ 
-                              fontSize: '12px', 
-                              marginBottom: '4px', 
+                              fontSize: '11px', 
+                              marginBottom: '3px', 
                               color: '#f97316',
                               fontWeight: '500'
                             }}>
@@ -455,8 +449,8 @@ function OrderDetailPageContent({ orderId }) {
 
                           {showKoreanUrl ? (
                             <div style={{ 
-                              fontSize: '11px', 
-                              marginBottom: '6px', 
+                              fontSize: '10px', 
+                              marginBottom: '4px', 
                               color: '#64748b'
                             }}>
                               {urlInfo.name}
@@ -465,8 +459,8 @@ function OrderDetailPageContent({ orderId }) {
                             <Tooltip title="더블클릭하면 복사됩니다">
                               <div 
                                 style={{ 
-                                  fontSize: '10px', 
-                                  marginBottom: '6px', 
+                                  fontSize: '9px', 
+                                  marginBottom: '4px', 
                                   color: '#666',
                                   maxWidth: '250px',
                                   overflow: 'hidden',
@@ -491,7 +485,7 @@ function OrderDetailPageContent({ orderId }) {
                           {page.time_spent_seconds > 0 && (
                             <Tag 
                               color={page.time_spent_seconds >= 60 ? 'red' : page.time_spent_seconds < 10 ? 'cyan' : 'orange'}
-                              style={{ fontSize: '11px' }}
+                              style={{ fontSize: '10px', padding: '0 6px', lineHeight: '18px' }}
                             >
                               {page.time_spent_seconds >= 60 ? '🔥' : page.time_spent_seconds < 10 ? '⚡' : '⏱️'} 
                               {' '}{
