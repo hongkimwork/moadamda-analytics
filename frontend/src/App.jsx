@@ -45,6 +45,25 @@ function AppLayout() {
   // 메뉴 아이템 정의
   const menuItems = [
     {
+      key: 'lab',
+      icon: <ExperimentOutlined />,
+      label: '실험실',
+      children: [
+        {
+          key: 'orders',
+          icon: <ShoppingOutlined />,
+          label: '주문 분석',
+          onClick: () => navigate('/')
+        },
+        {
+          key: 'creative-performance',
+          icon: <BarChartOutlined />,
+          label: '광고 소재 모수 분석',
+          onClick: () => navigate('/creative-performance')
+        }
+      ]
+    },
+    {
       key: 'page-mapping',
       icon: <LinkOutlined />,
       label: '페이지 매핑',
@@ -98,25 +117,6 @@ function AppLayout() {
         //   label: '실시간 방문자',
         //   onClick: () => navigate('/data/realtime-visitors')
         // }
-      ]
-    },
-    {
-      key: 'lab',
-      icon: <ExperimentOutlined />,
-      label: '실험실',
-      children: [
-        {
-          key: 'orders',
-          icon: <ShoppingOutlined />,
-          label: '주문 분석',
-          onClick: () => navigate('/')
-        },
-        {
-          key: 'creative-performance',
-          icon: <BarChartOutlined />,
-          label: '광고 소재 모수 분석',
-          onClick: () => navigate('/creative-performance')
-        }
       ]
     }
   ];
