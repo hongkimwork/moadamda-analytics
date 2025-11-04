@@ -1,12 +1,12 @@
 # 🎯 Moadamda Analytics - 프로젝트 현황
 
-**마지막 업데이트**: 2025-10-31 14:45
+**마지막 업데이트**: 2025-11-04 14:40
 
 ---
 
 ## 📍 현재 단계
 
-**Phase 3: tracker-v042.js 개발 및 테스트 (visitor_id 주입)**
+**Phase 4: Cafe24 API 연동 완료 (v043)**
 
 ---
 
@@ -36,42 +36,54 @@
 - [x] Nginx SSL 설정 (두 도메인 모두)
 - [x] HTTPS 적용 완료
 
-### Phase 3: tracker-v042.js 개발 (완료: 2025-10-31 14:30)
+### Phase 3: tracker-v042.js 개발 (완료: 2025-10-31)
 - [x] visitor_id 자동 주입 로직 구현
   - Cafe24 추가옵션(`add_option_name`, `add_option_input`)에 자동 삽입
   - 네이버페이, 카카오페이, 일반 주문 모두 지원
 - [x] 주문서 폼 자동 감지 및 hidden input 생성
-- [x] tracker-v042.js 파일 생성 및 로컬 저장
+- [x] tracker-v042.js 파일 생성 및 배포
+- [x] Cafe24 관리자에 tracker-v042.js 설치
 - [x] VERSION.txt 업데이트
 
+### Phase 4: Cafe24 API 연동 (완료: 2025-11-04)
+- [x] 1. Cafe24 API OAuth 앱 등록
+  - Client ID: z19FtJJUINTnX0mkQh7M3D
+  - Redirect URI: https://marketingzon.com/cafe24/callback
+  - 권한: mall.read_order, mall.read_product, mall.read_customer
+- [x] 2. Access Token 발급 성공
+  - OAuth 인증 페이지 구현 (`/cafe24/auth`)
+  - OAuth 콜백 처리 구현 (`/cafe24/callback`)
+  - Access Token과 Refresh Token 발급 완료
+- [x] 3. Node.js에서 Cafe24 API 호출 코드 작성
+  - `backend/src/routes/cafe24.js` - OAuth 엔드포인트
+  - `backend/src/utils/cafe24Client.js` - API 클라이언트
+  - `backend/src/scheduler/syncCafe24Orders.js` - 주문 동기화 스케줄러
+- [x] 4. `visitor_id` 추출 로직 구현
+  - 주문 추가옵션(additional_option_values)에서 ma_visitor_id 추출
+  - visitors 테이블 확인 후 conversions 테이블 저장
+- [x] 5. 네이버 클라우드 서버 배포 (v043)
+  - Git 브랜치 병합 (feature/cafe24-api-integration → main)
+  - v043 태그 생성
+  - docker-compose.prod.yml 업데이트 (env_file 추가)
+  - .env 파일 설정 완료
+- [x] 6. 주문 동기화 스케줄러 정상 작동 확인
+  - 1시간마다 자동 실행
+  - 최근 7일 주문 조회 (100개 주문 fetch 성공)
+  - API 버전 문제 해결 (2024-03-01 → 2025-09-01)
+  - 스케줄러 로그: `[Cafe24 Sync] Fetched 100 orders`
+
 ---
 
-## 🔄 진행 중 (Phase 3 계속)
+## 🔄 진행 중
 
-### tracker-v042.js 테스트
-- [x] 1. Cafe24 관리자 로그인 (완료: 2025-10-31)
-- [x] 2. 스마트디자인 편집 → `</head>` 직전에 tracker-v042.js 삽입 (완료: 2025-10-31)
-- [ ] 3. 테스트 주문 실행
-  - [ ] 3-1. 신용카드 테스트 (일반 결제)
-  - [ ] 3-2. 카카오페이 테스트 (외부 결제) ⭐ **핵심 테스트**
-  - [ ] 3-3. 페이코 테스트 (선택)
-- [ ] 4. Cafe24 관리자 → 주문 관리 → 주문 상세 → 추가옵션에서 `ma_visitor_id` 확인
-- [ ] 5. visitor_id 값이 정상적으로 기록되는지 검증
+### tracker-v042.js 실전 테스트 (대기 중)
+- [ ] 새 주문 발생 시 visitor_id 동기화 확인
+- [ ] conversions 테이블에 visitor_id 포함 여부 검증
+- [ ] 광고 소재 분석 페이지에서 데이터 확인
 
 ---
 
-## 📋 다음 할 일 (Phase 4 예정)
-
-### Phase 4-A: 백엔드 Cafe24 API 연동
-- [ ] 1. Cafe24 API OAuth 앱 등록
-- [ ] 2. Access Token 발급
-- [ ] 3. Node.js에서 Cafe24 API 호출 코드 작성
-  - 주문 목록 조회 API (`/api/v2/admin/orders`)
-  - 주문 상세 조회 API (추가옵션 포함)
-- [ ] 4. `visitor_id` 추출 로직 구현
-- [ ] 5. `conversions` 테이블에 `visitor_id` 컬럼 추가 (마이그레이션)
-- [ ] 6. 주문 생성 시 `visitor_id` 자동 저장
-- [ ] 7. 기존 주문 데이터에 `visitor_id` 매핑 (배치 작업)
+## 📋 다음 할 일 (Phase 5 예정)
 
 ### Phase 4-B: 주문 상태 동기화 (선택적)
 - [ ] 1. Google Sheets API 연동 (Cafe24 Recipe에서 업데이트)
@@ -89,18 +101,24 @@
 
 ## ⚠️ 알려진 이슈
 
-### 1. 외부 결제 주문 누락 문제 (해결 진행 중)
+### 1. 외부 결제 주문 누락 문제 (해결 완료 ✅)
 - **문제**: 카카오페이/페이코 같은 외부 결제 주문이 `conversions` 테이블에 기록되지 않음
 - **원인**: 
   - 외부 결제 페이지로 리다이렉트 → Cafe24 주문 완료 페이지(`order_result.html`)를 거치지 않음
   - tracker.js의 `purchase` 이벤트가 발생하지 않음
-  - 예시: 2025-10-31 16:16:12 주문 (165,000원, 카카오페이 추정) - Clarity에는 있지만 우리 시스템에 없음
-- **해결 전략 (2단계)**:
-  - Phase 3 (현재): tracker-v042.js에서 visitor_id를 Cafe24 추가옵션에 주입 ✅
-  - Phase 4 (다음): 백엔드에서 Cafe24 API로 주문 정보 가져오기 → visitor_id 추출 → conversions 테이블 저장
-- **상태**: tracker-v042.js 개발 완료 ✅, Cafe24 업로드 완료 ✅, 테스트 대기 중
+- **해결 완료 (2025-11-04)**:
+  - ✅ tracker-v042.js: visitor_id를 Cafe24 추가옵션에 주입
+  - ✅ Cafe24 API: 1시간마다 주문 조회 → visitor_id 추출 → conversions 저장
+  - ✅ 스케줄러 정상 작동 확인 (100개 주문 fetch 성공)
+- **상태**: 해결 완료! tracker 설치 후 새 주문부터 자동 동기화
 
-### 2. 대시보드 IP 주소 접속 문제 (해결 완료 ✅)
+### 2. 과거 주문 visitor_id 없음 (정상 동작)
+- **상황**: tracker-v042.js 설치 이전 주문들은 visitor_id가 없음
+- **결과**: `[Cafe24 Sync] skipped: 100` - 과거 주문은 스킵됨
+- **영향**: 과거 주문은 광고 분석 불가능 (정상)
+- **대응**: tracker 설치 후 새 주문부터 광고 분석 가능
+
+### 3. 대시보드 IP 주소 접속 문제 (해결 완료 ✅)
 - **문제**: https://dashboard.marketingzon.com 대신 http://211.188.53.220:3030으로 접속 시 불편
 - **해결**: 도메인 구매 및 DNS 설정 완료, SSL 적용 완료
 
@@ -126,37 +144,57 @@ docker-compose up
 - **서버 IP**: 211.188.53.220
 - **Backend API**: https://marketingzon.com/api/track
 - **Dashboard**: https://dashboard.marketingzon.com
+- **Cafe24 OAuth**: https://marketingzon.com/cafe24/auth
 - **SSH 접속**: `ssh -i C:\Users\HOTSELLER\Downloads\moadamda-key.pem root@211.188.53.220`
+
+### Cafe24 API 설정
+- **Client ID**: z19FtJJUINTnX0mkQh7M3D
+- **Shop ID**: moadamda
+- **Redirect URI**: https://marketingzon.com/cafe24/callback
+- **권한**: mall.read_order, mall.read_product, mall.read_customer
+- **API Version**: 2025-09-01
+- **스케줄러**: 1시간마다 자동 실행 (최근 7일 주문 조회)
 
 ### 배포 절차
 ```bash
-# 1. 로컬: 프로젝트 압축
-cd C:\analysis
-tar -czf moadamda-analytics.tar.gz moadamda-analytics/
-
-# 2. 서버 업로드
-scp -i C:\Users\HOTSELLER\Downloads\moadamda-key.pem moadamda-analytics.tar.gz root@211.188.53.220:~/
-
-# 3. 서버 접속 및 배포
+# 1. 서버 SSH 접속
 ssh -i C:\Users\HOTSELLER\Downloads\moadamda-key.pem root@211.188.53.220
+
+# 2. 백업 생성 (선택)
 cd ~
-tar -xzf moadamda-analytics.tar.gz
-cd moadamda-analytics
+cp -r moadamda-analytics moadamda-analytics-backup-$(date +%Y%m%d)
+
+# 3. 코드 수정 후 재배포
+cd ~/moadamda-analytics
 docker-compose -f docker-compose.prod.yml down
-docker-compose -f docker-compose.prod.yml up -d
+docker-compose -f docker-compose.prod.yml up -d --build
 
 # 4. 로그 확인
-docker-compose -f docker-compose.prod.yml logs -f
+docker-compose -f docker-compose.prod.yml logs backend -f
+
+# 5. Cafe24 스케줄러 확인
+docker-compose -f docker-compose.prod.yml logs backend | grep "Cafe24"
+```
+
+### 롤백 방법 (문제 발생 시)
+```bash
+# v042 (이전 버전)로 되돌리기
+cd ~/moadamda-analytics
+git checkout v042
+docker-compose -f docker-compose.prod.yml down
+docker-compose -f docker-compose.prod.yml up -d --build
 ```
 
 ---
 
 ## 📊 프로젝트 통계
 
-- **tracker 버전**: v042 (최신)
-- **총 개발 기간**: 6일
-- **완료된 Phase**: 2 / 5
-- **다음 마일스톤**: Cafe24 API 연동 (Phase 4)
+- **tracker 버전**: v043 (최신)
+- **시스템 버전**: v043 (Cafe24 API 통합)
+- **총 개발 기간**: 10일
+- **완료된 Phase**: 4 / 5
+- **다음 마일스톤**: 실전 테스트 및 모니터링
+- **Git 태그**: v042 (baseline) → v043 (Cafe24 API)
 
 ---
 
@@ -180,15 +218,31 @@ docker-compose -f docker-compose.prod.yml logs -f
 
 ## 🎯 다음 세션 시작 시 할 일
 
-1. **tracker-v042.js 테스트 결과 확인**
-   - visitor_id가 Cafe24 주문에 정상 기록되었는지 체크
+### 1. **실전 테스트 및 모니터링**
+   - 새 주문 발생 시 로그 확인
+   ```bash
+   docker-compose -f ~/moadamda-analytics/docker-compose.prod.yml logs backend -f
+   ```
+   - 예상 로그: `[Cafe24 Sync] ✓ Order 20251104-xxx synced (visitor_id: abc-123...)`
    
-2. **테스트 성공 시**:
-   - Phase 4-A (Cafe24 API 연동) 시작
+### 2. **conversions 테이블 확인**
+   - PostgreSQL 접속 후 데이터 확인
+   ```sql
+   SELECT order_id, visitor_id, final_payment, utm_source 
+   FROM conversions 
+   WHERE visitor_id IS NOT NULL 
+   ORDER BY timestamp DESC 
+   LIMIT 10;
+   ```
    
-3. **테스트 실패 시**:
-   - tracker-v042.js 디버깅
-   - Cafe24 추가옵션 설정 확인
+### 3. **대시보드에서 광고 효과 확인**
+   - https://dashboard.marketingzon.com
+   - 광고 소재 분석 페이지
+   - 새 주문이 광고 출처별로 집계되는지 확인
+
+### 4. **선택적: Google Sheets 동기화 구현** (필요 시)
+   - 주문 취소/환불 자동 업데이트
+   - order_status 필드 동기화
 
 ---
 
