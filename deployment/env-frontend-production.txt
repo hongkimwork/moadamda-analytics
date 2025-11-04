@@ -1,0 +1,10 @@
+# Production Environment Variables for Frontend
+# Copy this content to frontend/.env.production on the server
+
+# API Configuration
+# Leave empty to use relative paths (nginx proxy will handle routing)
+VITE_API_URL=
+
+# Server Info
+PUBLIC_IP=211.188.53.220
+

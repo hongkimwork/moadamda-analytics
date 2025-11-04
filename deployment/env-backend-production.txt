@@ -1,0 +1,19 @@
+# Production Environment Variables for Backend
+# Copy this content to backend/.env.production on the server
+
+NODE_ENV=production
+PORT=3003
+
+# Database Configuration
+DB_HOST=postgres
+DB_PORT=5432
+DB_USER=moadamda
+DB_PASSWORD=CHANGE_THIS_PASSWORD_IN_PRODUCTION
+DB_NAME=analytics
+
+# CORS Configuration (allow all origins for Cloudflare compatibility)
+CORS_ORIGINS=*
+
+# Server Info
+PUBLIC_IP=211.188.53.220
+
