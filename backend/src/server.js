@@ -6,6 +6,7 @@ const statsRoutes = require('./routes/stats');
 const tablesRoutes = require('./routes/tables');
 const mappingsRoutes = require('./routes/mappings');
 const creativePerformanceRoutes = require('./routes/creative-performance');
+const cafe24Routes = require('./routes/cafe24');
 
 const app = express();
 const PORT = process.env.PORT || 3003;
@@ -32,6 +33,7 @@ app.use('/api/stats', statsRoutes);
 app.use('/api/tables', tablesRoutes);
 app.use('/api/mappings', mappingsRoutes);
 app.use('/api', creativePerformanceRoutes);
+app.use('/', cafe24Routes);  // Cafe24 OAuth routes
 
 // Error handling
 app.use((err, req, res, next) => {
