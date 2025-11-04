@@ -324,30 +324,74 @@ function OrderDetailPageContent({ orderId }) {
     columns.push(page_path.slice(start, end));
   }
 
+  // 체류시간 계산
+  const totalSeconds = page_path.reduce((sum, p) => sum + (p.time_spent_seconds || 0), 0);
+  const avgSeconds = page_path.length > 0 ? Math.round(totalSeconds / page_path.length) : 0;
+  const maxPage = page_path.reduce((max, p) => 
+    (p.time_spent_seconds || 0) > (max.time_spent_seconds || 0) ? p : max, 
+    { time_spent_seconds: 0 }
+  );
+  const maxSeconds = maxPage.time_spent_seconds || 0;
+
   return (
     <div style={{ background: '#fff' }}>
-      {/* 주문 정보 (압축) */}
+      {/* 주문 정보 + 체류시간 통계 */}
       <div style={{ 
         background: '#fafafa', 
         padding: '16px', 
         borderBottom: '1px solid #f0f0f0',
-        marginBottom: '20px'
+        marginBottom: '20px',
+        display: 'flex',
+        gap: '20px',
+        alignItems: 'flex-start'
       }}>
-        <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', fontSize: '13px' }}>
-          <span><strong>주문번호:</strong> {order.order_id}</span>
-          <span><strong>시간:</strong> {dayjs(order.timestamp).format('YYYY-MM-DD HH:mm:ss')}</span>
-          <span><strong>금액:</strong> <span style={{ color: '#1890ff', fontWeight: 'bold' }}>{order.final_payment.toLocaleString()}원</span></span>
-          <Tag color={order.device_type === 'mobile' ? 'blue' : 'green'}>
-            {order.device_type === 'mobile' ? '📱 Mobile' : '💻 PC'}
-          </Tag>
-          <span><strong>IP:</strong> {order.ip_address}</span>
-          <span><strong>UTM:</strong> {order.utm_source || 'direct'}</span>
-        </div>
-        {order.product_name && (
-          <div style={{ marginTop: '8px', fontSize: '12px', color: '#666' }}>
-            <strong>상품:</strong> {order.product_name}
+        {/* 좌측: 주문 정보 */}
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', fontSize: '13px' }}>
+            <span><strong>주문번호:</strong> {order.order_id}</span>
+            <span><strong>시간:</strong> {dayjs(order.timestamp).format('YYYY-MM-DD HH:mm:ss')}</span>
+            <span><strong>금액:</strong> <span style={{ color: '#1890ff', fontWeight: 'bold' }}>{order.final_payment.toLocaleString()}원</span></span>
+            <Tag color={order.device_type === 'mobile' ? 'blue' : 'green'}>
+              {order.device_type === 'mobile' ? '📱 Mobile' : '💻 PC'}
+            </Tag>
+            <span><strong>IP:</strong> {order.ip_address}</span>
+            <span><strong>UTM:</strong> {order.utm_source || 'direct'}</span>
           </div>
-        )}
+          {order.product_name && (
+            <div style={{ marginTop: '8px', fontSize: '12px', color: '#666' }}>
+              <strong>상품:</strong> {order.product_name}
+            </div>
+          )}
+        </div>
+
+        {/* 우측: 체류시간 통계 */}
+        <div style={{ 
+          minWidth: '180px',
+          fontSize: '12px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '6px',
+          padding: '4px 0'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ color: '#999' }}>⏱️ 총:</span>
+            <strong>{totalSeconds >= 60 
+              ? `${Math.floor(totalSeconds / 60)}분 ${totalSeconds % 60}초`
+              : `${totalSeconds}초`}</strong>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ color: '#999' }}>📊 평균:</span>
+            <strong>{avgSeconds >= 60 
+              ? `${Math.floor(avgSeconds / 60)}분 ${avgSeconds % 60}초`
+              : `${avgSeconds}초`}</strong>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ color: '#999' }}>🔥 최대:</span>
+            <strong>{maxSeconds >= 60 
+              ? `${Math.floor(maxSeconds / 60)}분 ${maxSeconds % 60}초`
+              : `${maxSeconds}초`}</strong>
+          </div>
+        </div>
       </div>
 
       {/* 페이지 이동 경로 */}
@@ -373,54 +417,6 @@ function OrderDetailPageContent({ orderId }) {
           </Space>
         </div>
 
-        {/* 체류 시간 통계 */}
-        <Row gutter={12} style={{ marginBottom: '20px' }}>
-          <Col span={8}>
-            <div style={{ background: '#fafafa', padding: '12px', borderRadius: '4px', textAlign: 'center' }}>
-              <div style={{ fontSize: '11px', color: '#999', marginBottom: '4px' }}>총 체류 시간</div>
-              <div style={{ fontSize: '16px', fontWeight: 'bold' }}>
-                ⏱️ {(() => {
-                  const totalSeconds = page_path.reduce((sum, p) => sum + (p.time_spent_seconds || 0), 0);
-                  return totalSeconds >= 60 
-                    ? `${Math.floor(totalSeconds / 60)}분 ${totalSeconds % 60}초`
-                    : `${totalSeconds}초`;
-                })()}
-              </div>
-            </div>
-          </Col>
-          <Col span={8}>
-            <div style={{ background: '#fafafa', padding: '12px', borderRadius: '4px', textAlign: 'center' }}>
-              <div style={{ fontSize: '11px', color: '#999', marginBottom: '4px' }}>평균 체류 시간</div>
-              <div style={{ fontSize: '16px', fontWeight: 'bold' }}>
-                📊 {(() => {
-                  const totalSeconds = page_path.reduce((sum, p) => sum + (p.time_spent_seconds || 0), 0);
-                  const avgSeconds = page_path.length > 0 ? Math.round(totalSeconds / page_path.length) : 0;
-                  return avgSeconds >= 60 
-                    ? `${Math.floor(avgSeconds / 60)}분 ${avgSeconds % 60}초`
-                    : `${avgSeconds}초`;
-                })()}
-              </div>
-            </div>
-          </Col>
-          <Col span={8}>
-            <div style={{ background: '#fafafa', padding: '12px', borderRadius: '4px', textAlign: 'center' }}>
-              <div style={{ fontSize: '11px', color: '#999', marginBottom: '4px' }}>최대 체류 시간</div>
-              <div style={{ fontSize: '16px', fontWeight: 'bold' }}>
-                🔥 {(() => {
-                  const maxPage = page_path.reduce((max, p) => 
-                    (p.time_spent_seconds || 0) > (max.time_spent_seconds || 0) ? p : max, 
-                    { time_spent_seconds: 0 }
-                  );
-                  const maxSeconds = maxPage.time_spent_seconds || 0;
-                  return maxSeconds >= 60 
-                    ? `${Math.floor(maxSeconds / 60)}분 ${maxSeconds % 60}초`
-                    : `${maxSeconds}초`;
-                })()}
-              </div>
-            </div>
-          </Col>
-        </Row>
-
         {/* 다단 타임라인 */}
         {page_path.length > 0 ? (
           <div style={{ display: 'flex', gap: '30px', alignItems: 'flex-start' }}>
@@ -438,7 +434,7 @@ function OrderDetailPageContent({ orderId }) {
                         key={globalIdx}
                         color={isFirst ? 'green' : isLast ? 'red' : 'blue'}
                       >
-                        <div>
+                        <div style={{ minHeight: '68px' }}>
                           <div style={{ fontWeight: 'bold', marginBottom: '6px', fontSize: '13px' }}>
                             {showKoreanUrl ? urlInfo.icon : '📄'} {isFirst ? '진입' : isLast ? '구매 완료' : `${globalIdx}단계`}
                             <span style={{ marginLeft: '8px', color: '#999', fontWeight: 'normal', fontSize: '12px' }}>
@@ -466,9 +462,30 @@ function OrderDetailPageContent({ orderId }) {
                               {urlInfo.name}
                             </div>
                           ) : (
-                            <div style={{ fontSize: '10px', wordBreak: 'break-all', marginBottom: '6px', color: '#666' }}>
-                              {page.page_url}
-                            </div>
+                            <Tooltip title="더블클릭하면 복사됩니다">
+                              <div 
+                                style={{ 
+                                  fontSize: '10px', 
+                                  marginBottom: '6px', 
+                                  color: '#666',
+                                  maxWidth: '250px',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  cursor: 'pointer'
+                                }}
+                                onDoubleClick={async () => {
+                                  try {
+                                    await navigator.clipboard.writeText(page.page_url);
+                                    message.success('URL이 복사되었습니다!');
+                                  } catch (err) {
+                                    message.error('복사에 실패했습니다.');
+                                  }
+                                }}
+                              >
+                                {page.page_url}
+                              </div>
+                            </Tooltip>
                           )}
 
                           {page.time_spent_seconds > 0 && (
