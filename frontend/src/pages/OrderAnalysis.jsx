@@ -365,19 +365,19 @@ function OrderDetailPageContent({ orderId }) {
               marginLeft: 'auto'
             }}>
               <span>
-                <span style={{ color: '#999' }}>⏱️ 총:</span>{' '}
+                <span style={{ color: '#999' }}>⏱️ 총 체류시간:</span>{' '}
                 <strong>{totalSeconds >= 60 
                   ? `${Math.floor(totalSeconds / 60)}분 ${totalSeconds % 60}초`
                   : `${totalSeconds}초`}</strong>
               </span>
               <span>
-                <span style={{ color: '#999' }}>📊 평균:</span>{' '}
+                <span style={{ color: '#999' }}>📊 평균 체류시간:</span>{' '}
                 <strong>{avgSeconds >= 60 
                   ? `${Math.floor(avgSeconds / 60)}분 ${avgSeconds % 60}초`
                   : `${avgSeconds}초`}</strong>
               </span>
               <span>
-                <span style={{ color: '#999' }}>🔥 최대:</span>{' '}
+                <span style={{ color: '#999' }}>🔥 최대 체류시간:</span>{' '}
                 <strong>{maxSeconds >= 60 
                   ? `${Math.floor(maxSeconds / 60)}분 ${maxSeconds % 60}초`
                   : `${maxSeconds}초`}</strong>
@@ -391,8 +391,8 @@ function OrderDetailPageContent({ orderId }) {
       <div style={{ padding: '0 20px 20px 20px' }}>
         <div style={{ 
           display: 'flex', 
-          justifyContent: 'space-between', 
           alignItems: 'center',
+          gap: '12px',
           marginBottom: '16px'
         }}>
           <h3 style={{ margin: 0, fontSize: '16px' }}>
@@ -412,9 +412,9 @@ function OrderDetailPageContent({ orderId }) {
 
         {/* 다단 타임라인 */}
         {page_path.length > 0 ? (
-          <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
+          <div style={{ display: 'flex', gap: '15px', alignItems: 'flex-start' }}>
             {columns.map((columnItems, colIdx) => (
-              <div key={colIdx} style={{ flex: 1 }}>
+              <div key={colIdx} style={{ width: '250px', flexShrink: 0 }}>
                 <Timeline style={{ fontSize: '12px' }}>
                   {columnItems.map((page, idx) => {
                     const globalIdx = colIdx * MAX_ITEMS_PER_COLUMN + idx;
