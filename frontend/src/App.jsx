@@ -12,7 +12,8 @@ import {
   GlobalOutlined,
   LinkOutlined,
   ExperimentOutlined,
-  BarChartOutlined
+  BarChartOutlined,
+  SettingOutlined
 } from '@ant-design/icons';
 import { OrderListPage, OrderDetailPage } from './pages/OrderAnalysis';
 import DataTables from './pages/DataTables';
@@ -64,10 +65,17 @@ function AppLayout() {
       ]
     },
     {
-      key: 'page-mapping',
-      icon: <LinkOutlined />,
-      label: '페이지 매핑',
-      onClick: () => navigate('/page-mapping')
+      key: 'settings',
+      icon: <SettingOutlined />,
+      label: '설정',
+      children: [
+        {
+          key: 'page-mapping',
+          icon: <LinkOutlined />,
+          label: '페이지 매핑',
+          onClick: () => navigate('/page-mapping')
+        }
+      ]
     },
     {
       key: 'data',
@@ -157,7 +165,7 @@ function AppLayout() {
           theme="dark"
           mode="inline"
           selectedKeys={getSelectedKeys()}
-          defaultOpenKeys={['data', 'lab']}
+          defaultOpenKeys={['data', 'lab', 'settings']}
           items={menuItems}
           style={{ borderRight: 0 }}
         />
