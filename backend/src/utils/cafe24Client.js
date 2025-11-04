@@ -161,7 +161,7 @@ class Cafe24Client {
           headers: {
             'Authorization': `Bearer ${this.accessToken}`,
             'Content-Type': 'application/json',
-            'X-Cafe24-Api-Version': '2024-03-01'
+            'X-Cafe24-Api-Version': '2025-09-01'
           }
         }
       );
@@ -198,7 +198,7 @@ class Cafe24Client {
           headers: {
             'Authorization': `Bearer ${this.accessToken}`,
             'Content-Type': 'application/json',
-            'X-Cafe24-Api-Version': '2024-03-01'
+            'X-Cafe24-Api-Version': '2025-09-01'
           }
         }
       );
