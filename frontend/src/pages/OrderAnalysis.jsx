@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Card, Table, DatePicker, Select, Button, Tag, Space, Typography, Descriptions, Timeline, Spin, Alert, Statistic, Row, Col, Switch, Tooltip, Tabs, Modal, message } from 'antd';
-import { ReloadOutlined, ArrowLeftOutlined, ClockCircleOutlined, ShoppingOutlined, GlobalOutlined, HistoryOutlined, LinkOutlined, ApartmentOutlined } from '@ant-design/icons';
+import { Card, Table, DatePicker, Select, Button, Tag, Space, Typography, Descriptions, Timeline, Spin, Alert, Statistic, Row, Col, Switch, Tooltip, Modal, message } from 'antd';
+import { ReloadOutlined, ArrowLeftOutlined, ClockCircleOutlined, ShoppingOutlined, GlobalOutlined, HistoryOutlined, LinkOutlined } from '@ant-design/icons';
 import axios from 'axios';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ko';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { urlToKorean, getUrlDisplayMode, setUrlDisplayMode } from '../utils/urlToKorean';
-import CustomerJourneyFlow from '../components/CustomerJourneyFlow';
 
 dayjs.extend(relativeTime);
 dayjs.locale('ko');
@@ -410,88 +409,77 @@ function OrderDetailPageContent({ orderId }) {
         style={{ marginBottom: '16px' }}
       >
         {page_path.length > 0 ? (
-          <Tabs
-            defaultActiveKey="timeline"
-            items={[
-              {
-                key: 'timeline',
-                label: (
-                  <span>
-                    <ClockCircleOutlined /> 타임라인
-                  </span>
-                ),
-                children: (
-                  <>
-                    {/* URL 표시 토글 */}
-                    <div style={{ marginBottom: '16px', textAlign: 'right' }}>
-                      <Space>
-                        <LinkOutlined />
-                        <span style={{ fontSize: '13px', color: '#666' }}>원본 URL</span>
-                        <Switch 
-                          checked={showKoreanUrl} 
-                          onChange={handleUrlDisplayToggle}
-                          size="small"
-                        />
-                        <span style={{ fontSize: '13px', color: '#666' }}>한글 이름</span>
-                      </Space>
-                    </div>
+          <>
+            {/* URL 표시 토글 */}
+            <div style={{ marginBottom: '16px', textAlign: 'right' }}>
+              <Space>
+                <LinkOutlined />
+                <span style={{ fontSize: '13px', color: '#666' }}>원본 URL</span>
+                <Switch 
+                  checked={showKoreanUrl} 
+                  onChange={handleUrlDisplayToggle}
+                  size="small"
+                />
+                <span style={{ fontSize: '13px', color: '#666' }}>한글 이름</span>
+              </Space>
+            </div>
 
-                    {/* 체류 시간 통계 */}
-                    <Row gutter={16} style={{ marginBottom: '24px' }}>
-                      <Col span={8}>
-                        <Card style={{ background: '#ffffff', border: '1px solid #e5e7eb' }}>
-                          <Statistic
-                            title="총 체류 시간"
-                            value={(() => {
-                              const totalSeconds = page_path.reduce((sum, p) => sum + (p.time_spent_seconds || 0), 0);
-                              return totalSeconds >= 60 
-                                ? `${Math.floor(totalSeconds / 60)}분 ${totalSeconds % 60}초`
-                                : `${totalSeconds}초`;
-                            })()}
-                            valueStyle={{ color: '#374151', fontSize: '18px', fontWeight: '600' }}
-                            prefix="⏱️"
-                          />
-                        </Card>
-                      </Col>
-                      <Col span={8}>
-                        <Card style={{ background: '#ffffff', border: '1px solid #e5e7eb' }}>
-                          <Statistic
-                            title="평균 체류 시간"
-                            value={(() => {
-                              const totalSeconds = page_path.reduce((sum, p) => sum + (p.time_spent_seconds || 0), 0);
-                              const avgSeconds = page_path.length > 0 ? Math.round(totalSeconds / page_path.length) : 0;
-                              return avgSeconds >= 60 
-                                ? `${Math.floor(avgSeconds / 60)}분 ${avgSeconds % 60}초`
-                                : `${avgSeconds}초`;
-                            })()}
-                            valueStyle={{ color: '#374151', fontSize: '18px', fontWeight: '600' }}
-                            prefix="📊"
-                          />
-                        </Card>
-                      </Col>
-                      <Col span={8}>
-                        <Card style={{ background: '#ffffff', border: '1px solid #e5e7eb' }}>
-                          <Statistic
-                            title="최대 체류 시간"
-                            value={(() => {
-                              const maxPage = page_path.reduce((max, p) => 
-                                (p.time_spent_seconds || 0) > (max.time_spent_seconds || 0) ? p : max, 
-                                { time_spent_seconds: 0 }
-                              );
-                              const maxSeconds = maxPage.time_spent_seconds || 0;
-                              return maxSeconds >= 60 
-                                ? `${Math.floor(maxSeconds / 60)}분 ${maxSeconds % 60}초`
-                                : `${maxSeconds}초`;
-                            })()}
-                            valueStyle={{ color: '#374151', fontSize: '18px', fontWeight: '600' }}
-                            prefix="🔥"
-                          />
-                        </Card>
-                      </Col>
-                    </Row>
+            {/* 체류 시간 통계 */}
+            <Row gutter={16} style={{ marginBottom: '24px' }}>
+              <Col span={8}>
+                <Card style={{ background: '#ffffff', border: '1px solid #e5e7eb' }}>
+                  <Statistic
+                    title="총 체류 시간"
+                    value={(() => {
+                      const totalSeconds = page_path.reduce((sum, p) => sum + (p.time_spent_seconds || 0), 0);
+                      return totalSeconds >= 60 
+                        ? `${Math.floor(totalSeconds / 60)}분 ${totalSeconds % 60}초`
+                        : `${totalSeconds}초`;
+                    })()}
+                    valueStyle={{ color: '#374151', fontSize: '18px', fontWeight: '600' }}
+                    prefix="⏱️"
+                  />
+                </Card>
+              </Col>
+              <Col span={8}>
+                <Card style={{ background: '#ffffff', border: '1px solid #e5e7eb' }}>
+                  <Statistic
+                    title="평균 체류 시간"
+                    value={(() => {
+                      const totalSeconds = page_path.reduce((sum, p) => sum + (p.time_spent_seconds || 0), 0);
+                      const avgSeconds = page_path.length > 0 ? Math.round(totalSeconds / page_path.length) : 0;
+                      return avgSeconds >= 60 
+                        ? `${Math.floor(avgSeconds / 60)}분 ${avgSeconds % 60}초`
+                        : `${avgSeconds}초`;
+                    })()}
+                    valueStyle={{ color: '#374151', fontSize: '18px', fontWeight: '600' }}
+                    prefix="📊"
+                  />
+                </Card>
+              </Col>
+              <Col span={8}>
+                <Card style={{ background: '#ffffff', border: '1px solid #e5e7eb' }}>
+                  <Statistic
+                    title="최대 체류 시간"
+                    value={(() => {
+                      const maxPage = page_path.reduce((max, p) => 
+                        (p.time_spent_seconds || 0) > (max.time_spent_seconds || 0) ? p : max, 
+                        { time_spent_seconds: 0 }
+                      );
+                      const maxSeconds = maxPage.time_spent_seconds || 0;
+                      return maxSeconds >= 60 
+                        ? `${Math.floor(maxSeconds / 60)}분 ${maxSeconds % 60}초`
+                        : `${maxSeconds}초`;
+                    })()}
+                    valueStyle={{ color: '#374151', fontSize: '18px', fontWeight: '600' }}
+                    prefix="🔥"
+                  />
+                </Card>
+              </Col>
+            </Row>
 
-                    {/* 타임라인 */}
-                    <Timeline style={{ marginTop: '16px', paddingLeft: '20px' }}>
+            {/* 타임라인 */}
+            <Timeline style={{ marginTop: '16px', paddingLeft: '20px' }}>
               {page_path.map((page, idx) => {
                 const urlInfo = urlToKorean(page.page_url);
                 return (
@@ -549,26 +537,8 @@ function OrderDetailPageContent({ orderId }) {
                   </Timeline.Item>
                 );
               })}
-                    </Timeline>
-                  </>
-                )
-              },
-              {
-                key: 'flowchart',
-                label: (
-                  <span>
-                    <ApartmentOutlined /> 플로우차트
-                  </span>
-                ),
-                children: (
-                  <CustomerJourneyFlow 
-                    pagePath={page_path} 
-                    useKoreanNames={showKoreanUrl}
-                  />
-                )
-              }
-            ]}
-          />
+            </Timeline>
+          </>
         ) : (
           <Alert message="페이지 이동 기록이 없습니다." type="info" />
         )}
