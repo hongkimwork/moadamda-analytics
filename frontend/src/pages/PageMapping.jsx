@@ -186,12 +186,7 @@ function PageMapping() {
           korean_name: values.korean_name.trim()
         });
         
-        // Check for warning (duplicate korean_name)
-        if (response.data.warning) {
-          message.warning(response.data.warning);
-        } else {
-          message.success('페이지 매핑이 완료되었습니다');
-        }
+        message.success('페이지 매핑이 완료되었습니다');
       }
 
       // Close modal
@@ -215,7 +210,8 @@ function PageMapping() {
       if (error.response?.status === 409) {
         message.error('이미 매핑된 URL입니다');
       } else if (error.response?.status === 400) {
-        message.error(error.response.data.message || '입력값을 확인해주세요');
+        // 백엔드에서 error.response.data.error로 메시지 전달
+        message.error(error.response.data.error || error.response.data.message || '입력값을 확인해주세요');
       } else {
         message.error('매핑 저장에 실패했습니다');
       }

@@ -26,6 +26,7 @@ export function OrderListPage() {
   const [dateRange, setDateRange] = useState([dayjs().subtract(7, 'day'), dayjs()]);
   const [deviceFilter, setDeviceFilter] = useState('all');
   const [totalOrders, setTotalOrders] = useState(0);
+  const [userMappings, setUserMappings] = useState({});
   
   // 모달 state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -58,6 +59,12 @@ export function OrderListPage() {
 
   useEffect(() => {
     fetchOrders();
+    
+    // 사용자 정의 매핑 로드
+    fetch(`${API_URL}/api/mappings/lookup`)
+      .then(res => res.json())
+      .then(data => setUserMappings(data))
+      .catch(err => console.error('매핑 로드 실패:', err));
   }, [dateRange, deviceFilter]);
 
   // 모달 열기 핸들러
@@ -229,7 +236,7 @@ export function OrderListPage() {
         destroyOnClose={true}
       >
         {selectedOrderId && (
-          <OrderDetailPageContent orderId={selectedOrderId} />
+          <OrderDetailPageContent orderId={selectedOrderId} userMappings={userMappings} />
         )}
       </Modal>
     </div>
@@ -239,7 +246,7 @@ export function OrderListPage() {
 // ============================================================================
 // 주문 상세 페이지 콘텐츠 (모달과 페이지에서 공통 사용)
 // ============================================================================
-function OrderDetailPageContent({ orderId }) {
+function OrderDetailPageContent({ orderId, userMappings = {} }) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -418,7 +425,7 @@ function OrderDetailPageContent({ orderId }) {
                 <Timeline style={{ fontSize: '12px' }}>
                   {columnItems.map((page, idx) => {
                     const globalIdx = colIdx * MAX_ITEMS_PER_COLUMN + idx;
-                    const urlInfo = urlToKorean(page.page_url);
+                    const urlInfo = urlToKorean(page.page_url, userMappings);
                     const isFirst = globalIdx === 0;
                     const isLast = globalIdx === page_path.length - 1;
                     
@@ -667,5 +674,15 @@ function OrderDetailPageContent({ orderId }) {
 // ============================================================================
 export function OrderDetailPage() {
   const { orderId } = useParams();
-  return <OrderDetailPageContent orderId={orderId} />;
+  const [userMappings, setUserMappings] = useState({});
+
+  useEffect(() => {
+    // 사용자 정의 매핑 로드
+    fetch(`${API_URL}/api/mappings/lookup`)
+      .then(res => res.json())
+      .then(data => setUserMappings(data))
+      .catch(err => console.error('매핑 로드 실패:', err));
+  }, []);
+
+  return <OrderDetailPageContent orderId={orderId} userMappings={userMappings} />;
 }

@@ -204,11 +204,15 @@ router.post('/', async (req, res) => {
       });
     }
     
-    // Check if korean_name already exists (warning only, not blocking)
-    const duplicateNameQuery = `SELECT url FROM url_mappings WHERE korean_name = $1`;
+    // Check if korean_name already exists (block duplicate names)
+    const duplicateNameQuery = `SELECT id FROM url_mappings WHERE korean_name = $1 AND is_excluded = false`;
     const duplicateNameResult = await db.query(duplicateNameQuery, [korean_name]);
     
-    const hasDuplicateName = duplicateNameResult.rows.length > 0;
+    if (duplicateNameResult.rows.length > 0) {
+      return res.status(400).json({ 
+        error: '이미 정의된 매핑 이름입니다.' 
+      });
+    }
     
     // Insert new mapping
     const insertQuery = `
@@ -220,8 +224,7 @@ router.post('/', async (req, res) => {
     
     res.status(201).json({
       success: true,
-      data: insertResult.rows[0],
-      warning: hasDuplicateName ? 'Another URL already uses this Korean name' : null
+      data: insertResult.rows[0]
     });
   } catch (error) {
     console.error('Mapping creation error:', error);
@@ -269,14 +272,18 @@ router.put('/:id', async (req, res) => {
       });
     }
     
-    // Check if korean_name already exists in other mappings (warning only)
+    // Check if korean_name already exists in other mappings (block duplicate names)
     const duplicateNameQuery = `
-      SELECT url FROM url_mappings 
-      WHERE korean_name = $1 AND id != $2
+      SELECT id FROM url_mappings 
+      WHERE korean_name = $1 AND id != $2 AND is_excluded = false
     `;
     const duplicateNameResult = await db.query(duplicateNameQuery, [korean_name, id]);
     
-    const hasDuplicateName = duplicateNameResult.rows.length > 0;
+    if (duplicateNameResult.rows.length > 0) {
+      return res.status(400).json({ 
+        error: '이미 정의된 매핑 이름입니다.' 
+      });
+    }
     
     // Update mapping
     const updateQuery = `
@@ -289,8 +296,7 @@ router.put('/:id', async (req, res) => {
     
     res.json({
       success: true,
-      data: updateResult.rows[0],
-      warning: hasDuplicateName ? 'Another URL already uses this Korean name' : null
+      data: updateResult.rows[0]
     });
   } catch (error) {
     console.error('Mapping update error:', error);
@@ -340,20 +346,27 @@ router.delete('/:id', async (req, res) => {
 
 // ============================================================================
 // 6. GET /api/mappings/lookup
-// Lookup Korean name for a given URL
+// Lookup Korean name for a given URL, or get all mappings if no URL provided
 // ============================================================================
 router.get('/lookup', async (req, res) => {
   try {
     const { url } = req.query;
     
+    // If no URL parameter, return all mappings as a simple map
     if (!url) {
-      return res.status(400).json({ 
-        error: 'Missing parameter',
-        message: 'url parameter is required' 
+      const result = await db.query(
+        'SELECT url, korean_name FROM url_mappings WHERE is_excluded = false'
+      );
+      
+      const mappings = {};
+      result.rows.forEach(row => {
+        mappings[row.url] = row.korean_name;
       });
+      
+      return res.json(mappings);
     }
     
-    // Clean the URL
+    // Single URL lookup (existing functionality)
     const cleanedUrl = cleanUrl(url);
     
     // Lookup mapping
