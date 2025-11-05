@@ -587,6 +587,28 @@ function OrderDetailPageContent({ orderId }) {
                         )}
                       </div>
 
+                      {/* 광고 소재 이름 (utm_content) */}
+                      {utm.utm_content && (
+                        <Tooltip title={utm.utm_content}>
+                          <div style={{ 
+                            fontSize: '11px', 
+                            color: '#666',
+                            marginTop: '6px',
+                            marginBottom: '4px',
+                            maxWidth: '400px',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            padding: '4px 8px',
+                            background: '#fff7e6',
+                            border: '1px solid #ffd591',
+                            borderRadius: '4px'
+                          }}>
+                            <strong>소재:</strong> {utm.utm_content}
+                          </div>
+                        </Tooltip>
+                      )}
+
                       {utm.total_duration > 0 && (
                         <div style={{ fontSize: '12px', color: '#666' }}>
                           체류시간:{' '}

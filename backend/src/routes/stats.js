@@ -1371,15 +1371,81 @@ router.get('/order-detail/:orderId', async (req, res) => {
     const pagePathResult = await db.query(pagePathQuery, [order.session_id]);
 
     // 3. 동일 쿠키 UTM 히스토리 (동일 visitor_id의 모든 UTM 세션)
+    // utm_params에서 누락된 값 복구 + 같은 광고 소재 병합 (5분 이내)
     const utmHistoryQuery = `
+      WITH enriched_utm AS (
+        -- Step 1: utm_params에서 누락된 값 복구
+        SELECT
+          id,
+          visitor_id,
+          COALESCE(utm_source, utm_params->>'utm_source', 'direct') as utm_source,
+          COALESCE(utm_medium, utm_params->>'utm_medium') as utm_medium,
+          COALESCE(utm_campaign, utm_params->>'utm_campaign') as utm_campaign,
+          utm_params->>'utm_content' as utm_content,
+          entry_timestamp,
+          exit_timestamp,
+          duration_seconds,
+          sequence_order
+        FROM utm_sessions
+        WHERE visitor_id = $1
+      ),
+      grouped_sessions AS (
+        -- Step 2: 같은 광고 소재를 5분 이내면 그룹화
+        SELECT
+          eu.*,
+          -- 이전 세션과의 간격 (초)
+          EXTRACT(EPOCH FROM (
+            eu.entry_timestamp - 
+            LAG(eu.exit_timestamp) OVER (
+              PARTITION BY eu.utm_content
+              ORDER BY eu.entry_timestamp
+            )
+          )) as gap_seconds,
+          -- 그룹 번호 생성 (5분=300초 초과 시 새 그룹)
+          SUM(
+            CASE 
+              WHEN EXTRACT(EPOCH FROM (
+                eu.entry_timestamp - 
+                LAG(eu.exit_timestamp) OVER (
+                  PARTITION BY eu.utm_content
+                  ORDER BY eu.entry_timestamp
+                )
+              )) > 300 OR LAG(eu.exit_timestamp) OVER (
+                PARTITION BY eu.utm_content
+                ORDER BY eu.entry_timestamp
+              ) IS NULL
+              THEN 1 
+              ELSE 0 
+            END
+          ) OVER (
+            PARTITION BY eu.utm_content
+            ORDER BY eu.entry_timestamp
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+          ) as session_group
+        FROM enriched_utm eu
+      ),
+      merged_sessions AS (
+        -- Step 3: 그룹별로 병합
+        SELECT
+          MIN(utm_source) as utm_source,
+          MIN(utm_medium) as utm_medium,
+          MIN(utm_campaign) as utm_campaign,
+          MIN(utm_content) as utm_content,
+          MIN(entry_timestamp) as entry_timestamp,
+          MAX(exit_timestamp) as exit_timestamp,
+          SUM(duration_seconds) as total_duration_seconds,
+          MIN(sequence_order) as original_sequence_order
+        FROM grouped_sessions
+        GROUP BY utm_content, session_group
+      )
       SELECT
         utm_source,
         utm_medium,
         utm_campaign,
+        utm_content,
         entry_timestamp,
-        duration_seconds
-      FROM utm_sessions
-      WHERE visitor_id = $1
+        total_duration_seconds as duration_seconds
+      FROM merged_sessions
       ORDER BY entry_timestamp ASC
     `;
     const utmHistoryResult = await db.query(utmHistoryQuery, [order.visitor_id]);
@@ -1470,6 +1536,7 @@ router.get('/order-detail/:orderId', async (req, res) => {
         utm_source: row.utm_source || 'direct',
         utm_medium: row.utm_medium || null,
         utm_campaign: row.utm_campaign || null,
+        utm_content: row.utm_content || null,
         entry_time: row.entry_timestamp,
         total_duration: row.duration_seconds || 0
       })),
