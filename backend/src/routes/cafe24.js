@@ -41,14 +41,16 @@ router.get('/cafe24/callback', async (req, res) => {
             body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
             .success { background: #d4edda; border: 1px solid #c3e6cb; padding: 20px; border-radius: 5px; }
             .token { background: #f8f9fa; padding: 10px; border-radius: 3px; margin: 10px 0; font-family: monospace; word-break: break-all; }
-            .warning { background: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 5px; margin-top: 20px; }
+            .info { background: #d1ecf1; border: 1px solid #bee5eb; padding: 15px; border-radius: 5px; margin-top: 20px; }
             code { background: #e9ecef; padding: 2px 5px; border-radius: 3px; }
+            h3 { margin-top: 0; }
           </style>
         </head>
         <body>
           <div class="success">
             <h1>✅ Cafe24 OAuth 인증 완료!</h1>
-            <p>Access Token이 성공적으로 발급되었습니다.</p>
+            <p>Access Token이 성공적으로 발급되어 <strong>데이터베이스에 저장</strong>되었습니다.</p>
+            <p>이제 Cafe24 API 연동이 자동으로 활성화됩니다! 🎉</p>
           </div>
 
           <h2>📋 발급된 토큰 정보</h2>
@@ -60,18 +62,15 @@ router.get('/cafe24/callback', async (req, res) => {
 
           <p><strong>만료 시간:</strong> ${tokens.expires_at}</p>
 
-          <div class="warning">
-            <h3>⚠️ 다음 단계 (수동 설정 필요)</h3>
-            <p>다음 파일을 열어서 토큰을 저장해주세요:</p>
-            <code>C:\\analysis\\moadamda-analytics\\backend\\.env</code>
-            
-            <p>다음 두 줄을 찾아서 값을 채워주세요:</p>
-            <pre>
-CAFE24_ACCESS_TOKEN=${tokens.access_token}
-CAFE24_REFRESH_TOKEN=${tokens.refresh_token}
-            </pre>
-
-            <p>저장 후 백엔드를 재시작하면 Cafe24 API 연동이 활성화됩니다.</p>
+          <div class="info">
+            <h3>🚀 자동 갱신 기능 활성화!</h3>
+            <ul>
+              <li>✅ Access Token (2시간 유효) → 만료 시 <strong>자동 갱신</strong></li>
+              <li>✅ Refresh Token (2주 유효) → 갱신 시 <strong>2주 자동 연장</strong></li>
+              <li>✅ 주문 동기화 스케줄러 (1시간마다) → <strong>자동 실행</strong></li>
+              <li>✅ 서버 재시작해도 토큰 유지 (DB 저장)</li>
+            </ul>
+            <p><strong>결과:</strong> 2주에 1번 이상 주문 조회가 있으면 <strong>영구 자동화!</strong> 🎯</p>
           </div>
 
           <p style="margin-top: 30px;">
