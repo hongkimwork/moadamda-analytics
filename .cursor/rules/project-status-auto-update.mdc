@@ -1,0 +1,193 @@
+---
+description: PROJECT_STATUS.md 자동 업데이트 규칙 (최우선 강제 적용)
+alwaysApply: true
+globs:
+  - "**/*.js"
+  - "**/*.ts"
+  - "**/*.jsx"
+  - "**/*.tsx"
+  - "**/*.md"
+  - "backend/**/*"
+  - "frontend/**/*"
+---
+
+# 🚨 PROJECT_STATUS.md 자동 업데이트 규칙 (CRITICAL)
+
+## ⚠️ 절대 규칙 (MUST FOLLOW)
+
+### 작업 완료 시 PROJECT_STATUS.md를 **즉시 자동으로** 업데이트!
+
+**트리거 (언제):**
+- ✅ 백엔드 코드 수정 후
+- ✅ 프론트엔드 코드 수정 후
+- ✅ 파일 삭제/추가 후
+- ✅ DB 스키마 변경 후
+- ✅ 시스템 설정 변경 후
+- ✅ 배포 완료 후
+- ✅ Phase 전환 시
+- ✅ **Git 커밋 전 (필수!)**
+
+**절대 하지 말 것:**
+- ❌ 사용자가 요청하기 전까지 미루기
+- ❌ "나중에 업데이트하겠다"는 생각
+- ❌ PROJECT_STATUS.md 업데이트 없이 Git 커밋
+- ❌ 사용자에게 "업데이트할까요?" 묻기
+
+**반드시 할 것:**
+- ✅ 작업 완료 즉시 자동 업데이트
+- ✅ 사용자에게 묻지 말고 자동 처리
+- ✅ Git 커밋에 항상 포함
+- ✅ "마지막 업데이트" 시간 갱신
+
+---
+
+## 📋 자동 업데이트 워크플로우
+
+```
+1. 작업 수행 (코드 수정, 파일 삭제 등)
+   ↓
+2. 작업 완료 확인
+   ↓
+3. PROJECT_STATUS.md 자동 열기 ← 자동!
+   ↓
+4. 해당 Phase/작업 찾기
+   ↓
+5. 체크박스 업데이트 (`[ ]` → `[x]`) ← 자동!
+   ↓
+6. 완료 시간 기록: (완료: YYYY-MM-DD) ← 자동!
+   ↓
+7. "마지막 업데이트" 시간 갱신 ← 자동!
+   ↓
+8. Git add PROJECT_STATUS.md ← 자동!
+   ↓
+9. Git 커밋 (PROJECT_STATUS.md 포함)
+   ↓
+10. GitHub Push
+```
+
+---
+
+## 📝 업데이트 형식 예시
+
+### Phase 완료
+```markdown
+### Phase 4: 코어 시스템 안정화 (완료: 2025-11-05)
+- [x] 1. Cafe24 API 연동 시도
+  - OAuth 인증 구현 완료
+  - **결과**: visitor_id를 추출할 수 없어 실질적 효용 없음 확인
+- [x] 2. Cafe24 API 연동 제거
+  - 파일 삭제 (3개)
+  - server.js 정리
+  - 불필요한 API 호출 제거
+```
+
+### 진행 중 작업 업데이트
+```markdown
+## 🔄 진행 중
+
+### 시스템 안정화 모니터링
+- [x] Cafe24 API 제거 완료
+- [x] 백엔드 정상 작동 확인
+- [ ] 일반 결제 주문 추적 모니터링 (지속적)
+```
+
+### 알려진 이슈 업데이트
+```markdown
+### 1. 외부 결제 주문 추적 불가 (미해결 ⚠️)
+- **문제**: 카카오페이/네이버페이 주문이 추적 안 됨
+- **원인**: 외부 결제 페이지 이탈로 purchase 이벤트 미전송
+- **현재 상태**:
+  - ✅ 일반 결제: 정상 추적
+  - ❌ 외부 결제: 추적 불가
+- **향후 계획**: Google Sheets + 매칭 로직 (보류 중)
+```
+
+---
+
+## 🎯 Git 커밋 필수 포함
+
+**잘못된 예:**
+```bash
+git add backend/src/server.js
+git commit -m "Remove Cafe24 API"
+git push origin main
+# ❌ PROJECT_STATUS.md 빠짐!
+```
+
+**올바른 예:**
+```bash
+git add backend/src/server.js
+git add PROJECT_STATUS.md  # ← 필수!
+git commit -m "[Refactor] Remove Cafe24 API
+
+- Removed unused Cafe24 API integration
+- Updated PROJECT_STATUS.md: Phase 4 completion"
+git push origin main
+```
+
+---
+
+## 🔍 AI 개발자 자가 점검
+
+매 작업 완료 후 반드시 확인:
+
+### 체크리스트
+- [ ] 1. PROJECT_STATUS.md를 열었는가?
+- [ ] 2. 해당 Phase를 찾았는가?
+- [ ] 3. 체크박스를 `[x]`로 변경했는가?
+- [ ] 4. 완료 시간을 기록했는가?
+- [ ] 5. "마지막 업데이트" 시간을 갱신했는가?
+- [ ] 6. `git add PROJECT_STATUS.md`를 실행했는가?
+- [ ] 7. Git 커밋 메시지에 PROJECT_STATUS.md 업데이트 명시했는가?
+
+### 모든 항목이 YES가 아니면 커밋하지 말 것!
+
+---
+
+## 📊 참조 파일
+
+- **메인 문서**: `moadamda-analytics/PROJECT_STATUS.md`
+- **Git 배포 규칙**: `moadamda-analytics/.cursor/rules/git-deployment.mdc`
+- **프로젝트 추적**: `moadamda-analytics/.cursor/rules/project-tracker.mdc`
+
+---
+
+## 💡 규칙 준수 사례
+
+### ✅ 좋은 예
+```
+작업: Cafe24 API 제거
+1. 파일 삭제 (cafe24.js, cafe24Client.js, syncCafe24Orders.js)
+2. server.js 수정
+3. PROJECT_STATUS.md 자동 업데이트 (즉시!) ← Good!
+4. Git 커밋 (PROJECT_STATUS.md 포함)
+5. Push 완료
+```
+
+### ❌ 나쁜 예
+```
+작업: Cafe24 API 제거
+1. 파일 삭제
+2. server.js 수정
+3. Git 커밋 (PROJECT_STATUS.md 빠짐!) ← Bad!
+4. Push
+5. 사용자: "PROJECT_STATUS.md도 수정해야 하지 않나요?"
+6. 그제서야 수정함 ← 너무 늦음!
+```
+
+---
+
+## 🚨 위반 시 대응
+
+만약 PROJECT_STATUS.md 업데이트를 깜빡했다면:
+
+1. **즉시 인정**: "죄송합니다. PROJECT_STATUS.md 업데이트를 깜빡했습니다."
+2. **즉시 수정**: 바로 PROJECT_STATUS.md 업데이트
+3. **추가 커밋**: `git commit -m "[Docs] Update PROJECT_STATUS.md (missed)"`
+4. **학습**: 다음부터 절대 빠뜨리지 않기
+
+---
+
+**규칙 버전**: v2 (2025-11-05)
+**우선순위**: CRITICAL (최우선)
+**강제 적용**: YES
