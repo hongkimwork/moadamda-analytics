@@ -212,7 +212,8 @@ class Cafe24Client {
 
       const params = new URLSearchParams({
         limit: Math.min(limit, 100), // Max 100 per request
-        offset: offset
+        offset: offset,
+        embed: 'items'  // Include items data (required for additional_option_values)
       });
 
       if (start_date) params.append('start_date', start_date);
