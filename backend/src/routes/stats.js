@@ -1193,8 +1193,19 @@ router.get('/orders', async (req, res) => {
         c.session_id,
         s.ip_address,
         v.device_type,
-        v.utm_source,
-        v.utm_campaign,
+        -- UTM 데이터: utm_sessions 우선, 없으면 visitors 테이블 사용
+        COALESCE(
+          (SELECT us.utm_source FROM utm_sessions us 
+           WHERE us.visitor_id = c.visitor_id 
+           ORDER BY us.entry_timestamp DESC LIMIT 1),
+          v.utm_source
+        ) as utm_source,
+        COALESCE(
+          (SELECT us.utm_campaign FROM utm_sessions us 
+           WHERE us.visitor_id = c.visitor_id 
+           ORDER BY us.entry_timestamp DESC LIMIT 1),
+          v.utm_campaign
+        ) as utm_campaign,
         -- Get first product name from events table
         (
           SELECT e.product_name 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Card, Table, DatePicker, Select, Button, Tag, Space, Typography, Descriptions, Timeline, Spin, Alert, Statistic, Row, Col, Switch, Tooltip, Modal, message } from 'antd';
-import { ReloadOutlined, ArrowLeftOutlined, ClockCircleOutlined, ShoppingOutlined, GlobalOutlined, HistoryOutlined, LinkOutlined } from '@ant-design/icons';
+import { ReloadOutlined, ArrowLeftOutlined, ClockCircleOutlined, ShoppingOutlined, GlobalOutlined, HistoryOutlined, LinkOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import axios from 'axios';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ko';
@@ -505,144 +505,159 @@ function OrderDetailPageContent({ orderId }) {
         )}
       </div>
 
-      {/* UTM 접촉 이력 섹션 */}
-      {utm_history && utm_history.length > 0 && (
-        <div style={{ 
-          padding: '20px', 
-          background: '#f9fafb',
-          borderTop: '1px solid #e5e7eb'
-        }}>
-          <h3 style={{ margin: '0 0 16px 0', fontSize: '16px' }}>
-            <HistoryOutlined /> 고객 접촉 이력 (UTM History)
-          </h3>
-          
-          {/* 접촉 횟수 및 기간 요약 */}
-          <div style={{ 
-            marginBottom: '16px',
-            padding: '12px',
-            background: '#fff',
-            borderRadius: '6px',
-            border: '1px solid #e5e7eb',
-            fontSize: '13px'
-          }}>
-            <Space size="large">
-              <span>
-                <strong>총 접촉 횟수:</strong>{' '}
-                <span style={{ color: '#1890ff', fontWeight: 600 }}>{utm_history.length}회</span>
-              </span>
-              {utm_history.length > 0 && (
+      {/* UTM 접촉 이력 섹션 - 항상 표시 */}
+      <div style={{ 
+        padding: '20px', 
+        background: '#f9fafb',
+        borderTop: '1px solid #e5e7eb'
+      }}>
+        <h3 style={{ margin: '0 0 16px 0', fontSize: '16px' }}>
+          <HistoryOutlined /> 고객 접촉 이력 (UTM History)
+        </h3>
+        
+        {utm_history && utm_history.length > 0 ? (
+          <>
+            {/* 접촉 횟수 및 기간 요약 */}
+            <div style={{ 
+              marginBottom: '16px',
+              padding: '12px',
+              background: '#fff',
+              borderRadius: '6px',
+              border: '1px solid #e5e7eb',
+              fontSize: '13px'
+            }}>
+              <Space size="large">
                 <span>
-                  <strong>첫 접촉 이후:</strong>{' '}
-                  <span style={{ color: '#52c41a', fontWeight: 600 }}>
-                    {dayjs(order.timestamp).diff(dayjs(utm_history[0].entry_time), 'day')}일 경과
-                  </span>
+                  <strong>총 접촉 횟수:</strong>{' '}
+                  <span style={{ color: '#1890ff', fontWeight: 600 }}>{utm_history.length}회</span>
                 </span>
-              )}
-            </Space>
-          </div>
+                {utm_history.length > 0 && (
+                  <span>
+                    <strong>첫 접촉 이후:</strong>{' '}
+                    <span style={{ color: '#52c41a', fontWeight: 600 }}>
+                      {dayjs(order.timestamp).diff(dayjs(utm_history[0].entry_time), 'day')}일 경과
+                    </span>
+                  </span>
+                )}
+              </Space>
+            </div>
 
-          {/* UTM 접촉 타임라인 */}
-          <div style={{ 
-            background: '#fff',
-            padding: '16px',
-            borderRadius: '6px',
-            border: '1px solid #e5e7eb'
-          }}>
-            <Timeline>
-              {utm_history.map((utm, index) => {
-                const isFirst = index === 0;
-                const isLast = index === utm_history.length - 1;
-                const touchDate = dayjs(utm.entry_time);
-                const durationMinutes = Math.floor(utm.total_duration / 60);
-                const durationSeconds = utm.total_duration % 60;
+            {/* UTM 접촉 타임라인 */}
+            <div style={{ 
+              background: '#fff',
+              padding: '16px',
+              borderRadius: '6px',
+              border: '1px solid #e5e7eb'
+            }}>
+              <Timeline>
+                {utm_history.map((utm, index) => {
+                  const isFirst = index === 0;
+                  const isLast = index === utm_history.length - 1;
+                  const touchDate = dayjs(utm.entry_time);
+                  const durationMinutes = Math.floor(utm.total_duration / 60);
+                  const durationSeconds = utm.total_duration % 60;
 
-                return (
-                  <Timeline.Item
-                    key={index}
-                    color={isFirst ? 'green' : isLast ? 'red' : 'blue'}
-                  >
-                    <div style={{ fontSize: '13px' }}>
-                      <div style={{ marginBottom: '6px' }}>
-                        <strong style={{ fontSize: '14px' }}>
-                          {isFirst ? '첫 접촉' : isLast ? '최종 접촉' : `${index + 1}번째 접촉`}
-                        </strong>
-                        <span style={{ marginLeft: '8px', color: '#999', fontSize: '12px' }}>
-                          {touchDate.format('MM/DD HH:mm')}
-                        </span>
-                      </div>
-                      
-                      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '4px' }}>
-                        <Tag color="blue" style={{ margin: 0 }}>
-                          {utm.utm_source || 'direct'}
-                        </Tag>
-                        {utm.utm_medium && (
-                          <Tag color="cyan" style={{ margin: 0 }}>
-                            {utm.utm_medium}
-                          </Tag>
-                        )}
-                        {utm.utm_campaign && (
-                          <Tag color="purple" style={{ margin: 0 }}>
-                            {utm.utm_campaign}
-                          </Tag>
-                        )}
-                      </div>
-
-                      {/* 광고 소재 이름 (utm_content) */}
-                      {utm.utm_content && (
-                        <Tooltip title={utm.utm_content}>
-                          <div style={{ 
-                            fontSize: '11px', 
-                            color: '#666',
-                            marginTop: '6px',
-                            marginBottom: '4px',
-                            maxWidth: '400px',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            padding: '4px 8px',
-                            background: '#fff7e6',
-                            border: '1px solid #ffd591',
-                            borderRadius: '4px'
-                          }}>
-                            <strong>소재:</strong> {utm.utm_content}
-                          </div>
-                        </Tooltip>
-                      )}
-
-                      {utm.total_duration > 0 && (
-                        <div style={{ fontSize: '12px', color: '#666' }}>
-                          체류시간:{' '}
-                          <span style={{ fontWeight: 500 }}>
-                            {durationMinutes > 0 
-                              ? `${durationMinutes}분 ${durationSeconds}초`
-                              : `${durationSeconds}초`
-                            }
+                  return (
+                    <Timeline.Item
+                      key={index}
+                      color={isFirst ? 'green' : isLast ? 'red' : 'blue'}
+                    >
+                      <div style={{ fontSize: '13px' }}>
+                        <div style={{ marginBottom: '6px' }}>
+                          <strong style={{ fontSize: '14px' }}>
+                            {isFirst ? '첫 접촉' : isLast ? '최종 접촉' : `${index + 1}번째 접촉`}
+                          </strong>
+                          <span style={{ marginLeft: '8px', color: '#999', fontSize: '12px' }}>
+                            {touchDate.format('MM/DD HH:mm')}
                           </span>
                         </div>
-                      )}
-                    </div>
-                  </Timeline.Item>
-                );
-              })}
-            </Timeline>
-          </div>
+                        
+                        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                          <Tag color="blue" style={{ margin: 0 }}>
+                            {utm.utm_source || 'direct'}
+                          </Tag>
+                          {utm.utm_medium && (
+                            <Tag color="cyan" style={{ margin: 0 }}>
+                              {utm.utm_medium}
+                            </Tag>
+                          )}
+                          {utm.utm_campaign && (
+                            <Tag color="purple" style={{ margin: 0 }}>
+                              {utm.utm_campaign}
+                            </Tag>
+                          )}
+                        </div>
 
-          {/* 접촉 패턴 인사이트 */}
-          {utm_history.length > 1 && (
-            <div style={{ 
-              marginTop: '12px',
-              padding: '12px',
-              background: '#e6f7ff',
-              borderRadius: '6px',
-              fontSize: '12px',
-              color: '#096dd9'
-            }}>
-              <strong>분석:</strong> 이 고객은 {utm_history.length}번의 접촉 끝에 구매했습니다.
-              {utm_history.length >= 3 && ' 여러 채널을 거쳐 신중하게 결정한 고객입니다.'}
+                        {/* 광고 소재 이름 (utm_content) */}
+                        {utm.utm_content && (
+                          <Tooltip title={utm.utm_content}>
+                            <div style={{ 
+                              fontSize: '11px', 
+                              color: '#666',
+                              marginTop: '6px',
+                              marginBottom: '4px',
+                              maxWidth: '400px',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              padding: '4px 8px',
+                              background: '#fff7e6',
+                              border: '1px solid #ffd591',
+                              borderRadius: '4px'
+                            }}>
+                              <strong>소재:</strong> {utm.utm_content}
+                            </div>
+                          </Tooltip>
+                        )}
+
+                        {utm.total_duration > 0 && (
+                          <div style={{ fontSize: '12px', color: '#666' }}>
+                            체류시간:{' '}
+                            <span style={{ fontWeight: 500 }}>
+                              {durationMinutes > 0 
+                                ? `${durationMinutes}분 ${durationSeconds}초`
+                                : `${durationSeconds}초`
+                              }
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </Timeline.Item>
+                  );
+                })}
+              </Timeline>
             </div>
-          )}
-        </div>
-      )}
+
+            {/* 접촉 패턴 인사이트 */}
+            {utm_history.length > 1 && (
+              <div style={{ 
+                marginTop: '12px',
+                padding: '12px',
+                background: '#e6f7ff',
+                borderRadius: '6px',
+                fontSize: '12px',
+                color: '#096dd9'
+              }}>
+                <strong>분석:</strong> 이 고객은 {utm_history.length}번의 접촉 끝에 구매했습니다.
+                {utm_history.length >= 3 && ' 여러 채널을 거쳐 신중하게 결정한 고객입니다.'}
+              </div>
+            )}
+          </>
+        ) : (
+          // UTM 히스토리 없는 경우 - Direct 방문 안내
+          <Alert
+            message="Direct 방문"
+            description="이 고객은 광고를 통하지 않고 직접 사이트에 방문했습니다. (검색, 직접 URL 입력, 북마크 등)"
+            type="info"
+            showIcon
+            icon={<InfoCircleOutlined />}
+            style={{
+              background: '#e6f7ff',
+              border: '1px solid #91d5ff'
+            }}
+          />
+        )}
+      </div>
     </div>
   );
 }
