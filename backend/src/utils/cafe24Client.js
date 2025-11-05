@@ -1,4 +1,5 @@
 const axios = require('axios');
+const querystring = require('querystring');
 require('dotenv').config();
 
 /**
@@ -50,17 +51,19 @@ class Cafe24Client {
    */
   async getAccessToken(code) {
     try {
+      const data = querystring.stringify({
+        grant_type: 'authorization_code',
+        code: code,
+        redirect_uri: this.redirectUri
+      });
+
       const response = await axios.post(
         `${this.authBaseUrl}/api/v2/oauth/token`,
-        {
-          grant_type: 'authorization_code',
-          code: code,
-          redirect_uri: this.redirectUri
-        },
+        data,
         {
           headers: {
             'Authorization': `Basic ${Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64')}`,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/x-www-form-urlencoded'
           }
         }
       );
@@ -89,16 +92,18 @@ class Cafe24Client {
    */
   async refreshAccessToken() {
     try {
+      const data = querystring.stringify({
+        grant_type: 'refresh_token',
+        refresh_token: this.refreshToken
+      });
+
       const response = await axios.post(
         `${this.authBaseUrl}/api/v2/oauth/token`,
-        {
-          grant_type: 'refresh_token',
-          refresh_token: this.refreshToken
-        },
+        data,
         {
           headers: {
             'Authorization': `Basic ${Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64')}`,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/x-www-form-urlencoded'
           }
         }
       );
@@ -111,6 +116,7 @@ class Cafe24Client {
       this.refreshToken = refresh_token;
 
       console.log('[Cafe24 Client] Access token refreshed successfully');
+      console.log('[Cafe24 Client] New tokens received, expires in', expires_in, 'seconds');
 
       return {
         access_token,
