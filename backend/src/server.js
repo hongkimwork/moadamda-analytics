@@ -7,8 +7,6 @@ const statsRoutes = require('./routes/stats');
 const tablesRoutes = require('./routes/tables');
 const mappingsRoutes = require('./routes/mappings');
 const creativePerformanceRoutes = require('./routes/creative-performance');
-const cafe24Routes = require('./routes/cafe24');
-const { startScheduler } = require('./scheduler/syncCafe24Orders');
 
 const app = express();
 const PORT = process.env.PORT || 3003;
@@ -35,7 +33,6 @@ app.use('/api/stats', statsRoutes);
 app.use('/api/tables', tablesRoutes);
 app.use('/api/mappings', mappingsRoutes);
 app.use('/api', creativePerformanceRoutes);
-app.use('/', cafe24Routes);  // Cafe24 OAuth routes
 
 // Error handling
 app.use((err, req, res, next) => {
@@ -57,20 +54,6 @@ app.listen(PORT, '0.0.0.0', () => {
       console.error('Database connection failed:', err);
     } else {
       console.log('Database connected successfully');
-    }
-  });
-
-  // Start Cafe24 order sync scheduler (if token exists in DB)
-  db.query('SELECT * FROM cafe24_token ORDER BY idx DESC LIMIT 1', (err, result) => {
-    if (err) {
-      console.log('[Cafe24] Failed to check token in DB:', err.message);
-      console.log('[Cafe24] Scheduler disabled');
-    } else if (result.rows.length > 0) {
-      console.log('[Cafe24] Token found in database, starting order sync scheduler...');
-      startScheduler();
-    } else {
-      console.log('[Cafe24] No token found in database, scheduler disabled');
-      console.log('[Cafe24] Visit https://marketingzon.com/cafe24/auth to authorize');
     }
   });
 });
