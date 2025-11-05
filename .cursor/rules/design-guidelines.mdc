@@ -1,0 +1,340 @@
+# UI/UX 디자인 규칙
+
+## 📋 개요
+
+moadamda-analytics 프로젝트의 일관된 디자인 언어와 UI/UX 표준을 정의합니다.
+
+---
+
+## 🎨 디자인 원칙
+
+### 1. 단조롭고 전문적인 디자인
+- **목표**: 마케팅 분석 도구로서 전문적이고 깔끔한 인상
+- **특징**: 
+  - 최소한의 색상 사용
+  - 명확한 정보 계층 구조
+  - 시각적 노이즈 최소화
+
+### 2. 이모티콘 사용 금지
+- ❌ **절대 사용하지 말 것**: 📱, 💻, 🎯, 📊, 🔥, ⏱️, 📄, 🔄 등 모든 이모티콘
+- ✅ **대신 사용할 것**: Ant Design 아이콘 컴포넌트
+  - `<ReloadOutlined />`, `<BarChartOutlined />`, `<ClockCircleOutlined />` 등
+
+### 3. 정보 우선 디자인
+- 장식보다 정보 전달이 우선
+- 불필요한 시각적 요소 제거
+- 데이터를 명확하게 표시
+
+---
+
+## 🎨 색상 팔레트
+
+### Primary Colors
+- **Primary Blue**: `#1890ff` - 주요 액션, 링크, 강조
+- **Success Green**: `#52c41a` - 성공, 증가, 긍정
+- **Warning Orange**: `#fa8c16` - 경고, 주의
+- **Error Red**: `#f5222d` - 오류, 실패, 감소
+- **Purple**: `#9254de` - 보조 강조색
+
+### Neutral Colors
+- **Black**: `#000000` - 제목
+- **Dark Gray**: `#333333` - 본문
+- **Medium Gray**: `#666666` - 보조 텍스트
+- **Light Gray**: `#999999` - 비활성 상태
+- **Border Gray**: `#d9d9d9` - 테두리
+- **Background Gray**: `#f0f2f5` - 페이지 배경
+- **Card Background**: `#fafafa` - 카드 배경
+- **White**: `#ffffff` - 카드, 모달
+
+### 색상 사용 가이드
+- 금액/매출: `#1890ff` (파란색)
+- 구매/전환: `#52c41a` (초록색)
+- 기여도/어트리뷰션: `#ff7a45` 또는 `#9254de` (오렌지/보라)
+- 비활성/없음: `#999999` (회색)
+
+---
+
+## 📝 타이포그래피
+
+### 폰트 패밀리
+```css
+font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+  'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+  sans-serif;
+```
+
+### 폰트 크기
+- **대제목 (h1)**: 24px, font-weight: 600
+- **소제목 (h2)**: 18px, font-weight: 600
+- **본문**: 14px, font-weight: 400
+- **테이블 헤더**: 13px, font-weight: 500
+- **테이블 내용**: 11-12px, font-weight: 400
+- **보조 텍스트**: 12px, font-weight: 400, color: #999
+
+### 폰트 사용 예시
+```jsx
+// 페이지 제목
+<Title level={2} style={{ margin: 0, fontSize: '18px' }}>
+  광고 소재 모수 분석
+</Title>
+
+// 테이블 셀
+<span style={{ fontSize: '12px', fontWeight: 500 }}>
+  {value}
+</span>
+
+// 보조 설명
+<div style={{ fontSize: '12px', color: '#999' }}>
+  마지막 갱신: {timestamp}
+</div>
+```
+
+---
+
+## 📐 간격 (Spacing)
+
+### 표준 간격 값
+- **xs**: 4px
+- **sm**: 8px
+- **md**: 16px
+- **lg**: 24px
+- **xl**: 32px
+
+### 사용 예시
+- 카드 간 간격: 16px
+- 섹션 간 간격: 24px
+- 요소 간 간격: 8-12px
+- 페이지 패딩: 24px
+
+```jsx
+<div style={{ padding: '24px', marginBottom: '16px' }}>
+  <Space size="middle" /> {/* 16px 간격 */}
+</div>
+```
+
+---
+
+## 🧩 컴포넌트 스타일 가이드
+
+### 1. Card
+```jsx
+<Card 
+  size="default"  // 또는 "small"
+  style={{ marginBottom: '16px' }}
+>
+  {/* 내용 */}
+</Card>
+```
+
+### 2. Table
+```jsx
+<Table
+  columns={columns}
+  dataSource={data}
+  size="small"  // 데이터가 많을 때
+  pagination={{
+    showTotal: (total) => `총 ${total.toLocaleString()}개`,
+    showSizeChanger: true
+  }}
+/>
+```
+
+### 3. Tag
+```jsx
+// 색상만 사용, 이모티콘 없음
+<Tag color="blue">PC</Tag>
+<Tag color="green">Mobile</Tag>
+<Tag color={value > 0 ? 'green' : 'default'}>
+  {formatNumber(value)}
+</Tag>
+```
+
+### 4. Button
+```jsx
+// 주요 액션
+<Button type="primary" icon={<ReloadOutlined />}>
+  새로고침
+</Button>
+
+// 보조 액션
+<Button icon={<FilterOutlined />}>
+  필터
+</Button>
+```
+
+### 5. Modal
+```jsx
+<Modal
+  title="제목"
+  open={isOpen}
+  onCancel={handleClose}
+  footer={null}
+  width={1200}  // 기본 크기
+  style={{ top: 20 }}
+  styles={{ body: { padding: 0, maxHeight: '85vh', overflow: 'auto' } }}
+>
+  {/* 내용 */}
+</Modal>
+```
+
+---
+
+## 📊 데이터 시각화 규칙
+
+### 1. 숫자 포맷팅
+```javascript
+// 금액
+const formatCurrency = (amount) => {
+  return `${parseInt(amount).toLocaleString()}원`;
+};
+
+// 일반 숫자
+const formatNumber = (num) => {
+  return parseInt(num).toLocaleString();
+};
+
+// 시간
+const formatDuration = (seconds) => {
+  if (seconds < 60) return `${Math.round(seconds)}초`;
+  const minutes = Math.floor(seconds / 60);
+  const remainSeconds = Math.round(seconds % 60);
+  return `${minutes}분 ${remainSeconds}초`;
+};
+```
+
+### 2. 색상 코딩
+- 금액이 0보다 크면: 강조 색상 (`#1890ff`, `#52c41a`)
+- 금액이 0이면: 회색 (`#999`)
+- 폰트 굵기도 함께 조정
+
+```jsx
+<span style={{ 
+  color: amount > 0 ? '#1890ff' : '#999',
+  fontWeight: amount > 0 ? 600 : 400,
+  fontSize: '12px'
+}}>
+  {formatCurrency(amount)}
+</span>
+```
+
+### 3. 테이블 정렬
+- 정렬 가능한 컬럼에는 `sorter: true` 추가
+- 기본 정렬: 매출 또는 중요 지표 내림차순
+
+---
+
+## 🚫 하지 말아야 할 것
+
+### 절대 금지
+1. ❌ 이모티콘 사용 (📱, 💻, 🎯, 📊 등)
+2. ❌ 알록달록한 색상 사용
+3. ❌ 불필요한 애니메이션
+4. ❌ 과도한 그래디언트
+5. ❌ 그림자 남용
+
+### 지양할 것
+1. 너무 작은 폰트 (10px 미만)
+2. 너무 많은 색상 (한 화면에 5가지 이상)
+3. 복잡한 레이아웃
+4. 의미 없는 장식 요소
+
+---
+
+## ✅ 권장 사항
+
+### 1. 아이콘 사용
+```jsx
+import { 
+  ReloadOutlined, 
+  BarChartOutlined, 
+  ClockCircleOutlined,
+  ShoppingOutlined,
+  FilterOutlined,
+  SearchOutlined 
+} from '@ant-design/icons';
+
+// ✅ 좋은 예
+<Button icon={<ReloadOutlined />}>새로고침</Button>
+
+// ❌ 나쁜 예
+<Button>🔄 새로고침</Button>
+```
+
+### 2. 상태 표시
+```jsx
+// ✅ 좋은 예 - 색상으로 구분
+<Tag color={isActive ? 'green' : 'default'}>
+  {isActive ? '활성' : '비활성'}
+</Tag>
+
+// ❌ 나쁜 예 - 이모티콘 사용
+<Tag>{isActive ? '✅ 활성' : '❌ 비활성'}</Tag>
+```
+
+### 3. 시각적 계층 구조
+```jsx
+// 제목 → 설명 → 본문 순서로 시각적 강도 감소
+<div>
+  <Title level={2} style={{ fontSize: '18px', color: '#000' }}>
+    주요 제목
+  </Title>
+  <div style={{ fontSize: '14px', color: '#666', marginTop: '4px' }}>
+    부가 설명
+  </div>
+  <div style={{ fontSize: '12px', color: '#999', marginTop: '8px' }}>
+    보조 정보
+  </div>
+</div>
+```
+
+---
+
+## 🎯 실전 예시
+
+### Before (나쁜 예)
+```jsx
+<div>
+  📊 총 매출: <strong style={{ color: 'red' }}>1,234,567원</strong> 🚀
+  💰 평균 주문액: 45,678원 ✨
+</div>
+```
+
+### After (좋은 예)
+```jsx
+<Space direction="vertical" size="small">
+  <div style={{ fontSize: '13px', color: '#666' }}>
+    총 매출:{' '}
+    <span style={{ fontWeight: 600, color: '#1890ff', fontSize: '14px' }}>
+      {formatCurrency(totalRevenue)}
+    </span>
+  </div>
+  <div style={{ fontSize: '13px', color: '#666' }}>
+    평균 주문액:{' '}
+    <span style={{ fontWeight: 500 }}>
+      {formatCurrency(avgOrderValue)}
+    </span>
+  </div>
+</Space>
+```
+
+---
+
+## 📚 참고 자료
+
+- **Ant Design 공식 문서**: https://ant.design/components/overview/
+- **Ant Design 색상 시스템**: https://ant.design/docs/spec/colors
+- **Ant Design 아이콘**: https://ant.design/components/icon/
+
+---
+
+## 🔄 업데이트 이력
+
+- **2025-11-05**: 초기 버전 생성
+  - 이모티콘 사용 금지 규칙 추가
+  - 색상 팔레트 정의
+  - 타이포그래피 가이드 작성
+  - 컴포넌트 스타일 가이드 작성
+
+---
+
+**마지막 업데이트**: 2025-11-05

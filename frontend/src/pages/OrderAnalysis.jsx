@@ -114,7 +114,7 @@ export function OrderListPage() {
       width: 100,
       render: (device) => (
         <Tag color={device === 'mobile' ? 'blue' : 'green'}>
-          {device === 'mobile' ? '📱 Mobile' : '💻 PC'}
+          {device === 'mobile' ? 'Mobile' : 'PC'}
         </Tag>
       )
     },
@@ -160,7 +160,7 @@ export function OrderListPage() {
         <Space direction="vertical" size="middle" style={{ width: '100%' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Title level={2} style={{ margin: 0 }}>
-              📦 주문 목록
+              주문 목록
             </Title>
             <Button 
               icon={<ReloadOutlined />} 
@@ -187,8 +187,8 @@ export function OrderListPage() {
               style={{ width: 120 }}
             >
               <Select.Option value="all">전체</Select.Option>
-              <Select.Option value="pc">💻 PC</Select.Option>
-              <Select.Option value="mobile">📱 Mobile</Select.Option>
+              <Select.Option value="pc">PC</Select.Option>
+              <Select.Option value="mobile">Mobile</Select.Option>
             </Select>
 
             <Tag color="blue">총 {totalOrders}건</Tag>
@@ -219,11 +219,11 @@ export function OrderListPage() {
 
       {/* 주문 상세 모달 */}
       <Modal
-        title="🎯 고객 여정 분석"
+        title="고객 여정 분석"
         open={isModalOpen}
         onCancel={handleCloseModal}
         footer={null}
-        width={1200}
+        width={1728}
         style={{ top: 20, maxWidth: '95vw' }}
         styles={{ body: { padding: 0, maxHeight: '85vh', overflow: 'auto' } }}
         destroyOnClose={true}
@@ -311,7 +311,7 @@ function OrderDetailPageContent({ orderId }) {
     );
   }
 
-  const { order, page_path } = data;
+  const { order, page_path, utm_history } = data;
 
   // 타임라인 다단 배치 계산
   const MAX_ITEMS_PER_COLUMN = 5;
@@ -347,7 +347,7 @@ function OrderDetailPageContent({ orderId }) {
           <span><strong>시간:</strong> {dayjs(order.timestamp).format('YYYY-MM-DD HH:mm:ss')}</span>
           <span><strong>금액:</strong> <span style={{ color: '#1890ff', fontWeight: 'bold' }}>{order.final_payment.toLocaleString()}원</span></span>
           <Tag color={order.device_type === 'mobile' ? 'blue' : 'green'}>
-            {order.device_type === 'mobile' ? '📱 Mobile' : '💻 PC'}
+            {order.device_type === 'mobile' ? 'Mobile' : 'PC'}
           </Tag>
           <span><strong>IP:</strong> {order.ip_address}</span>
           <span><strong>UTM:</strong> {order.utm_source || 'direct'}</span>
@@ -365,19 +365,19 @@ function OrderDetailPageContent({ orderId }) {
               marginLeft: 'auto'
             }}>
               <span>
-                <span style={{ color: '#999' }}>⏱️ 총 체류시간:</span>{' '}
+                <span style={{ color: '#999' }}>총 체류시간:</span>{' '}
                 <strong>{totalSeconds >= 60 
                   ? `${Math.floor(totalSeconds / 60)}분 ${totalSeconds % 60}초`
                   : `${totalSeconds}초`}</strong>
               </span>
               <span>
-                <span style={{ color: '#999' }}>📊 평균 체류시간:</span>{' '}
+                <span style={{ color: '#999' }}>평균 체류시간:</span>{' '}
                 <strong>{avgSeconds >= 60 
                   ? `${Math.floor(avgSeconds / 60)}분 ${avgSeconds % 60}초`
                   : `${avgSeconds}초`}</strong>
               </span>
               <span>
-                <span style={{ color: '#999' }}>🔥 최대 체류시간:</span>{' '}
+                <span style={{ color: '#999' }}>최대 체류시간:</span>{' '}
                 <strong>{maxSeconds >= 60 
                   ? `${Math.floor(maxSeconds / 60)}분 ${maxSeconds % 60}초`
                   : `${maxSeconds}초`}</strong>
@@ -430,7 +430,7 @@ function OrderDetailPageContent({ orderId }) {
                       >
                         <div style={{ minHeight: '50px' }}>
                           <div style={{ fontWeight: 'bold', marginBottom: '4px', fontSize: '12px' }}>
-                            {showKoreanUrl ? urlInfo.icon : '📄'} {isFirst ? '진입' : isLast ? '구매 완료' : `${globalIdx}단계`}
+                            {isFirst ? '진입' : isLast ? '구매 완료' : `${globalIdx}단계`}
                             <span style={{ marginLeft: '6px', color: '#999', fontWeight: 'normal', fontSize: '11px' }}>
                               {dayjs(page.timestamp).format('HH:mm:ss')}
                             </span>
@@ -443,7 +443,7 @@ function OrderDetailPageContent({ orderId }) {
                               color: '#f97316',
                               fontWeight: '500'
                             }}>
-                              📦 {page.page_title}
+                              {page.page_title}
                             </div>
                           )}
 
@@ -487,12 +487,9 @@ function OrderDetailPageContent({ orderId }) {
                               color={page.time_spent_seconds >= 60 ? 'red' : page.time_spent_seconds < 10 ? 'cyan' : 'orange'}
                               style={{ fontSize: '10px', padding: '0 6px', lineHeight: '18px' }}
                             >
-                              {page.time_spent_seconds >= 60 ? '🔥' : page.time_spent_seconds < 10 ? '⚡' : '⏱️'} 
-                              {' '}{
-                                page.time_spent_seconds >= 60 
-                                  ? `${Math.floor(page.time_spent_seconds / 60)}분 ${page.time_spent_seconds % 60}초`
-                                  : `${page.time_spent_seconds}초`
-                              }
+                              {page.time_spent_seconds >= 60 
+                                ? `${Math.floor(page.time_spent_seconds / 60)}분 ${page.time_spent_seconds % 60}초`
+                                : `${page.time_spent_seconds}초`}
                             </Tag>
                           )}
                         </div>
@@ -507,6 +504,123 @@ function OrderDetailPageContent({ orderId }) {
           <Alert message="페이지 이동 기록이 없습니다." type="info" />
         )}
       </div>
+
+      {/* UTM 접촉 이력 섹션 */}
+      {utm_history && utm_history.length > 0 && (
+        <div style={{ 
+          padding: '20px', 
+          background: '#f9fafb',
+          borderTop: '1px solid #e5e7eb'
+        }}>
+          <h3 style={{ margin: '0 0 16px 0', fontSize: '16px' }}>
+            <HistoryOutlined /> 고객 접촉 이력 (UTM History)
+          </h3>
+          
+          {/* 접촉 횟수 및 기간 요약 */}
+          <div style={{ 
+            marginBottom: '16px',
+            padding: '12px',
+            background: '#fff',
+            borderRadius: '6px',
+            border: '1px solid #e5e7eb',
+            fontSize: '13px'
+          }}>
+            <Space size="large">
+              <span>
+                <strong>총 접촉 횟수:</strong>{' '}
+                <span style={{ color: '#1890ff', fontWeight: 600 }}>{utm_history.length}회</span>
+              </span>
+              {utm_history.length > 0 && (
+                <span>
+                  <strong>첫 접촉 이후:</strong>{' '}
+                  <span style={{ color: '#52c41a', fontWeight: 600 }}>
+                    {dayjs(order.timestamp).diff(dayjs(utm_history[0].entry_time), 'day')}일 경과
+                  </span>
+                </span>
+              )}
+            </Space>
+          </div>
+
+          {/* UTM 접촉 타임라인 */}
+          <div style={{ 
+            background: '#fff',
+            padding: '16px',
+            borderRadius: '6px',
+            border: '1px solid #e5e7eb'
+          }}>
+            <Timeline>
+              {utm_history.map((utm, index) => {
+                const isFirst = index === 0;
+                const isLast = index === utm_history.length - 1;
+                const touchDate = dayjs(utm.entry_time);
+                const durationMinutes = Math.floor(utm.total_duration / 60);
+                const durationSeconds = utm.total_duration % 60;
+
+                return (
+                  <Timeline.Item
+                    key={index}
+                    color={isFirst ? 'green' : isLast ? 'red' : 'blue'}
+                  >
+                    <div style={{ fontSize: '13px' }}>
+                      <div style={{ marginBottom: '6px' }}>
+                        <strong style={{ fontSize: '14px' }}>
+                          {isFirst ? '첫 접촉' : isLast ? '최종 접촉' : `${index + 1}번째 접촉`}
+                        </strong>
+                        <span style={{ marginLeft: '8px', color: '#999', fontSize: '12px' }}>
+                          {touchDate.format('MM/DD HH:mm')}
+                        </span>
+                      </div>
+                      
+                      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                        <Tag color="blue" style={{ margin: 0 }}>
+                          {utm.utm_source || 'direct'}
+                        </Tag>
+                        {utm.utm_medium && (
+                          <Tag color="cyan" style={{ margin: 0 }}>
+                            {utm.utm_medium}
+                          </Tag>
+                        )}
+                        {utm.utm_campaign && (
+                          <Tag color="purple" style={{ margin: 0 }}>
+                            {utm.utm_campaign}
+                          </Tag>
+                        )}
+                      </div>
+
+                      {utm.total_duration > 0 && (
+                        <div style={{ fontSize: '12px', color: '#666' }}>
+                          체류시간:{' '}
+                          <span style={{ fontWeight: 500 }}>
+                            {durationMinutes > 0 
+                              ? `${durationMinutes}분 ${durationSeconds}초`
+                              : `${durationSeconds}초`
+                            }
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </Timeline.Item>
+                );
+              })}
+            </Timeline>
+          </div>
+
+          {/* 접촉 패턴 인사이트 */}
+          {utm_history.length > 1 && (
+            <div style={{ 
+              marginTop: '12px',
+              padding: '12px',
+              background: '#e6f7ff',
+              borderRadius: '6px',
+              fontSize: '12px',
+              color: '#096dd9'
+            }}>
+              <strong>분석:</strong> 이 고객은 {utm_history.length}번의 접촉 끝에 구매했습니다.
+              {utm_history.length >= 3 && ' 여러 채널을 거쳐 신중하게 결정한 고객입니다.'}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
