@@ -425,7 +425,7 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
                 <Timeline style={{ fontSize: '12px' }}>
                   {columnItems.map((page, idx) => {
                     const globalIdx = colIdx * MAX_ITEMS_PER_COLUMN + idx;
-                    const urlInfo = urlToKorean(page.page_url, userMappings);
+                    const urlInfo = urlToKorean(page.clean_url || page.page_url, userMappings);
                     const isFirst = globalIdx === 0;
                     const isLast = globalIdx === page_path.length - 1;
                     

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../utils/database');
+const { cleanUrl } = require('../utils/urlCleaner');
 
 // GET /api/stats/today - Today's basic statistics
 router.get('/today', async (req, res) => {
@@ -1536,6 +1537,7 @@ router.get('/order-detail/:orderId', async (req, res) => {
       },
       page_path: pagePathResult.rows.map(row => ({
         page_url: row.page_url,
+        clean_url: cleanUrl(row.page_url),
         page_title: row.page_title || null,
         timestamp: row.timestamp,
         time_spent_seconds: row.time_spent_seconds || 0

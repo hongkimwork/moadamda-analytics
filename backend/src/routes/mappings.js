@@ -204,16 +204,6 @@ router.post('/', async (req, res) => {
       });
     }
     
-    // Check if korean_name already exists (block duplicate names)
-    const duplicateNameQuery = `SELECT id FROM url_mappings WHERE korean_name = $1 AND is_excluded = false`;
-    const duplicateNameResult = await db.query(duplicateNameQuery, [korean_name]);
-    
-    if (duplicateNameResult.rows.length > 0) {
-      return res.status(400).json({ 
-        error: '이미 정의된 매핑 이름입니다.' 
-      });
-    }
-    
     // Insert new mapping
     const insertQuery = `
       INSERT INTO url_mappings (url, korean_name)
@@ -269,19 +259,6 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ 
         error: 'Not found',
         message: 'Mapping not found' 
-      });
-    }
-    
-    // Check if korean_name already exists in other mappings (block duplicate names)
-    const duplicateNameQuery = `
-      SELECT id FROM url_mappings 
-      WHERE korean_name = $1 AND id != $2 AND is_excluded = false
-    `;
-    const duplicateNameResult = await db.query(duplicateNameQuery, [korean_name, id]);
-    
-    if (duplicateNameResult.rows.length > 0) {
-      return res.status(400).json({ 
-        error: '이미 정의된 매핑 이름입니다.' 
       });
     }
     
