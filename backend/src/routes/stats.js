@@ -1389,43 +1389,40 @@ router.get('/order-detail/:orderId', async (req, res) => {
         FROM utm_sessions
         WHERE visitor_id = $1
       ),
-      grouped_sessions AS (
-        -- Step 2: 같은 광고 소재를 5분 이내면 그룹화
+      with_gaps AS (
+        -- Step 2: 이전 세션과의 간격 계산
         SELECT
           eu.*,
-          -- 이전 세션과의 간격 (초)
-          EXTRACT(EPOCH FROM (
-            eu.entry_timestamp - 
-            LAG(eu.exit_timestamp) OVER (
-              PARTITION BY eu.utm_content
-              ORDER BY eu.entry_timestamp
-            )
-          )) as gap_seconds,
-          -- 그룹 번호 생성 (5분=300초 초과 시 새 그룹)
-          SUM(
-            CASE 
-              WHEN EXTRACT(EPOCH FROM (
-                eu.entry_timestamp - 
-                LAG(eu.exit_timestamp) OVER (
-                  PARTITION BY eu.utm_content
-                  ORDER BY eu.entry_timestamp
-                )
-              )) > 300 OR LAG(eu.exit_timestamp) OVER (
-                PARTITION BY eu.utm_content
-                ORDER BY eu.entry_timestamp
-              ) IS NULL
-              THEN 1 
-              ELSE 0 
-            END
-          ) OVER (
+          LAG(eu.exit_timestamp) OVER (
             PARTITION BY eu.utm_content
             ORDER BY eu.entry_timestamp
-            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-          ) as session_group
+          ) as prev_exit_timestamp
         FROM enriched_utm eu
       ),
+      with_group_flags AS (
+        -- Step 3: 새 그룹 시작 플래그 계산
+        SELECT
+          *,
+          CASE 
+            WHEN prev_exit_timestamp IS NULL THEN 1
+            WHEN EXTRACT(EPOCH FROM (entry_timestamp - prev_exit_timestamp)) > 300 THEN 1
+            ELSE 0
+          END as is_new_group
+        FROM with_gaps
+      ),
+      grouped_sessions AS (
+        -- Step 4: 그룹 번호 생성
+        SELECT
+          *,
+          SUM(is_new_group) OVER (
+            PARTITION BY utm_content
+            ORDER BY entry_timestamp
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+          ) as session_group
+        FROM with_group_flags
+      ),
       merged_sessions AS (
-        -- Step 3: 그룹별로 병합
+        -- Step 5: 그룹별로 병합
         SELECT
           MIN(utm_source) as utm_source,
           MIN(utm_medium) as utm_medium,
