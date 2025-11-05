@@ -60,6 +60,20 @@ async function syncOrders(options = {}) {
 
     console.log(`[Cafe24 Sync] Total orders fetched: ${stats.totalFetched}`);
 
+    // DEBUG: Log first order structure to verify embed=items is working
+    if (allOrders.length > 0) {
+      console.log('[Cafe24 Sync] DEBUG: First order structure:');
+      console.log('[Cafe24 Sync] - order_id:', allOrders[0].order_id);
+      console.log('[Cafe24 Sync] - has items?', !!allOrders[0].items);
+      console.log('[Cafe24 Sync] - items count:', allOrders[0].items ? allOrders[0].items.length : 0);
+      if (allOrders[0].items && allOrders[0].items.length > 0) {
+        console.log('[Cafe24 Sync] - first item has additional_option_values?', !!allOrders[0].items[0].additional_option_values);
+        if (allOrders[0].items[0].additional_option_values) {
+          console.log('[Cafe24 Sync] - additional_option_values:', JSON.stringify(allOrders[0].items[0].additional_option_values));
+        }
+      }
+    }
+
     // Process each order
     for (const order of allOrders) {
       try {
