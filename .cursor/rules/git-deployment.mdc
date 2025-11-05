@@ -15,7 +15,9 @@ moadamda-analytics 프로젝트는 **Git 기반 배포 방식**을 사용합니�
 
 ---
 
-## 🚀 배포 프로세스 (5단계)
+## 🚀 배포 프로세스
+
+### 기본 배포 (백엔드 변경 시)
 
 ### 1️⃣ 로컬에서 코드 수정 및 GitHub 업로드
 
@@ -65,6 +67,52 @@ docker-compose -f docker-compose.prod.yml logs backend --tail 50
 # 실시간 로그
 docker-compose -f docker-compose.prod.yml logs backend -f
 ```
+
+---
+
+## 🎨 프론트엔드 변경 시 추가 단계 (중요!)
+
+**⚠️ 프론트엔드 코드 변경 시 반드시 추가 빌드 필요!**
+
+프론트엔드는 **빌드된 정적 파일(dist)**을 사용하므로, 코드 변경 후 반드시 재빌드해야 합니다.
+
+### 프론트엔드 변경이 포함된 경우 (frontend/src/ 수정)
+
+```bash
+# 1-3단계: 위의 기본 배포 과정 동일하게 진행
+
+# 4단계: Docker 재빌드
+cd /root/moadamda-analytics
+docker-compose -f docker-compose.prod.yml up -d --build
+
+# 5단계: 프론트엔드 빌드 (★ 추가 단계 ★)
+cd /root/moadamda-analytics/frontend
+npm run build
+
+# 6단계: 프론트엔드 컨테이너 재시작
+cd /root/moadamda-analytics
+docker-compose -f docker-compose.prod.yml restart frontend
+
+# 7단계: 확인
+docker-compose -f docker-compose.prod.yml logs frontend --tail 20
+```
+
+### 배포 완료 후 브라우저 확인
+
+- 브라우저에서 **Ctrl + Shift + R** (강력 새로고침) 실행
+- 캐시를 지우고 새로운 파일 로드
+
+---
+
+## 📦 변경 유형별 배포 가이드
+
+| 변경 파일 위치 | 필요한 배포 단계 |
+|---------------|----------------|
+| `backend/src/**` | Docker 재빌드만 (`up -d --build`) |
+| `frontend/src/**` | Docker 재빌드 + **npm run build** + frontend 재시작 |
+| `tracker/src/**` | 빌드 후 서버 업로드 (별도 프로세스) |
+| `.env` 파일 | Docker 컨테이너 재시작 (`restart`) |
+| `docker-compose.prod.yml` | Docker 재빌드 (`up -d --build`) |
 
 ---
 
@@ -184,31 +232,63 @@ git diff
 
 AI가 코드를 수정할 때는 다음 순서를 따릅니다:
 
+### 1. 파일 수정 및 Git 작업
+
 1. **로컬에서 파일 수정** (search_replace, write 도구 사용)
 2. **Git 커밋 및 push** (run_terminal_cmd 도구 사용)
-3. **사용자에게 서버 배포 안내**:
-   - "서버에서 다음 명령어를 실행해주세요"
-   - git pull 명령어 제공
-   - docker-compose up -d --build 명령어 제공
-4. **배포 확인 로그 요청**
+
+### 2. 사용자에게 배포 안내 (변경 유형 구분!)
+
+#### 백엔드만 변경한 경우 (backend/src/**)
+
+```bash
+ssh root@211.188.53.220
+cd /root/moadamda-analytics
+git pull origin main
+docker-compose -f docker-compose.prod.yml up -d --build
+docker-compose -f docker-compose.prod.yml logs backend --tail 50
+```
+
+#### 프론트엔드 변경이 포함된 경우 (frontend/src/**)
+
+```bash
+ssh root@211.188.53.220
+cd /root/moadamda-analytics
+git pull origin main
+docker-compose -f docker-compose.prod.yml up -d --build
+
+# ★ 프론트엔드 빌드 추가 (필수!) ★
+cd /root/moadamda-analytics/frontend
+npm run build
+cd /root/moadamda-analytics
+docker-compose -f docker-compose.prod.yml restart frontend
+
+# 확인
+docker-compose -f docker-compose.prod.yml logs frontend --tail 20
+```
+
+**중요:** 프론트엔드 변경 시 반드시 "브라우저에서 Ctrl+Shift+R로 강력 새로고침 해주세요"라고 안내할 것!
 
 ### AI가 직접 하지 말아야 할 것
 
 - ❌ 서버 파일 직접 수정
 - ❌ 서버에서 cat > 파일 생성
 - ❌ SSH로 서버 접속해서 코드 수정
+- ❌ 프론트엔드 변경 시 npm build 단계 누락
 
 ### AI가 해야 할 것
 
 - ✅ 로컬 파일 수정
 - ✅ Git 커밋 및 push
-- ✅ 사용자에게 배포 가이드 제공
+- ✅ 사용자에게 **변경 유형에 맞는** 배포 가이드 제공
+- ✅ 프론트엔드 변경 시 빌드 단계 명시
+- ✅ 브라우저 캐시 새로고침 안내
 
 ---
 
 ## 📝 배포 체크리스트
 
-배포 전 확인사항:
+### 백엔드 변경 시
 
 - [ ] 로컬에서 코드 수정 완료
 - [ ] `git status`로 변경사항 확인
@@ -220,6 +300,23 @@ AI가 코드를 수정할 때는 다음 순서를 따릅니다:
 - [ ] `git pull origin main` 실행 (Fast-forward 확인)
 - [ ] `docker-compose -f docker-compose.prod.yml up -d --build` 실행
 - [ ] 로그 확인으로 정상 작동 확인
+
+### 프론트엔드 변경 시 (★ 추가 단계 필수 ★)
+
+- [ ] 로컬에서 코드 수정 완료
+- [ ] `git status`로 변경사항 확인
+- [ ] `git add .` 실행
+- [ ] `git commit -m "의미있는 메시지"` 실행
+- [ ] `git push origin main` 실행 (성공 확인)
+- [ ] 서버 SSH 접속
+- [ ] `cd /root/moadamda-analytics` 이동
+- [ ] `git pull origin main` 실행 (Fast-forward 확인)
+- [ ] `docker-compose -f docker-compose.prod.yml up -d --build` 실행
+- [ ] **`cd frontend && npm run build` 실행** ← 필수!
+- [ ] `cd .. && docker-compose -f docker-compose.prod.yml restart frontend` 실행
+- [ ] 프론트엔드 로그 확인
+- [ ] 브라우저에서 Ctrl+Shift+R로 강력 새로고침
+- [ ] 변경사항 반영 확인
 
 ---
 
@@ -251,4 +348,50 @@ chmod +x /root/deploy.sh
 
 ---
 
-**마지막 업데이트**: 2025-11-04
+---
+
+## ❗ 자주하는 실수
+
+### 1. 프론트엔드 변경 후 npm build 누락
+
+**증상:** 
+- 코드는 변경했는데 브라우저에서 변경사항이 안 보임
+- Docker 로그는 정상인데 UI는 그대로
+
+**원인:** 
+- 프론트엔드는 빌드된 정적 파일(dist)을 사용
+- Docker 재빌드만으로는 dist 폴더가 업데이트 안 됨
+
+**해결:**
+```bash
+cd /root/moadamda-analytics/frontend
+npm run build
+cd ..
+docker-compose -f docker-compose.prod.yml restart frontend
+```
+
+### 2. 브라우저 캐시 문제
+
+**증상:** 
+- 서버에는 새 파일이 배포되었는데 브라우저는 구버전 표시
+
+**해결:**
+- **Ctrl + Shift + R** (Chrome, Edge)
+- **Cmd + Shift + R** (Mac)
+- 또는 개발자도구 → Network 탭 → Disable cache 체크
+
+### 3. Docker 캐시 문제
+
+**증상:** 
+- `--build` 옵션을 사용했는데도 변경사항 미반영
+
+**해결:**
+```bash
+# 캐시 없이 완전히 새로 빌드
+docker-compose -f docker-compose.prod.yml build --no-cache backend
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+---
+
+**마지막 업데이트**: 2025-11-05
