@@ -68,15 +68,20 @@ class Cafe24Client {
         }
       );
 
+      console.log('[Cafe24 Client] Token response:', JSON.stringify(response.data, null, 2));
+
       const { access_token, refresh_token, expires_in } = response.data;
       
-      // Calculate expiration date
-      const expiresAt = new Date(Date.now() + expires_in * 1000);
+      // Cafe24 may not return expires_in, default to 2 hours (7200 seconds)
+      const expiresInSeconds = expires_in || 7200;
+      const expiresAt = new Date(Date.now() + expiresInSeconds * 1000);
+
+      console.log('[Cafe24 Client] Token expires in:', expiresInSeconds, 'seconds');
 
       return {
         access_token,
         refresh_token,
-        expires_in,
+        expires_in: expiresInSeconds,
         expires_at: expiresAt.toISOString()
       };
     } catch (error) {
@@ -108,20 +113,27 @@ class Cafe24Client {
         }
       );
 
+      console.log('[Cafe24 Client] Refresh token response:', JSON.stringify(response.data, null, 2));
+
       const { access_token, refresh_token, expires_in } = response.data;
-      const expiresAt = new Date(Date.now() + expires_in * 1000);
+      
+      // Cafe24 may not return expires_in, default to 2 hours (7200 seconds)
+      const expiresInSeconds = expires_in || 7200;
+      const expiresAt = new Date(Date.now() + expiresInSeconds * 1000);
 
       // Update instance tokens
       this.accessToken = access_token;
-      this.refreshToken = refresh_token;
+      if (refresh_token) {
+        this.refreshToken = refresh_token;
+      }
 
       console.log('[Cafe24 Client] Access token refreshed successfully');
-      console.log('[Cafe24 Client] New tokens received, expires in', expires_in, 'seconds');
+      console.log('[Cafe24 Client] New tokens received, expires in', expiresInSeconds, 'seconds');
 
       return {
         access_token,
-        refresh_token,
-        expires_in,
+        refresh_token: refresh_token || this.refreshToken,
+        expires_in: expiresInSeconds,
         expires_at: expiresAt.toISOString()
       };
     } catch (error) {
