@@ -69,7 +69,7 @@ router.get('/all', async (req, res) => {
     const excludedUrls = new Set(excludedResult.rows.map(row => row.url));
     
     // Merge URL data with mapping info, exclude excluded URLs
-    const allUrls = cleanUrls
+    let allUrls = cleanUrls
       .filter(urlData => !excludedUrls.has(urlData.url))
       .map(urlData => {
         const mapping = mappingsMap.get(urlData.url);
@@ -82,6 +82,16 @@ router.get('/all', async (req, res) => {
           is_mapped: !!mapping
         };
       });
+    
+    // Apply search filter (search in URL or korean_name)
+    if (search) {
+      const searchLower = search.toLowerCase();
+      allUrls = allUrls.filter(item => {
+        const urlMatch = item.url.toLowerCase().includes(searchLower);
+        const koreanNameMatch = item.korean_name && item.korean_name.toLowerCase().includes(searchLower);
+        return urlMatch || koreanNameMatch;
+      });
+    }
     
     // Apply pagination
     const paginatedData = allUrls.slice(

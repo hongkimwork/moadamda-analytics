@@ -186,7 +186,7 @@ function PageMapping() {
           korean_name: values.korean_name.trim()
         });
         
-        message.success('페이지 매핑이 완료되었습니다');
+          message.success('페이지 매핑이 완료되었습니다');
       }
 
       // Close modal
