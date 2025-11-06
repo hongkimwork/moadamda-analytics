@@ -411,25 +411,31 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
           
           {lastTouch ? (
             <>
-              <div style={{ fontSize: '13px', color: 'rgb(0,0,0)', marginBottom: '8px' }}>
-                매체: <span style={{ fontWeight: 'bold' }}>{lastTouch.utm_source || '-'}</span>
+              <div style={{ fontSize: '13px', marginBottom: '8px' }}>
+                <span style={{ color: 'rgb(102,102,102)' }}>매체: </span>
+                <span style={{ color: 'rgb(0,0,0)', fontWeight: 'bold' }}>{lastTouch.utm_source || '-'}</span>
               </div>
               
-              <div style={{ fontSize: '13px', color: 'rgb(0,0,0)', marginBottom: '8px' }}>
-                유형: <span style={{ fontWeight: 'bold' }}>{lastTouch.utm_medium || '-'}</span>
+              <div style={{ fontSize: '13px', marginBottom: '8px' }}>
+                <span style={{ color: 'rgb(102,102,102)' }}>유형: </span>
+                <span style={{ color: 'rgb(0,0,0)', fontWeight: 'bold' }}>{lastTouch.utm_medium || '-'}</span>
               </div>
               
-              <div style={{ fontSize: '13px', color: 'rgb(0,0,0)', marginBottom: '8px' }}>
-                캠페인: <span style={{ fontWeight: 'bold' }}>{lastTouch.utm_campaign || '-'}</span>
+              <div style={{ fontSize: '13px', marginBottom: '8px' }}>
+                <span style={{ color: 'rgb(102,102,102)' }}>캠페인: </span>
+                <span style={{ color: 'rgb(0,0,0)', fontWeight: 'bold' }}>{lastTouch.utm_campaign || '-'}</span>
               </div>
               
-              <div style={{ fontSize: '13px', color: 'rgb(0,0,0)', marginBottom: '8px' }}>
-                소재: <span style={{ fontWeight: 'bold' }}>{lastTouch.utm_content || '-'}</span>
+              <div style={{ fontSize: '13px', marginBottom: '8px' }}>
+                <span style={{ color: 'rgb(102,102,102)' }}>소재: </span>
+                <span style={{ color: 'rgb(0,0,0)', fontWeight: 'bold' }}>{lastTouch.utm_content || '-'}</span>
               </div>
               
               {adToPurchaseSeconds !== null && (
-                <div style={{ fontSize: '13px', color: 'rgb(0,0,0)', marginTop: '12px' }}>
-                  전환 속도: <span style={{ fontWeight: 'bold' }}>광고 클릭 후 {formatDuration(adToPurchaseSeconds)} 만에 구매</span>
+                <div style={{ fontSize: '13px', marginTop: '12px' }}>
+                  <span style={{ color: 'rgb(102,102,102)' }}>전환 속도: </span>
+                  <span style={{ color: 'rgb(0,0,0)' }}>광고 클릭 후 </span>
+                  <span style={{ color: 'rgb(24,144,255)', fontWeight: 'bold' }}>{formatDuration(adToPurchaseSeconds)} 만에 구매</span>
                 </div>
               )}
             </>
@@ -456,16 +462,19 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
             구매 정보
           </h4>
           
-          <div style={{ fontSize: '13px', color: 'rgb(0,0,0)', marginBottom: '8px' }}>
-            상품명: <span style={{ fontWeight: 'bold' }}>{order.product_name || '상품명 없음'}</span>
+          <div style={{ fontSize: '13px', marginBottom: '8px' }}>
+            <span style={{ color: 'rgb(102,102,102)' }}>상품명: </span>
+            <span style={{ color: 'rgb(0,0,0)', fontWeight: 'bold' }}>{order.product_name || '상품명 없음'}</span>
           </div>
           
-          <div style={{ fontSize: '13px', color: 'rgb(0,0,0)', marginBottom: '8px' }}>
-            구매금액: <span style={{ fontWeight: 'bold', fontSize: '16px' }}>{order.final_payment.toLocaleString()}원</span>
+          <div style={{ fontSize: '13px', marginBottom: '8px' }}>
+            <span style={{ color: 'rgb(102,102,102)' }}>구매금액: </span>
+            <span style={{ color: 'rgb(24,144,255)', fontWeight: 'bold', fontSize: '16px' }}>{order.final_payment.toLocaleString()}원</span>
           </div>
           
-          <div style={{ fontSize: '13px', color: 'rgb(0,0,0)' }}>
-            주문시간: <span style={{ fontWeight: 'bold' }}>{dayjs(order.timestamp).format('YYYY-MM-DD HH:mm:ss')}</span>
+          <div style={{ fontSize: '13px' }}>
+            <span style={{ color: 'rgb(102,102,102)' }}>주문시간: </span>
+            <span style={{ color: 'rgb(0,0,0)', fontWeight: 'bold' }}>{dayjs(order.timestamp).format('YYYY-MM-DD HH:mm:ss')}</span>
           </div>
         </div>
         
@@ -487,22 +496,37 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
             고객 분석
           </h4>
           
-          <div style={{ fontSize: '13px', color: 'rgb(0,0,0)', marginBottom: '8px' }}>
-            구매여정: <span style={{ fontWeight: 'bold' }}>
-              {daysSinceFirstVisit !== null ? `첫 방문 후 ${daysSinceFirstVisit}일 만에 구매` : '신규 방문'}
-            </span>
+          <div style={{ fontSize: '13px', marginBottom: '8px' }}>
+            <span style={{ color: 'rgb(102,102,102)' }}>구매여정: </span>
+            {daysSinceFirstVisit !== null ? (
+              <>
+                <span style={{ color: 'rgb(0,0,0)' }}>첫 방문 후 </span>
+                <span style={{ color: 'rgb(24,144,255)', fontWeight: 'bold' }}>{daysSinceFirstVisit}일</span>
+                <span style={{ color: 'rgb(0,0,0)' }}> 만에 구매</span>
+              </>
+            ) : (
+              <span style={{ color: 'rgb(0,0,0)', fontWeight: 'bold' }}>신규 방문</span>
+            )}
           </div>
           
-          <div style={{ fontSize: '13px', color: 'rgb(0,0,0)', marginBottom: '8px' }}>
-            재구매 횟수: <span style={{ fontWeight: 'bold' }}>{repurchaseCount}회</span>
+          <div style={{ fontSize: '13px', marginBottom: '8px' }}>
+            <span style={{ color: 'rgb(102,102,102)' }}>재구매 횟수: </span>
+            <span style={{ color: 'rgb(0,0,0)', fontWeight: 'bold' }}>{repurchaseCount}회</span>
           </div>
           
-          <div style={{ fontSize: '13px', color: 'rgb(0,0,0)', marginBottom: '8px' }}>
-            디바이스: <span style={{ fontWeight: 'bold' }}>{order.device_type === 'mobile' ? 'Mobile' : 'PC'}</span>
+          <div style={{ fontSize: '13px', marginBottom: '8px' }}>
+            <span style={{ color: 'rgb(102,102,102)' }}>디바이스: </span>
+            <span style={{ color: 'rgb(0,0,0)', fontWeight: 'bold' }}>{order.device_type === 'mobile' ? 'Mobile' : 'PC'}</span>
           </div>
           
-          <div style={{ fontSize: '13px', color: 'rgb(0,0,0)' }}>
-            페이지 체류시간: <span style={{ fontWeight: 'bold' }}>총 {formatDuration(totalSeconds)}, 평균 {formatDuration(avgSeconds)}, 최대 {formatDuration(maxSeconds)}</span>
+          <div style={{ fontSize: '13px' }}>
+            <span style={{ color: 'rgb(102,102,102)' }}>페이지 체류시간: </span>
+            <span style={{ color: 'rgb(0,0,0)' }}>총 </span>
+            <span style={{ color: 'rgb(24,144,255)', fontWeight: 'bold' }}>{formatDuration(totalSeconds)}</span>
+            <span style={{ color: 'rgb(0,0,0)' }}>, 평균 </span>
+            <span style={{ color: 'rgb(24,144,255)', fontWeight: 'bold' }}>{formatDuration(avgSeconds)}</span>
+            <span style={{ color: 'rgb(0,0,0)' }}>, 최대 </span>
+            <span style={{ color: 'rgb(24,144,255)', fontWeight: 'bold' }}>{formatDuration(maxSeconds)}</span>
           </div>
         </div>
       </div>
