@@ -37,11 +37,11 @@ router.get('/all', async (req, res) => {
       search = ''
     } = req.query;
     
-    // Get unique clean URLs from pageviews
+    // Get unique clean URLs from pageviews (don't filter here, filter later with korean_name)
     const { data: cleanUrls, total: totalClean } = await getUniqueCleanUrls(db, {
       limit: 10000, // Get all URLs first, then filter
       offset: 0,
-      search
+      search: '' // Don't filter at DB level, filter after merging with mapping data
     });
     
     // Get all mappings (excluding excluded URLs)
