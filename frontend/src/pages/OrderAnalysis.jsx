@@ -586,11 +586,10 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
                           {page.page_title && page.page_title !== '모아담다 온라인 공식몰' && (
                             <div style={{ 
                               fontSize: '11px', 
-                              marginBottom: '3px', 
-                              color: '#f97316',
-                              fontWeight: '500'
+                              marginBottom: '3px'
                             }}>
-                              {page.page_title}
+                              <span style={{ color: 'rgb(102,102,102)' }}>상품명: </span>
+                              <span style={{ color: '#f97316', fontWeight: '500' }}>{page.page_title}</span>
                             </div>
                           )}
 
@@ -728,11 +727,10 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
                                       {page.page_title && page.page_title !== '모아담다 온라인 공식몰' && (
                                         <div style={{ 
                                           fontSize: '11px', 
-                                          marginBottom: '3px', 
-                                          color: '#000',
-                                          fontWeight: '500'
+                                          marginBottom: '3px'
                                         }}>
-                                          {page.page_title}
+                                          <span style={{ color: 'rgb(102,102,102)' }}>상품명: </span>
+                                          <span style={{ color: '#f97316', fontWeight: '500' }}>{page.page_title}</span>
                                         </div>
                                       )}
 
