@@ -252,6 +252,7 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
   const [showKoreanUrl, setShowKoreanUrl] = useState(getUrlDisplayMode() === 'korean');
+  const [showPreviousVisits, setShowPreviousVisits] = useState(false);
 
   useEffect(() => {
     fetchOrderDetail();
@@ -322,9 +323,6 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
 
   // 구매 직전 경로 (광고 클릭 후 ~ 구매까지)
   const journeyPages = purchase_journey?.pages || page_path || [];
-  
-  // 이전 방문 표시 여부
-  const [showPreviousVisits, setShowPreviousVisits] = useState(false);
 
   // 타임라인 다단 배치 계산
   const MAX_ITEMS_PER_COLUMN = 5;
