@@ -1321,40 +1321,35 @@ router.get('/order-detail/:orderId', async (req, res) => {
     const order = orderResult.rows[0];
 
     // 2. 페이지 이동 경로 (해당 세션의 모든 페이지뷰 + 체류 시간 계산)
-    // 페이지 중복 제거: 같은 base URL(쿼리 파라미터 제외)은 하나로 통합
+    // 중복 제거 로직 제거: 모든 pageview를 시간순으로 표시
+    // 세션 경계 검증: 30분 이상 간격은 비정상으로 간주하여 체류시간 제한
     const pagePathQuery = `
-      WITH base_urls AS (
+      WITH all_pageviews AS (
         SELECT
           p.page_url,
           p.page_title,
           p.timestamp,
-          -- URL에서 쿼리 파라미터 제거 (base URL만 추출)
-          CASE 
-            WHEN p.page_url LIKE '%?%' THEN SPLIT_PART(p.page_url, '?', 1)
-            ELSE p.page_url
-          END as base_url
+          LAG(p.timestamp) OVER (ORDER BY p.timestamp) as prev_timestamp,
+          LEAD(p.timestamp) OVER (ORDER BY p.timestamp) as next_timestamp,
+          ROW_NUMBER() OVER (ORDER BY p.timestamp) as page_order
         FROM pageviews p
         WHERE p.session_id = $1
       ),
-      deduplicated_pages AS (
-        SELECT
-          base_url,
-          MIN(page_url) as page_url, -- 원본 URL (첫 번째)
-          MIN(page_title) as page_title, -- 첫 번째 페이지 타이틀
-          MIN(timestamp) as first_timestamp, -- 첫 방문 시간
-          MAX(timestamp) as last_timestamp, -- 마지막 이탈 시간
-          ROW_NUMBER() OVER (ORDER BY MIN(timestamp)) as visit_order
-        FROM base_urls
-        GROUP BY base_url
-      ),
       page_times AS (
         SELECT
-          dp.page_url,
-          dp.page_title,
-          dp.first_timestamp as timestamp,
-          dp.last_timestamp,
-          LEAD(dp.first_timestamp) OVER (ORDER BY dp.first_timestamp) as next_page_timestamp
-        FROM deduplicated_pages dp
+          page_url,
+          page_title,
+          timestamp,
+          next_timestamp,
+          prev_timestamp,
+          page_order,
+          -- 이전 페이지와의 간격 계산 (세션 검증용)
+          CASE 
+            WHEN prev_timestamp IS NOT NULL THEN
+              EXTRACT(EPOCH FROM (timestamp - prev_timestamp))::INTEGER
+            ELSE 0
+          END as gap_from_prev
+        FROM all_pageviews
       ),
       purchase_time AS (
         SELECT MIN(e.timestamp) as purchase_timestamp
@@ -1366,15 +1361,22 @@ router.get('/order-detail/:orderId', async (req, res) => {
         pt.page_title,
         pt.timestamp,
         CASE
-          -- 같은 페이지 내 체류시간 (last_timestamp - first_timestamp)
-          WHEN pt.last_timestamp > pt.timestamp THEN
-            EXTRACT(EPOCH FROM (pt.last_timestamp - pt.timestamp))::INTEGER
           -- 다음 페이지로 이동한 경우
-          WHEN pt.next_page_timestamp IS NOT NULL THEN
-            EXTRACT(EPOCH FROM (pt.next_page_timestamp - pt.timestamp))::INTEGER
+          WHEN pt.next_timestamp IS NOT NULL THEN
+            -- 30분(1800초) 이상 간격이면 세션 경계로 간주하여 0 반환
+            CASE 
+              WHEN EXTRACT(EPOCH FROM (pt.next_timestamp - pt.timestamp))::INTEGER > 1800 THEN 0
+              ELSE LEAST(
+                EXTRACT(EPOCH FROM (pt.next_timestamp - pt.timestamp))::INTEGER,
+                600  -- 최대 10분으로 제한
+              )
+            END
           -- 마지막 페이지이고 구매가 발생한 경우
           WHEN (SELECT purchase_timestamp FROM purchase_time) IS NOT NULL THEN
-            EXTRACT(EPOCH FROM ((SELECT purchase_timestamp FROM purchase_time) - pt.timestamp))::INTEGER
+            LEAST(
+              EXTRACT(EPOCH FROM ((SELECT purchase_timestamp FROM purchase_time) - pt.timestamp))::INTEGER,
+              600  -- 최대 10분으로 제한
+            )
           ELSE 0
         END as time_spent_seconds
       FROM page_times pt

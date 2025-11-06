@@ -331,7 +331,7 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
     columns.push(page_path.slice(start, end));
   }
 
-  // 체류시간 계산
+  // 체류시간 계산 (백엔드에서 이미 필터링됨)
   const totalSeconds = page_path.reduce((sum, p) => sum + (p.time_spent_seconds || 0), 0);
   const avgSeconds = page_path.length > 0 ? Math.round(totalSeconds / page_path.length) : 0;
   const maxPage = page_path.reduce((max, p) => 
@@ -340,14 +340,39 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
   );
   const maxSeconds = maxPage.time_spent_seconds || 0;
 
+  // 데이터 검증 (백엔드가 제대로 처리했는지 확인)
+  if (totalSeconds > 3600) {
+    console.warn('[데이터 검증] 비정상적으로 긴 총 체류시간:', totalSeconds, '초');
+  }
+  const overLimitPages = page_path.filter(p => p.time_spent_seconds > 600);
+  if (overLimitPages.length > 0) {
+    console.warn('[데이터 검증] 10분 초과 페이지 발견:', overLimitPages);
+  }
+
+  // 시간 포맷 함수
+  const formatDuration = (seconds) => {
+    if (seconds >= 60) {
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      return `${mins}분 ${secs}초`;
+    }
+    return `${seconds}초`;
+  };
+
   // 마케팅 지표 계산
   const purchaseCount = (past_purchases?.length || 0) + 1; // 현재 주문 포함
   const daysSinceFirstVisit = order.first_visit 
     ? dayjs(order.timestamp).diff(dayjs(order.first_visit), 'day')
     : null;
   const touchpointCount = utm_history?.length || 0;
-  const utmDisplay = order.utm_source 
-    ? `${order.utm_source}${order.utm_medium ? `/${order.utm_medium}` : ''}${order.utm_campaign ? `/${order.utm_campaign}` : ''}`
+  
+  // UTM Last-Touch Attribution (최종 접촉 기준)
+  const lastTouch = utm_history && utm_history.length > 0 
+    ? utm_history[utm_history.length - 1] 
+    : null;
+  
+  const utmDisplay = lastTouch?.utm_source && lastTouch.utm_source !== 'direct'
+    ? `${lastTouch.utm_source}${lastTouch.utm_medium ? `/${lastTouch.utm_medium}` : ''}${lastTouch.utm_campaign ? `/${lastTouch.utm_campaign}` : ''}`
     : 'Direct 방문';
 
   return (
@@ -371,14 +396,18 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
             marginBottom: '6px'
           }}>
             {/* 금액 */}
-            <span style={{ color: '#1890ff', fontSize: '18px' }}>
-              {order.final_payment.toLocaleString()}원
+            <span>
+              <span style={{ fontSize: '12px', color: '#8c8c8c', fontWeight: 'normal' }}>구매금액: </span>
+              <span style={{ color: '#1890ff', fontSize: '18px' }}>
+                {order.final_payment.toLocaleString()}원
+              </span>
             </span>
             
             <span style={{ color: '#d9d9d9' }}>|</span>
             
             {/* 상품명 */}
             <span style={{ color: '#262626' }}>
+              <span style={{ fontSize: '12px', color: '#8c8c8c', fontWeight: 'normal' }}>상품: </span>
               {order.product_name || '상품명 없음'}
             </span>
             
@@ -399,6 +428,7 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
           
           {/* 주문 시간 */}
           <div style={{ fontSize: '14px', color: '#8c8c8c' }}>
+            <span style={{ fontSize: '12px', color: '#999' }}>주문시간: </span>
             {dayjs(order.timestamp).format('YYYY-MM-DD HH:mm:ss')}
           </div>
         </div>
@@ -421,30 +451,31 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
             marginBottom: '8px'
           }}>
             {/* 구매 결정 기간 */}
-            {daysSinceFirstVisit !== null ? (
-              <>
-                <span>
-                  <strong>첫 방문 후 {daysSinceFirstVisit}일 만에 구매</strong>
-                </span>
-                <span style={{ color: '#d9d9d9' }}>•</span>
-              </>
-            ) : (
-              <>
-                <span><strong>신규 방문</strong></span>
-                <span style={{ color: '#d9d9d9' }}>•</span>
-              </>
-            )}
+            <span>
+              <span style={{ fontSize: '11px', color: '#999' }}>구매여정: </span>
+              {daysSinceFirstVisit !== null ? (
+                <strong>첫 방문 후 {daysSinceFirstVisit}일 만에 구매</strong>
+              ) : (
+                <strong>신규 방문</strong>
+              )}
+            </span>
+            
+            <span style={{ color: '#d9d9d9' }}>•</span>
             
             {/* 접촉 횟수 */}
             <span>
-              <strong>총 {touchpointCount > 0 ? `${touchpointCount}번 접촉` : '직접 유입'}</strong>
+              <span style={{ fontSize: '11px', color: '#999' }}>접촉: </span>
+              <strong>{touchpointCount > 0 ? `${touchpointCount}회` : '직접 유입'}</strong>
             </span>
             
             <span style={{ color: '#d9d9d9' }}>•</span>
             
             {/* UTM 정보 */}
-            <span style={{ fontFamily: 'monospace' }}>
-              {utmDisplay}
+            <span>
+              <span style={{ fontSize: '11px', color: '#999' }}>유입: </span>
+              <span style={{ fontFamily: 'monospace', fontWeight: '500' }}>
+                {utmDisplay}
+              </span>
             </span>
           </div>
           
@@ -456,21 +487,15 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
             color: '#8c8c8c'
           }}>
             <span>
-              총 {totalSeconds >= 60 
-                ? `${Math.floor(totalSeconds / 60)}분 ${totalSeconds % 60}초`
-                : `${totalSeconds}초`}
+              <span style={{ color: '#999' }}>페이지 체류:</span> 총 {formatDuration(totalSeconds)}
             </span>
             <span style={{ color: '#d9d9d9' }}>•</span>
             <span>
-              평균 {avgSeconds >= 60 
-                ? `${Math.floor(avgSeconds / 60)}분 ${avgSeconds % 60}초`
-                : `${avgSeconds}초`}
+              평균 {formatDuration(avgSeconds)}
             </span>
             <span style={{ color: '#d9d9d9' }}>•</span>
             <span>
-              최대 {maxSeconds >= 60 
-                ? `${Math.floor(maxSeconds / 60)}분 ${maxSeconds % 60}초`
-                : `${maxSeconds}초`}
+              최대 {formatDuration(maxSeconds)}
             </span>
           </div>
         </div>
