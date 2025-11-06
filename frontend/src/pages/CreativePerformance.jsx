@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Table, Tag, Typography, Space, Button, Alert, message, Tooltip } from 'antd';
-import { ReloadOutlined, BarChartOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { ReloadOutlined, BarChartOutlined } from '@ant-design/icons';
 import axios from 'axios';
 import dayjs from 'dayjs';
 import SearchFilterBar from '../components/SearchFilterBar';
@@ -169,7 +169,8 @@ function CreativePerformance() {
           {text || '-'}
         </span>
       ),
-      sorter: true
+      sorter: true,
+      showSorterTooltip: false
     },
     {
       title: 'UTM Campaign',
@@ -183,7 +184,8 @@ function CreativePerformance() {
           {text || '-'}
         </span>
       ),
-      sorter: true
+      sorter: true,
+      showSorterTooltip: false
     },
     {
       title: 'UTM Medium',
@@ -197,7 +199,8 @@ function CreativePerformance() {
           {text || '-'}
         </span>
       ),
-      sorter: true
+      sorter: true,
+      showSorterTooltip: false
     },
     {
       title: '광고 소재 이름',
@@ -223,7 +226,8 @@ function CreativePerformance() {
           {text || '-'}
         </span>
       ),
-      sorter: true
+      sorter: true,
+      showSorterTooltip: false
     },
     {
       title: 'UV',
@@ -232,7 +236,8 @@ function CreativePerformance() {
       width: 60,
       align: 'center',
       render: (num) => <span style={{ fontWeight: 500, fontSize: '11px' }}>{formatNumber(num)}</span>,
-      sorter: true
+      sorter: true,
+      showSorterTooltip: false
     },
     {
       title: '평균PV',
@@ -241,7 +246,8 @@ function CreativePerformance() {
       width: 70,
       align: 'center',
       render: (num) => <span style={{ fontSize: '11px' }}>{num ? num.toFixed(1) : '0.0'}</span>,
-      sorter: true
+      sorter: true,
+      showSorterTooltip: false
     },
     {
       title: <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>평균<br/>체류시간</div>,
@@ -250,7 +256,8 @@ function CreativePerformance() {
       width: 75,
       align: 'center',
       render: (seconds) => <span style={{ fontSize: '11px' }}>{formatDuration(seconds)}</span>,
-      sorter: true
+      sorter: true,
+      showSorterTooltip: false
     },
     {
       title: '구매',
@@ -267,7 +274,8 @@ function CreativePerformance() {
           {formatNumber(num)}
         </span>
       ),
-      sorter: true
+      sorter: true,
+      showSorterTooltip: false
     },
     {
       title: '결제액',
@@ -284,16 +292,16 @@ function CreativePerformance() {
           {formatCurrency(amount)}
         </span>
       ),
-      sorter: true
+      sorter: true,
+      showSorterTooltip: false
     },
     {
       title: (
-        <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>
-          영향 준<br/>주문 수{' '}
-          <Tooltip title="이 광고를 본 후 구매한 주문 수">
-            <InfoCircleOutlined style={{ fontSize: '10px', color: '#999' }} />
-          </Tooltip>
-        </div>
+        <Tooltip title="이 광고를 본 후 구매한 주문 수">
+          <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>
+            영향 준<br/>주문 수
+          </div>
+        </Tooltip>
       ),
       dataIndex: 'contributed_orders_count',
       key: 'contributed_orders_count',
@@ -308,16 +316,16 @@ function CreativePerformance() {
           {formatNumber(num)}
         </span>
       ),
-      sorter: true
+      sorter: true,
+      showSorterTooltip: false
     },
     {
       title: (
-        <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>
-          기여한<br/>매출액{' '}
-          <Tooltip title="기여도 모델로 계산된 매출">
-            <InfoCircleOutlined style={{ fontSize: '10px', color: '#999' }} />
-          </Tooltip>
-        </div>
+        <Tooltip title="기여도 모델로 계산된 매출">
+          <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>
+            기여한<br/>매출액
+          </div>
+        </Tooltip>
       ),
       dataIndex: 'attributed_revenue',
       key: 'attributed_revenue',
@@ -332,16 +340,16 @@ function CreativePerformance() {
           {formatCurrency(amount)}
         </span>
       ),
-      sorter: true
+      sorter: true,
+      showSorterTooltip: false
     },
     {
       title: (
-        <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>
-          영향 준<br/>주문 총액{' '}
-          <Tooltip title="영향 준 주문들의 전체 결제금액">
-            <InfoCircleOutlined style={{ fontSize: '10px', color: '#999' }} />
-          </Tooltip>
-        </div>
+        <Tooltip title="영향 준 주문들의 전체 결제금액">
+          <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>
+            영향 준<br/>주문 총액
+          </div>
+        </Tooltip>
       ),
       dataIndex: 'total_contributed_revenue',
       key: 'total_contributed_revenue',
@@ -356,7 +364,8 @@ function CreativePerformance() {
           {formatCurrency(amount)}
         </span>
       ),
-      sorter: true
+      sorter: true,
+      showSorterTooltip: false
     }
   ];
 
