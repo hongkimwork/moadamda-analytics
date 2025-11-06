@@ -328,10 +328,263 @@ function OrderDetailPageContent({ orderId }) {
    - 4단계: 실제 데이터로 검증
    - 5단계: 배포
 
-4. **작업 일시정지 규칙**
+4. **작업 일시정지 규칙 (🚨 절대 규칙)**
    - 새 테이블/API 작업 시 → 일시정지, 데이터 요청
    - 복잡한 계산 로직 작성 시 → 일시정지, 검증 요청
    - 이상 징후 발견 시 → 일시정지, 원인 파악
+   - **SQL 쿼리 작성/수정 시 → 일시정지, 실제 데이터로 검증**
+   - **데이터 정제/필터링 로직 작성 시 → 일시정지, 샘플 데이터 요청**
+
+---
+
+## 🚨 필수 작업 일시정지 시나리오
+
+### 시나리오 1: 새 API/쿼리 개발
+
+**상황:**
+- 백엔드 API 엔드포인트 추가
+- SQL 쿼리 작성/수정
+- 데이터 집계/계산 로직 추가
+
+**행동:**
+1. ⏸️ **작업 즉시 일시정지**
+2. 📋 사용자에게 명령어 제공:
+```bash
+docker exec -i ma-postgres psql -U moadamda -d analytics -c "
+  [작성한 쿼리 또는 샘플 쿼리]
+"
+```
+3. ⏳ 사용자 응답 대기
+4. ✅ 결과 분석 후 작업 재개
+
+**예시:**
+```
+⏸️ 작업 일시정지
+
+새로운 쿼리를 작성했습니다. 실제 데이터로 검증이 필요합니다.
+
+다음 명령어를 서버에서 실행해주세요:
+
+docker exec -i ma-postgres psql -U moadamda -d analytics -c "
+  SELECT page_url, timestamp, time_spent_seconds 
+  FROM pageviews 
+  WHERE session_id = (
+    SELECT session_id FROM conversions 
+    ORDER BY timestamp DESC LIMIT 1
+  )
+  ORDER BY timestamp ASC;
+"
+
+결과를 보내주시면:
+- time_spent_seconds 범위 확인
+- timestamp 순서 확인
+- 중복 여부 확인
+후 작업을 계속하겠습니다.
+```
+
+---
+
+### 시나리오 2: 이상 값 발견
+
+**상황:**
+- 계산 결과가 도메인 상식에 맞지 않음
+- 32,602분, -100원, NULL이 예상치 못한 곳에 등장
+
+**행동:**
+1. ⏸️ **작업 즉시 일시정지**
+2. 🔍 원인 파악을 위한 쿼리 제공
+3. ⏳ 사용자 응답 대기
+4. 🎯 근본 원인 파악 후 해결
+
+**예시:**
+```
+⏸️ 작업 일시정지
+
+비정상 값 발견: 체류시간 32,602분 (22.6일)
+
+원인 파악을 위해 다음 명령어들을 순서대로 실행해주세요:
+
+1. 해당 주문의 기본 정보:
+docker exec -i ma-postgres psql -U moadamda -d analytics -c "
+  SELECT order_id, timestamp, visitor_id, session_id 
+  FROM conversions 
+  WHERE order_id = '20251106-0000108';
+"
+
+2. 해당 세션의 모든 pageview:
+docker exec -i ma-postgres psql -U moadamda -d analytics -c "
+  SELECT page_url, timestamp 
+  FROM pageviews 
+  WHERE session_id = '[1번 결과의 session_id]'
+  ORDER BY timestamp ASC;
+"
+
+3. 체류시간 계산 로직 테스트:
+docker exec -i ma-postgres psql -U moadamda -d analytics -c "
+  [체류시간 계산 쿼리]
+"
+
+결과를 모두 보내주시면 원인을 정확히 파악하겠습니다.
+```
+
+---
+
+### 시나리오 3: 데이터 소스 불일치
+
+**상황:**
+- 같은 정보의 여러 소스가 다른 값 표시
+- order.utm_source ≠ utm_history[0].utm_source
+
+**행동:**
+1. ⏸️ **작업 즉시 일시정지**
+2. 🔍 각 소스의 데이터 확인 쿼리 제공
+3. ⏳ 사용자 응답 대기
+4. ✅ 정확한 소스 선택 후 작업 재개
+
+**예시:**
+```
+⏸️ 작업 일시정지
+
+UTM 데이터 불일치 발견:
+- order.utm_source: null
+- utm_history: kakao
+
+어떤 것이 정확한지 확인이 필요합니다.
+
+다음 명령어를 실행해주세요:
+
+1. visitors 테이블 UTM (최초 방문):
+docker exec -i ma-postgres psql -U moadamda -d analytics -c "
+  SELECT utm_source, utm_medium, first_visit 
+  FROM visitors 
+  WHERE visitor_id = '[visitor_id]';
+"
+
+2. utm_sessions 테이블 UTM (전체 접촉):
+docker exec -i ma-postgres psql -U moadamda -d analytics -c "
+  SELECT utm_source, utm_medium, entry_timestamp 
+  FROM utm_sessions 
+  WHERE visitor_id = '[visitor_id]'
+  ORDER BY entry_timestamp ASC;
+"
+
+3. 주문 시간:
+docker exec -i ma-postgres psql -U moadamda -d analytics -c "
+  SELECT timestamp 
+  FROM conversions 
+  WHERE order_id = '[order_id]';
+"
+
+결과를 보내주시면 어떤 UTM이 구매에 영향을 주었는지 판단하겠습니다.
+```
+
+---
+
+### 시나리오 4: 테이블 스키마 불확실
+
+**상황:**
+- 컬럼명이 불확실
+- 데이터 타입이 불확실 (JSONB vs 일반 컬럼)
+
+**행동:**
+1. ⏸️ **작업 즉시 일시정지**
+2. 📋 스키마 확인 명령어 제공
+3. ⏳ 사용자 응답 대기
+4. ✅ 정확한 컬럼명 확인 후 작업 재개
+
+**예시:**
+```
+⏸️ 작업 일시정지
+
+events 테이블의 정확한 스키마 확인이 필요합니다.
+
+다음 명령어를 실행해주세요:
+
+docker exec -i ma-postgres psql -U moadamda -d analytics -c "\d events"
+
+결과를 보내주시면:
+- 컬럼명 확인
+- 데이터 타입 확인
+- metadata JSONB 구조 확인
+후 쿼리를 작성하겠습니다.
+```
+
+---
+
+## 📝 작업 일시정지 템플릿
+
+### 기본 템플릿
+```
+⏸️ 작업 일시정지 - [이유]
+
+[상황 설명]
+
+다음 명령어를 서버에서 실행해주세요:
+
+```bash
+[명령어]
+```
+
+[기대하는 결과 설명]
+
+결과를 보내주시면 [다음 단계] 하겠습니다.
+```
+
+### 복수 쿼리 템플릿
+```
+⏸️ 작업 일시정지 - 데이터 검증 필요
+
+[상황 설명]
+
+다음 명령어들을 **순서대로** 실행해주세요:
+
+### 명령어 1: [목적]
+```bash
+[명령어 1]
+```
+
+### 명령어 2: [목적]
+```bash
+[명령어 2]
+```
+
+### 명령어 3: [목적]
+```bash
+[명령어 3]
+```
+
+모든 결과를 보내주시면 종합 분석 후 작업을 진행하겠습니다.
+```
+
+---
+
+## 🎓 실제 사례: 체류시간 버그 (2025-11-06)
+
+### 올바른 진행 방식 (개선 후)
+
+1. **문제 인지**: 32,602분 = 비정상 값
+2. ⏸️ **즉시 일시정지**
+3. 📋 **쿼리 제공**:
+```bash
+# 1. 기본 정보
+docker exec -i ma-postgres psql -U moadamda -d analytics -c "..."
+
+# 2. 페이지뷰 확인
+docker exec -i ma-postgres psql -U moadamda -d analytics -c "..."
+
+# 3. 계산 로직 테스트
+docker exec -i ma-postgres psql -U moadamda -d analytics -c "..."
+```
+4. ⏳ **사용자 응답 대기**
+5. ✅ **원인 파악**: 8일 간격 URL 병합
+6. 🔧 **근본 해결**: 중복 제거 로직 제거
+
+### 잘못된 진행 방식 (개선 전)
+
+1. 문제 인지: 32,602분 = 비정상 값
+2. ❌ **가정으로 수정**: "아마 필터링이 필요할 거야"
+3. ❌ **프론트엔드 임시방편**: filter 추가
+4. ❌ **근본 원인 미파악**: 백엔드 쿼리 문제 방치
 
 ---
 
