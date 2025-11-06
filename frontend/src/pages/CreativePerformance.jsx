@@ -297,7 +297,24 @@ function CreativePerformance() {
     },
     {
       title: (
-        <Tooltip title="이 광고를 본 후 구매한 주문 수">
+        <Tooltip 
+          title={
+            <div style={{ whiteSpace: 'pre-line' }}>
+              {`이 광고를 본 고객이 구매한 주문 개수입니다.
+바로 구매하지 않아도 포함됩니다.
+
+예시:
+• 철수: Meta 광고 봄 → 3일 후 네이버 광고 보고 구매
+  → Meta 광고: +1개, 네이버 광고: +1개
+
+• 영희: Meta 광고만 보고 바로 구매  
+  → Meta 광고: +1개
+
+활용: 이 광고가 몇 개의 주문에 기여했는지 확인`}
+            </div>
+          }
+          overlayStyle={{ maxWidth: '500px' }}
+        >
           <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>
             영향 준<br/>주문 수
           </div>
@@ -321,7 +338,37 @@ function CreativePerformance() {
     },
     {
       title: (
-        <Tooltip title="기여도 모델로 계산된 매출">
+        <Tooltip 
+          title={
+            <div style={{ whiteSpace: 'pre-line' }}>
+              {`여러 광고를 거쳐 구매한 경우,
+각 광고가 실제로 벌어들인 금액입니다.
+
+계산 방식:
+• 막타(마지막) 광고: 50% 기본 보장
+• 나머지 50%: 접촉한 광고들이 접촉 횟수 비율로 나눔
+
+예시: 철수가 100,000원 구매
+• 광고 접촉 순서: Meta A → Meta B → 네이버 C(막타)
+
+1단계: 막타에 50% 먼저 줌
+   네이버 C = 50,000원
+
+2단계: 나머지 50%를 비막타들이 나눔
+   Meta A = 50,000 × 1/2 = 25,000원
+   Meta B = 50,000 × 1/2 = 25,000원
+
+결과:
+• 네이버 C: 50,000원
+• Meta A: 25,000원
+• Meta B: 25,000원
+합계: 100,000원 ✓
+
+활용: 이 광고의 실제 매출 기여도 측정`}
+            </div>
+          }
+          overlayStyle={{ maxWidth: '500px' }}
+        >
           <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>
             기여한<br/>매출액
           </div>
@@ -345,7 +392,37 @@ function CreativePerformance() {
     },
     {
       title: (
-        <Tooltip title="영향 준 주문들의 전체 결제금액">
+        <Tooltip 
+          title={
+            <div style={{ whiteSpace: 'pre-line' }}>
+              {`이 광고를 본 고객들이 실제로 결제한 금액의 합계입니다.
+
+예시:
+철수가 basic_241230 광고를 7번 보고,
+자사몰배너 광고를 1번 보고 141,000원 구매했습니다.
+
+각 광고의 "영향 준 주문 총액":
+• basic_241230: +141,000원
+• 자사몰배너: +141,000원
+
+왜 둘 다 141,000원?
+→ 둘 다 철수 주문에 관여했으니, 
+   원래 주문 금액 그대로 각각 집계합니다!
+
+이렇게 세는 이유:
+각 광고가 접촉한 고객들의 전체 구매력을 보기 위해서입니다.
+
+"기여한 매출액"과의 차이:
+• 영향 준 주문 총액: 141,000 + 141,000 = 282,000원 (중복 OK)
+• 기여한 매출액: basic는 약 122,000원, 자사몰은 약 19,000원 
+                (기여도로 나눠서 합하면 141,000원 딱!)
+
+활용법:
+이 광고를 본 고객들의 총 구매 규모를 파악할 때 사용합니다.`}
+            </div>
+          }
+          overlayStyle={{ maxWidth: '500px' }}
+        >
           <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>
             영향 준<br/>주문 총액
           </div>
