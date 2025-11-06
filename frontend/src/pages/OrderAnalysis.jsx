@@ -392,14 +392,11 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
         {/* 광고 정보 */}
         {lastTouch && (
           <div style={{ 
-            background: '#fff8e1',
-            padding: '12px 16px',
-            borderLeft: '4px solid #ff9800',
             marginBottom: '16px'
           }}>
             <div style={{ 
               fontSize: '13px', 
-              color: '#e65100',
+              color: '#000',
               marginBottom: '8px'
             }}>
               <span style={{ fontWeight: '500' }}>매체: </span>
@@ -418,7 +415,7 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
               <div style={{ 
                 fontSize: '14px', 
                 fontWeight: 'bold', 
-                color: '#1976d2'
+                color: '#000'
               }}>
                 광고 클릭 후 {formatDuration(adToPurchaseSeconds)} 만에 구매
               </div>
@@ -429,14 +426,15 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
         {/* 구매여정 & 재구매 */}
         <div style={{ 
           fontSize: '13px',
-          marginBottom: '12px'
+          marginBottom: '12px',
+          color: '#000'
         }}>
-          <span style={{ color: '#595959' }}>구매여정: </span>
+          <span>구매여정: </span>
           <span style={{ fontWeight: '600' }}>
             {daysSinceFirstVisit !== null ? `첫 방문 후 ${daysSinceFirstVisit}일 만에 구매` : '신규 방문'}
           </span>
           <span style={{ margin: '0 10px', color: '#d9d9d9' }}>|</span>
-          <span style={{ color: '#595959' }}>재구매 횟수: </span>
+          <span>재구매 횟수: </span>
           <span style={{ fontWeight: '600' }}>{repurchaseCount}회</span>
         </div>
         
@@ -444,35 +442,37 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
         <div style={{ 
           fontSize: '14px', 
           fontWeight: 'bold',
-          marginBottom: '12px'
+          marginBottom: '12px',
+          color: '#000'
         }}>
-          <span style={{ color: '#8c8c8c', fontWeight: 'normal' }}>상품명: </span>
+          <span style={{ fontWeight: 'normal' }}>상품명: </span>
           {order.product_name || '상품명 없음'}
         </div>
         
         {/* 구매금액 & 주문시간 */}
         <div style={{ 
           fontSize: '13px',
-          marginBottom: '10px'
+          marginBottom: '10px',
+          color: '#000'
         }}>
-          <span style={{ color: '#595959' }}>구매금액: </span>
-          <span style={{ fontWeight: 'bold', color: '#1890ff', fontSize: '15px' }}>
+          <span>구매금액: </span>
+          <span style={{ fontWeight: 'bold', fontSize: '15px' }}>
             {order.final_payment.toLocaleString()}원
           </span>
           <span style={{ margin: '0 10px', color: '#d9d9d9' }}>|</span>
-          <span style={{ color: '#595959' }}>주문시간: </span>
+          <span>주문시간: </span>
           <span>{dayjs(order.timestamp).format('YYYY-MM-DD HH:mm:ss')}</span>
         </div>
         
         {/* 디바이스 & 페이지 체류시간 */}
         <div style={{ 
           fontSize: '12px',
-          color: '#616161'
+          color: '#000'
         }}>
-          <span style={{ color: '#8c8c8c' }}>디바이스: </span>
+          <span>디바이스: </span>
           <span>{order.device_type === 'mobile' ? 'Mobile' : 'PC'}</span>
           <span style={{ margin: '0 10px', color: '#d9d9d9' }}>|</span>
-          <span style={{ color: '#8c8c8c' }}>페이지 체류시간: </span>
+          <span>페이지 체류시간: </span>
           <span>총 {formatDuration(totalSeconds)}, </span>
           <span>평균 {formatDuration(avgSeconds)}, </span>
           <span>최대 {formatDuration(maxSeconds)}</span>
@@ -493,7 +493,7 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
           <Tag color="orange" style={{ fontSize: '11px' }}>
             {journeyPages.length}개 페이지 • {formatDuration(totalSeconds)}
           </Tag>
-          <Space size="small" style={{ marginLeft: 'auto' }}>
+          <Space size="small">
             <LinkOutlined />
             <span style={{ fontSize: '12px', color: '#666' }}>원본 URL</span>
             <Switch 
@@ -544,9 +544,9 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
 
                           {showKoreanUrl ? (
                             <div style={{ 
-                              fontSize: '10px', 
+                              fontSize: '12px', 
                               marginBottom: '4px', 
-                              color: '#64748b'
+                              color: '#000'
                             }}>
                               {urlInfo.name}
                             </div>
@@ -666,9 +666,9 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
                                     style={{ paddingBottom: '8px' }}
                                   >
                                     <div style={{ minHeight: '50px' }}>
-                                      <div style={{ fontWeight: 'bold', marginBottom: '4px', fontSize: '12px', color: '#666' }}>
+                                      <div style={{ fontWeight: 'bold', marginBottom: '4px', fontSize: '12px', color: '#000' }}>
                                         {isFirst ? '진입' : isLast ? '이탈' : `${globalIdx}단계`}
-                                        <span style={{ marginLeft: '6px', color: '#999', fontWeight: 'normal', fontSize: '11px' }}>
+                                        <span style={{ marginLeft: '6px', color: '#000', fontWeight: 'normal', fontSize: '11px' }}>
                                           {dayjs(page.timestamp).format('HH:mm:ss')}
                                         </span>
                                       </div>
@@ -677,7 +677,7 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
                                         <div style={{ 
                                           fontSize: '11px', 
                                           marginBottom: '3px', 
-                                          color: '#999',
+                                          color: '#000',
                                           fontWeight: '500'
                                         }}>
                                           {page.page_title}
@@ -686,9 +686,9 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
 
                                       {showKoreanUrl ? (
                                         <div style={{ 
-                                          fontSize: '10px', 
+                                          fontSize: '12px', 
                                           marginBottom: '4px', 
-                                          color: '#999'
+                                          color: '#000'
                                         }}>
                                           {urlInfo.name}
                                         </div>
@@ -697,7 +697,7 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
                                           style={{ 
                                             fontSize: '9px', 
                                             marginBottom: '4px', 
-                                            color: '#999',
+                                            color: '#000',
                                             maxWidth: '250px',
                                             overflow: 'hidden',
                                             textOverflow: 'ellipsis',
