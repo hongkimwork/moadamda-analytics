@@ -501,7 +501,7 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
             {daysSinceFirstVisit !== null ? (
               <>
                 <span style={{ color: 'rgb(0,0,0)' }}>첫 방문 후 </span>
-                <span style={{ color: 'rgb(24,144,255)', fontWeight: 'bold' }}>{daysSinceFirstVisit}일</span>
+                <span style={{ color: 'rgb(0,0,0)', fontWeight: 'bold' }}>{daysSinceFirstVisit}일</span>
                 <span style={{ color: 'rgb(0,0,0)' }}> 만에 구매</span>
               </>
             ) : (
@@ -522,11 +522,11 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
           <div style={{ fontSize: '13px' }}>
             <span style={{ color: 'rgb(102,102,102)' }}>페이지 체류시간: </span>
             <span style={{ color: 'rgb(0,0,0)' }}>총 </span>
-            <span style={{ color: 'rgb(24,144,255)', fontWeight: 'bold' }}>{formatDuration(totalSeconds)}</span>
+            <span style={{ color: 'rgb(0,0,0)', fontWeight: 'bold' }}>{formatDuration(totalSeconds)}</span>
             <span style={{ color: 'rgb(0,0,0)' }}>, 평균 </span>
-            <span style={{ color: 'rgb(24,144,255)', fontWeight: 'bold' }}>{formatDuration(avgSeconds)}</span>
+            <span style={{ color: 'rgb(0,0,0)', fontWeight: 'bold' }}>{formatDuration(avgSeconds)}</span>
             <span style={{ color: 'rgb(0,0,0)' }}>, 최대 </span>
-            <span style={{ color: 'rgb(24,144,255)', fontWeight: 'bold' }}>{formatDuration(maxSeconds)}</span>
+            <span style={{ color: 'rgb(0,0,0)', fontWeight: 'bold' }}>{formatDuration(maxSeconds)}</span>
           </div>
         </div>
       </div>
