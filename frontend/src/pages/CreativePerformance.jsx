@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Table, Tag, Typography, Space, Button, Alert, message, Tooltip } from 'antd';
-import { ReloadOutlined, BarChartOutlined } from '@ant-design/icons';
+import { ReloadOutlined, BarChartOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import axios from 'axios';
 import dayjs from 'dayjs';
 import SearchFilterBar from '../components/SearchFilterBar';
@@ -218,6 +218,7 @@ function CreativePerformance() {
             navigator.clipboard.writeText(text);
             message.success('광고 소재 이름이 복사되었습니다');
           }}
+          title="더블클릭하면 복사됩니다"
         >
           {text || '-'}
         </span>
@@ -286,7 +287,14 @@ function CreativePerformance() {
       sorter: true
     },
     {
-      title: <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>결제건<br/>기여 포함 수</div>,
+      title: (
+        <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>
+          영향 준<br/>주문 수{' '}
+          <Tooltip title="이 광고를 본 후 구매한 주문 수">
+            <InfoCircleOutlined style={{ fontSize: '10px', color: '#999' }} />
+          </Tooltip>
+        </div>
+      ),
       dataIndex: 'contributed_orders_count',
       key: 'contributed_orders_count',
       width: 80,
@@ -303,7 +311,14 @@ function CreativePerformance() {
       sorter: true
     },
     {
-      title: <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>결제건<br/>기여금액</div>,
+      title: (
+        <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>
+          기여한<br/>매출액{' '}
+          <Tooltip title="기여도 모델로 계산된 매출">
+            <InfoCircleOutlined style={{ fontSize: '10px', color: '#999' }} />
+          </Tooltip>
+        </div>
+      ),
       dataIndex: 'attributed_revenue',
       key: 'attributed_revenue',
       width: 85,
@@ -320,7 +335,14 @@ function CreativePerformance() {
       sorter: true
     },
     {
-      title: <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>기여 결제건<br/>총 결제금액</div>,
+      title: (
+        <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>
+          영향 준<br/>주문 총액{' '}
+          <Tooltip title="영향 준 주문들의 전체 결제금액">
+            <InfoCircleOutlined style={{ fontSize: '10px', color: '#999' }} />
+          </Tooltip>
+        </div>
+      ),
       dataIndex: 'total_contributed_revenue',
       key: 'total_contributed_revenue',
       width: 95,

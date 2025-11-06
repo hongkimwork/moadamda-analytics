@@ -602,30 +602,29 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
                               {urlInfo.name}
                             </div>
                           ) : (
-                            <Tooltip title="더블클릭하면 복사됩니다">
-                              <div 
-                                style={{ 
-                                  fontSize: '9px', 
-                                  marginBottom: '4px', 
-                                  color: '#666',
-                                  maxWidth: '250px',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap',
-                                  cursor: 'pointer'
-                                }}
-                                onDoubleClick={async () => {
-                                  try {
-                                    await navigator.clipboard.writeText(page.page_url);
-                                    message.success('URL이 복사되었습니다!');
-                                  } catch (err) {
-                                    message.error('복사에 실패했습니다.');
-                                  }
-                                }}
-                              >
-                                {page.page_url}
-                              </div>
-                            </Tooltip>
+                            <div 
+                              style={{ 
+                                fontSize: '9px', 
+                                marginBottom: '4px', 
+                                color: '#666',
+                                maxWidth: '250px',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                cursor: 'pointer'
+                              }}
+                              title="더블클릭하면 복사됩니다"
+                              onDoubleClick={async () => {
+                                try {
+                                  await navigator.clipboard.writeText(page.page_url);
+                                  message.success('URL이 복사되었습니다!');
+                                } catch (err) {
+                                  message.error('복사에 실패했습니다.');
+                                }
+                              }}
+                            >
+                              {page.page_url}
+                            </div>
                           )}
 
                           {page.time_spent_seconds > 0 && (
