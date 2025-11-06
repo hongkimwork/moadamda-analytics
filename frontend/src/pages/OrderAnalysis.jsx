@@ -365,143 +365,117 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
 
   // 마케팅 지표 계산
   const purchaseCount = (past_purchases?.length || 0) + 1; // 현재 주문 포함
+  const repurchaseCount = purchaseCount - 1; // 재구매 횟수
   const daysSinceFirstVisit = order.first_visit 
     ? dayjs(order.timestamp).diff(dayjs(order.first_visit), 'day')
     : null;
-  const touchpointCount = utm_history?.length || 0;
   
   // UTM Last-Touch Attribution (최종 접촉 기준)
   const lastTouch = utm_history && utm_history.length > 0 
     ? utm_history[utm_history.length - 1] 
     : null;
   
-  const utmDisplay = lastTouch?.utm_source && lastTouch.utm_source !== 'direct'
-    ? `${lastTouch.utm_source}${lastTouch.utm_medium ? `/${lastTouch.utm_medium}` : ''}${lastTouch.utm_campaign ? `/${lastTouch.utm_campaign}` : ''}`
-    : 'Direct 방문';
+  // 광고 클릭 후 구매까지 시간 계산
+  const adToPurchaseSeconds = lastTouch 
+    ? dayjs(order.timestamp).diff(dayjs(lastTouch.entry_time), 'second')
+    : null;
 
   return (
     <div style={{ background: '#fff' }}>
-      {/* 핵심 비즈니스 지표 - 2단 구조 */}
+      {/* 통합 상단 영역 */}
       <div style={{ 
         background: '#fafafa', 
         padding: '20px', 
         borderBottom: '1px solid #e5e7eb',
         marginBottom: '20px'
       }}>
-        {/* 1단: 핵심 비즈니스 지표 */}
-        <div style={{ marginBottom: '12px' }}>
+        {/* 광고 정보 */}
+        {lastTouch && (
           <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '16px', 
-            flexWrap: 'wrap',
-            fontSize: '15px',
-            fontWeight: 'bold',
-            marginBottom: '6px'
+            background: '#fff8e1',
+            padding: '12px 16px',
+            borderLeft: '4px solid #ff9800',
+            marginBottom: '16px'
           }}>
-            {/* 금액 */}
-            <span>
-              <span style={{ fontSize: '12px', color: '#8c8c8c', fontWeight: 'normal' }}>구매금액: </span>
-              <span style={{ color: '#1890ff', fontSize: '18px' }}>
-                {order.final_payment.toLocaleString()}원
-              </span>
-            </span>
-            
-            <span style={{ color: '#d9d9d9' }}>|</span>
-            
-            {/* 상품명 */}
-            <span style={{ color: '#262626' }}>
-              <span style={{ fontSize: '12px', color: '#8c8c8c', fontWeight: 'normal' }}>상품: </span>
-              {order.product_name || '상품명 없음'}
-            </span>
-            
-            <span style={{ color: '#d9d9d9' }}>|</span>
-            
-            {/* 재구매 여부 */}
-            <Tag color={purchaseCount > 1 ? 'gold' : 'green'} style={{ fontSize: '13px', fontWeight: 'bold' }}>
-              {purchaseCount}번째 구매
-            </Tag>
-            
-            <span style={{ color: '#d9d9d9' }}>|</span>
-            
-            {/* 디바이스 */}
-            <Tag color={order.device_type === 'mobile' ? 'blue' : 'green'} style={{ fontSize: '13px' }}>
-              {order.device_type === 'mobile' ? 'Mobile' : 'PC'}
-            </Tag>
+            <div style={{ 
+              fontSize: '13px', 
+              color: '#e65100',
+              marginBottom: '8px'
+            }}>
+              <span style={{ fontWeight: '500' }}>매체: </span>
+              <span style={{ fontWeight: 'bold' }}>{lastTouch.utm_source || '-'}</span>
+              <span style={{ margin: '0 8px', color: '#bdbdbd' }}>|</span>
+              <span style={{ fontWeight: '500' }}>유형: </span>
+              <span style={{ fontWeight: 'bold' }}>{lastTouch.utm_medium || '-'}</span>
+              <span style={{ margin: '0 8px', color: '#bdbdbd' }}>|</span>
+              <span style={{ fontWeight: '500' }}>캠페인: </span>
+              <span style={{ fontWeight: 'bold' }}>{lastTouch.utm_campaign || '-'}</span>
+              <span style={{ margin: '0 8px', color: '#bdbdbd' }}>|</span>
+              <span style={{ fontWeight: '500' }}>소재: </span>
+              <span style={{ fontWeight: 'bold' }}>{lastTouch.utm_content || '-'}</span>
+            </div>
+            {adToPurchaseSeconds !== null && (
+              <div style={{ 
+                fontSize: '14px', 
+                fontWeight: 'bold', 
+                color: '#1976d2'
+              }}>
+                광고 클릭 후 {formatDuration(adToPurchaseSeconds)} 만에 구매
+              </div>
+            )}
           </div>
-          
-          {/* 주문 시간 */}
-          <div style={{ fontSize: '14px', color: '#8c8c8c' }}>
-            <span style={{ fontSize: '12px', color: '#999' }}>주문시간: </span>
-            {dayjs(order.timestamp).format('YYYY-MM-DD HH:mm:ss')}
-          </div>
-        </div>
-
-        {/* 구분선 */}
+        )}
+        
+        {/* 구매여정 & 재구매 */}
         <div style={{ 
-          borderTop: '1px solid #e5e7eb', 
-          margin: '12px 0',
-        }} />
-
-        {/* 2단: 마케팅 효과 측정 */}
-        <div>
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '12px', 
-            flexWrap: 'wrap',
-            fontSize: '12px',
-            color: '#595959',
-            marginBottom: '8px'
-          }}>
-            {/* 구매 결정 기간 */}
-            <span>
-              <span style={{ fontSize: '11px', color: '#999' }}>구매여정: </span>
-              {daysSinceFirstVisit !== null ? (
-                <strong>첫 방문 후 {daysSinceFirstVisit}일 만에 구매</strong>
-              ) : (
-                <strong>신규 방문</strong>
-              )}
-            </span>
-            
-            <span style={{ color: '#d9d9d9' }}>•</span>
-            
-            {/* 접촉 횟수 */}
-            <span>
-              <span style={{ fontSize: '11px', color: '#999' }}>접촉: </span>
-              <strong>{touchpointCount > 0 ? `${touchpointCount}회` : '직접 유입'}</strong>
-            </span>
-            
-            <span style={{ color: '#d9d9d9' }}>•</span>
-            
-            {/* UTM 정보 */}
-            <span>
-              <span style={{ fontSize: '11px', color: '#999' }}>유입: </span>
-              <span style={{ fontFamily: 'monospace', fontWeight: '500' }}>
-                {utmDisplay}
-              </span>
-            </span>
-          </div>
-          
-          {/* 체류시간 통계 */}
-          <div style={{ 
-            display: 'flex', 
-            gap: '16px',
-            fontSize: '11px',
-            color: '#8c8c8c'
-          }}>
-            <span>
-              <span style={{ color: '#999' }}>페이지 체류:</span> 총 {formatDuration(totalSeconds)}
-            </span>
-            <span style={{ color: '#d9d9d9' }}>•</span>
-            <span>
-              평균 {formatDuration(avgSeconds)}
-            </span>
-            <span style={{ color: '#d9d9d9' }}>•</span>
-            <span>
-              최대 {formatDuration(maxSeconds)}
-            </span>
-          </div>
+          fontSize: '13px',
+          marginBottom: '12px'
+        }}>
+          <span style={{ color: '#595959' }}>구매여정: </span>
+          <span style={{ fontWeight: '600' }}>
+            {daysSinceFirstVisit !== null ? `첫 방문 후 ${daysSinceFirstVisit}일 만에 구매` : '신규 방문'}
+          </span>
+          <span style={{ margin: '0 10px', color: '#d9d9d9' }}>|</span>
+          <span style={{ color: '#595959' }}>재구매 횟수: </span>
+          <span style={{ fontWeight: '600' }}>{repurchaseCount}회</span>
+        </div>
+        
+        {/* 상품명 */}
+        <div style={{ 
+          fontSize: '14px', 
+          fontWeight: 'bold',
+          marginBottom: '12px'
+        }}>
+          <span style={{ color: '#8c8c8c', fontWeight: 'normal' }}>상품명: </span>
+          {order.product_name || '상품명 없음'}
+        </div>
+        
+        {/* 구매금액 & 주문시간 */}
+        <div style={{ 
+          fontSize: '13px',
+          marginBottom: '10px'
+        }}>
+          <span style={{ color: '#595959' }}>구매금액: </span>
+          <span style={{ fontWeight: 'bold', color: '#1890ff', fontSize: '15px' }}>
+            {order.final_payment.toLocaleString()}원
+          </span>
+          <span style={{ margin: '0 10px', color: '#d9d9d9' }}>|</span>
+          <span style={{ color: '#595959' }}>주문시간: </span>
+          <span>{dayjs(order.timestamp).format('YYYY-MM-DD HH:mm:ss')}</span>
+        </div>
+        
+        {/* 디바이스 & 페이지 체류시간 */}
+        <div style={{ 
+          fontSize: '12px',
+          color: '#616161'
+        }}>
+          <span style={{ color: '#8c8c8c' }}>디바이스: </span>
+          <span>{order.device_type === 'mobile' ? 'Mobile' : 'PC'}</span>
+          <span style={{ margin: '0 10px', color: '#d9d9d9' }}>|</span>
+          <span style={{ color: '#8c8c8c' }}>페이지 체류시간: </span>
+          <span>총 {formatDuration(totalSeconds)}, </span>
+          <span>평균 {formatDuration(avgSeconds)}, </span>
+          <span>최대 {formatDuration(maxSeconds)}</span>
         </div>
       </div>
 
@@ -761,159 +735,6 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
         )}
       </div>
 
-      {/* UTM 접촉 이력 섹션 - 항상 표시 */}
-      <div style={{ 
-        padding: '20px', 
-        background: '#f9fafb',
-        borderTop: '1px solid #e5e7eb'
-      }}>
-        <h3 style={{ margin: '0 0 16px 0', fontSize: '16px' }}>
-          <HistoryOutlined /> 고객 접촉 이력 (UTM History)
-        </h3>
-        
-        {utm_history && utm_history.length > 0 ? (
-          <>
-            {/* 접촉 횟수 및 기간 요약 */}
-            <div style={{ 
-              marginBottom: '16px',
-              padding: '12px',
-              background: '#fff',
-              borderRadius: '6px',
-              border: '1px solid #e5e7eb',
-              fontSize: '13px'
-            }}>
-              <Space size="large">
-                <span>
-                  <strong>총 접촉 횟수:</strong>{' '}
-                  <span style={{ color: '#1890ff', fontWeight: 600 }}>{utm_history.length}회</span>
-                </span>
-                {utm_history.length > 0 && (
-                  <span>
-                    <strong>첫 접촉 이후:</strong>{' '}
-                    <span style={{ color: '#52c41a', fontWeight: 600 }}>
-                      {dayjs(order.timestamp).diff(dayjs(utm_history[0].entry_time), 'day')}일 경과
-                    </span>
-                  </span>
-                )}
-              </Space>
-            </div>
-
-            {/* UTM 접촉 타임라인 */}
-            <div style={{ 
-              background: '#fff',
-              padding: '16px',
-              borderRadius: '6px',
-              border: '1px solid #e5e7eb'
-            }}>
-              <Timeline>
-                {utm_history.map((utm, index) => {
-                  const isFirst = index === 0;
-                  const isLast = index === utm_history.length - 1;
-                  const touchDate = dayjs(utm.entry_time);
-                  const durationMinutes = Math.floor(utm.total_duration / 60);
-                  const durationSeconds = utm.total_duration % 60;
-
-                  return (
-                    <Timeline.Item
-                      key={index}
-                      color={isFirst ? 'green' : isLast ? 'red' : 'blue'}
-                    >
-                      <div style={{ fontSize: '13px' }}>
-                        <div style={{ marginBottom: '6px' }}>
-                          <strong style={{ fontSize: '14px' }}>
-                            {isFirst ? '첫 접촉' : isLast ? '최종 접촉' : `${index + 1}번째 접촉`}
-                          </strong>
-                          <span style={{ marginLeft: '8px', color: '#999', fontSize: '12px' }}>
-                            {touchDate.format('MM/DD HH:mm')}
-                          </span>
-                        </div>
-                        
-                        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '4px' }}>
-                          <Tag color="blue" style={{ margin: 0 }}>
-                            {utm.utm_source || 'direct'}
-                          </Tag>
-                          {utm.utm_medium && (
-                            <Tag color="cyan" style={{ margin: 0 }}>
-                              {utm.utm_medium}
-                            </Tag>
-                          )}
-                          {utm.utm_campaign && (
-                            <Tag color="purple" style={{ margin: 0 }}>
-                              {utm.utm_campaign}
-                            </Tag>
-                          )}
-                        </div>
-
-                        {/* 광고 소재 이름 (utm_content) */}
-                        {utm.utm_content && (
-                          <Tooltip title={utm.utm_content}>
-                            <div style={{ 
-                              fontSize: '11px', 
-                              color: '#666',
-                              marginTop: '6px',
-                              marginBottom: '4px',
-                              maxWidth: '400px',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                              padding: '4px 8px',
-                              background: '#fff7e6',
-                              border: '1px solid #ffd591',
-                              borderRadius: '4px'
-                            }}>
-                              <strong>소재:</strong> {utm.utm_content}
-                            </div>
-                          </Tooltip>
-                        )}
-
-                        {utm.total_duration > 0 && (
-                          <div style={{ fontSize: '12px', color: '#666' }}>
-                            체류시간:{' '}
-                            <span style={{ fontWeight: 500 }}>
-                              {durationMinutes > 0 
-                                ? `${durationMinutes}분 ${durationSeconds}초`
-                                : `${durationSeconds}초`
-                              }
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </Timeline.Item>
-                  );
-                })}
-              </Timeline>
-            </div>
-
-            {/* 접촉 패턴 인사이트 */}
-            {utm_history.length > 1 && (
-              <div style={{ 
-                marginTop: '12px',
-                padding: '12px',
-                background: '#e6f7ff',
-                borderRadius: '6px',
-                fontSize: '12px',
-                color: '#096dd9'
-              }}>
-                <strong>분석:</strong> 이 고객은 {utm_history.length}번의 접촉 끝에 구매했습니다.
-                {utm_history.length >= 3 && ' 여러 채널을 거쳐 신중하게 결정한 고객입니다.'}
-              </div>
-            )}
-          </>
-        ) : (
-          // UTM 히스토리 없는 경우 - Direct 방문 안내
-          <Alert
-            message="Direct 방문"
-            description="이 고객은 광고를 통하지 않고 직접 사이트에 방문했습니다. (검색, 직접 URL 입력, 북마크 등)"
-            type="info"
-            showIcon
-            icon={<InfoCircleOutlined />}
-            style={{
-              background: '#e6f7ff',
-              border: '1px solid #91d5ff'
-            }}
-          />
-        )}
-      </div>
     </div>
   );
 }
