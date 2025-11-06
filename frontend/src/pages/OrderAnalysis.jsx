@@ -318,7 +318,7 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
     );
   }
 
-  const { order, page_path, utm_history } = data;
+  const { order, page_path, utm_history, past_purchases } = data;
 
   // 타임라인 다단 배치 계산
   const MAX_ITEMS_PER_COLUMN = 5;
@@ -340,58 +340,140 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
   );
   const maxSeconds = maxPage.time_spent_seconds || 0;
 
+  // 마케팅 지표 계산
+  const purchaseCount = (past_purchases?.length || 0) + 1; // 현재 주문 포함
+  const daysSinceFirstVisit = order.first_visit 
+    ? dayjs(order.timestamp).diff(dayjs(order.first_visit), 'day')
+    : null;
+  const touchpointCount = utm_history?.length || 0;
+  const utmDisplay = order.utm_source 
+    ? `${order.utm_source}${order.utm_medium ? `/${order.utm_medium}` : ''}${order.utm_campaign ? `/${order.utm_campaign}` : ''}`
+    : 'Direct 방문';
+
   return (
     <div style={{ background: '#fff' }}>
-      {/* 주문 정보 + 체류시간 통계 */}
+      {/* 핵심 비즈니스 지표 - 2단 구조 */}
       <div style={{ 
         background: '#fafafa', 
-        padding: '16px', 
-        borderBottom: '1px solid #f0f0f0',
+        padding: '20px', 
+        borderBottom: '1px solid #e5e7eb',
         marginBottom: '20px'
       }}>
-        <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', fontSize: '13px', marginBottom: '8px' }}>
-          <span><strong>주문번호:</strong> {order.order_id}</span>
-          <span><strong>시간:</strong> {dayjs(order.timestamp).format('YYYY-MM-DD HH:mm:ss')}</span>
-          <span><strong>금액:</strong> <span style={{ color: '#1890ff', fontWeight: 'bold' }}>{order.final_payment.toLocaleString()}원</span></span>
-          <Tag color={order.device_type === 'mobile' ? 'blue' : 'green'}>
-            {order.device_type === 'mobile' ? 'Mobile' : 'PC'}
-          </Tag>
-          <span><strong>IP:</strong> {order.ip_address}</span>
-          <span><strong>UTM:</strong> {order.utm_source || 'direct'}</span>
-        </div>
-        {order.product_name && (
-          <div style={{ display: 'flex', gap: '20px', alignItems: 'center', fontSize: '12px', color: '#666' }}>
-            <div>
-              <strong>상품:</strong> {order.product_name}
-            </div>
-            {/* 체류시간 통계 - 가로 배치 */}
-            <div style={{ 
-              display: 'flex', 
-              gap: '16px',
-              fontSize: '11px',
-              marginLeft: 'auto'
-            }}>
-              <span>
-                <span style={{ color: '#999' }}>총 체류시간:</span>{' '}
-                <strong>{totalSeconds >= 60 
-                  ? `${Math.floor(totalSeconds / 60)}분 ${totalSeconds % 60}초`
-                  : `${totalSeconds}초`}</strong>
-              </span>
-              <span>
-                <span style={{ color: '#999' }}>평균 체류시간:</span>{' '}
-                <strong>{avgSeconds >= 60 
-                  ? `${Math.floor(avgSeconds / 60)}분 ${avgSeconds % 60}초`
-                  : `${avgSeconds}초`}</strong>
-              </span>
-              <span>
-                <span style={{ color: '#999' }}>최대 체류시간:</span>{' '}
-                <strong>{maxSeconds >= 60 
-                  ? `${Math.floor(maxSeconds / 60)}분 ${maxSeconds % 60}초`
-                  : `${maxSeconds}초`}</strong>
-              </span>
-            </div>
+        {/* 1단: 핵심 비즈니스 지표 */}
+        <div style={{ marginBottom: '12px' }}>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '16px', 
+            flexWrap: 'wrap',
+            fontSize: '15px',
+            fontWeight: 'bold',
+            marginBottom: '6px'
+          }}>
+            {/* 금액 */}
+            <span style={{ color: '#1890ff', fontSize: '18px' }}>
+              {order.final_payment.toLocaleString()}원
+            </span>
+            
+            <span style={{ color: '#d9d9d9' }}>|</span>
+            
+            {/* 상품명 */}
+            <span style={{ color: '#262626' }}>
+              {order.product_name || '상품명 없음'}
+            </span>
+            
+            <span style={{ color: '#d9d9d9' }}>|</span>
+            
+            {/* 재구매 여부 */}
+            <Tag color={purchaseCount > 1 ? 'gold' : 'green'} style={{ fontSize: '13px', fontWeight: 'bold' }}>
+              {purchaseCount}번째 구매
+            </Tag>
+            
+            <span style={{ color: '#d9d9d9' }}>|</span>
+            
+            {/* 디바이스 */}
+            <Tag color={order.device_type === 'mobile' ? 'blue' : 'green'} style={{ fontSize: '13px' }}>
+              {order.device_type === 'mobile' ? 'Mobile' : 'PC'}
+            </Tag>
           </div>
-        )}
+          
+          {/* 주문 시간 */}
+          <div style={{ fontSize: '14px', color: '#8c8c8c' }}>
+            {dayjs(order.timestamp).format('YYYY-MM-DD HH:mm:ss')}
+          </div>
+        </div>
+
+        {/* 구분선 */}
+        <div style={{ 
+          borderTop: '1px solid #e5e7eb', 
+          margin: '12px 0',
+        }} />
+
+        {/* 2단: 마케팅 효과 측정 */}
+        <div>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '12px', 
+            flexWrap: 'wrap',
+            fontSize: '12px',
+            color: '#595959',
+            marginBottom: '8px'
+          }}>
+            {/* 구매 결정 기간 */}
+            {daysSinceFirstVisit !== null ? (
+              <>
+                <span>
+                  <strong>첫 방문 후 {daysSinceFirstVisit}일 만에 구매</strong>
+                </span>
+                <span style={{ color: '#d9d9d9' }}>•</span>
+              </>
+            ) : (
+              <>
+                <span><strong>신규 방문</strong></span>
+                <span style={{ color: '#d9d9d9' }}>•</span>
+              </>
+            )}
+            
+            {/* 접촉 횟수 */}
+            <span>
+              <strong>총 {touchpointCount > 0 ? `${touchpointCount}번 접촉` : '직접 유입'}</strong>
+            </span>
+            
+            <span style={{ color: '#d9d9d9' }}>•</span>
+            
+            {/* UTM 정보 */}
+            <span style={{ fontFamily: 'monospace' }}>
+              {utmDisplay}
+            </span>
+          </div>
+          
+          {/* 체류시간 통계 */}
+          <div style={{ 
+            display: 'flex', 
+            gap: '16px',
+            fontSize: '11px',
+            color: '#8c8c8c'
+          }}>
+            <span>
+              총 {totalSeconds >= 60 
+                ? `${Math.floor(totalSeconds / 60)}분 ${totalSeconds % 60}초`
+                : `${totalSeconds}초`}
+            </span>
+            <span style={{ color: '#d9d9d9' }}>•</span>
+            <span>
+              평균 {avgSeconds >= 60 
+                ? `${Math.floor(avgSeconds / 60)}분 ${avgSeconds % 60}초`
+                : `${avgSeconds}초`}
+            </span>
+            <span style={{ color: '#d9d9d9' }}>•</span>
+            <span>
+              최대 {maxSeconds >= 60 
+                ? `${Math.floor(maxSeconds / 60)}분 ${maxSeconds % 60}초`
+                : `${maxSeconds}초`}
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* 페이지 이동 경로 */}
