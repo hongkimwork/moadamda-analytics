@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Card, Table, DatePicker, Select, Button, Tag, Space, Typography, Descriptions, Timeline, Spin, Alert, Statistic, Row, Col, Switch, Tooltip, Modal, message } from 'antd';
-import { ReloadOutlined, ArrowLeftOutlined, ClockCircleOutlined, ShoppingOutlined, GlobalOutlined, HistoryOutlined, LinkOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { ReloadOutlined, ArrowLeftOutlined, ClockCircleOutlined, ShoppingOutlined, GlobalOutlined, HistoryOutlined, LinkOutlined, InfoCircleOutlined, UpOutlined, DownOutlined } from '@ant-design/icons';
 import axios from 'axios';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ko';
@@ -318,23 +318,29 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
     );
   }
 
-  const { order, page_path, utm_history, past_purchases } = data;
+  const { order, purchase_journey, previous_visits, page_path, utm_history, past_purchases } = data;
+
+  // 구매 직전 경로 (광고 클릭 후 ~ 구매까지)
+  const journeyPages = purchase_journey?.pages || page_path || [];
+  
+  // 이전 방문 표시 여부
+  const [showPreviousVisits, setShowPreviousVisits] = useState(false);
 
   // 타임라인 다단 배치 계산
   const MAX_ITEMS_PER_COLUMN = 5;
-  const columnCount = Math.ceil(page_path.length / MAX_ITEMS_PER_COLUMN);
+  const columnCount = Math.ceil(journeyPages.length / MAX_ITEMS_PER_COLUMN);
   const columns = [];
   
   for (let i = 0; i < columnCount; i++) {
     const start = i * MAX_ITEMS_PER_COLUMN;
     const end = start + MAX_ITEMS_PER_COLUMN;
-    columns.push(page_path.slice(start, end));
+    columns.push(journeyPages.slice(start, end));
   }
 
-  // 체류시간 계산 (백엔드에서 이미 필터링됨)
-  const totalSeconds = page_path.reduce((sum, p) => sum + (p.time_spent_seconds || 0), 0);
-  const avgSeconds = page_path.length > 0 ? Math.round(totalSeconds / page_path.length) : 0;
-  const maxPage = page_path.reduce((max, p) => 
+  // 체류시간 계산 (구매 직전 경로만)
+  const totalSeconds = purchase_journey?.total_duration || journeyPages.reduce((sum, p) => sum + (p.time_spent_seconds || 0), 0);
+  const avgSeconds = journeyPages.length > 0 ? Math.round(totalSeconds / journeyPages.length) : 0;
+  const maxPage = journeyPages.reduce((max, p) => 
     (p.time_spent_seconds || 0) > (max.time_spent_seconds || 0) ? p : max, 
     { time_spent_seconds: 0 }
   );
@@ -344,7 +350,7 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
   if (totalSeconds > 3600) {
     console.warn('[데이터 검증] 비정상적으로 긴 총 체류시간:', totalSeconds, '초');
   }
-  const overLimitPages = page_path.filter(p => p.time_spent_seconds > 600);
+  const overLimitPages = journeyPages.filter(p => p.time_spent_seconds > 600);
   if (overLimitPages.length > 0) {
     console.warn('[데이터 검증] 10분 초과 페이지 발견:', overLimitPages);
   }
@@ -510,9 +516,12 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
           marginBottom: '16px'
         }}>
           <h3 style={{ margin: 0, fontSize: '16px' }}>
-            <ClockCircleOutlined /> 페이지 이동 경로 (세션 내)
+            <ClockCircleOutlined /> 구매 당일 경로
           </h3>
-          <Space size="small">
+          <Tag color="orange" style={{ fontSize: '11px' }}>
+            {journeyPages.length}개 페이지 • {formatDuration(totalSeconds)}
+          </Tag>
+          <Space size="small" style={{ marginLeft: 'auto' }}>
             <LinkOutlined />
             <span style={{ fontSize: '12px', color: '#666' }}>원본 URL</span>
             <Switch 
@@ -525,7 +534,7 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
         </div>
 
         {/* 다단 타임라인 */}
-        {page_path.length > 0 ? (
+        {journeyPages.length > 0 ? (
           <div style={{ display: 'flex', gap: '15px', alignItems: 'flex-start' }}>
             {columns.map((columnItems, colIdx) => (
               <div key={colIdx} style={{ width: '250px', flexShrink: 0 }}>
@@ -534,7 +543,7 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
                     const globalIdx = colIdx * MAX_ITEMS_PER_COLUMN + idx;
                     const urlInfo = urlToKorean(page.clean_url || page.page_url, userMappings);
                     const isFirst = globalIdx === 0;
-                    const isLast = globalIdx === page_path.length - 1;
+                    const isLast = globalIdx === journeyPages.length - 1;
                     
                     return (
                       <Timeline.Item
@@ -616,6 +625,141 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
           </div>
         ) : (
           <Alert message="페이지 이동 기록이 없습니다." type="info" />
+        )}
+        
+        {/* 이전 방문 이력 토글 */}
+        {previous_visits && previous_visits.length > 0 && (
+          <div style={{ marginTop: '20px' }}>
+            <Button 
+              type="text" 
+              icon={showPreviousVisits ? <UpOutlined /> : <DownOutlined />}
+              onClick={() => setShowPreviousVisits(!showPreviousVisits)}
+              style={{ padding: '4px 8px', fontSize: '13px', color: '#666' }}
+            >
+              {showPreviousVisits ? '이전 방문 이력 접기' : `이전 방문 이력 보기 (${previous_visits.length}회)`}
+            </Button>
+            
+            {showPreviousVisits && (
+              <div style={{ marginTop: '16px' }}>
+                {previous_visits.map((visit, visitIdx) => {
+                  const visitPages = visit.pages || [];
+                  const visitColumns = [];
+                  const visitColumnCount = Math.ceil(visitPages.length / MAX_ITEMS_PER_COLUMN);
+                  
+                  for (let i = 0; i < visitColumnCount; i++) {
+                    const start = i * MAX_ITEMS_PER_COLUMN;
+                    const end = start + MAX_ITEMS_PER_COLUMN;
+                    visitColumns.push(visitPages.slice(start, end));
+                  }
+                  
+                  return (
+                    <div key={visitIdx} style={{ 
+                      marginBottom: '16px',
+                      padding: '16px',
+                      background: '#fafafa',
+                      borderRadius: '8px',
+                      border: '1px solid #e5e7eb'
+                    }}>
+                      <div style={{ 
+                        display: 'flex', 
+                        gap: '12px', 
+                        alignItems: 'center',
+                        marginBottom: '12px'
+                      }}>
+                        <h4 style={{ margin: 0, fontSize: '14px', color: '#666' }}>
+                          {dayjs(visit.date).format('YYYY-MM-DD')} 방문
+                        </h4>
+                        <Tag color="default" style={{ fontSize: '10px' }}>
+                          {visit.page_count}개 페이지 • {formatDuration(visit.total_duration)}
+                        </Tag>
+                        <Tag color="default" style={{ fontSize: '10px' }}>
+                          구매 안 함
+                        </Tag>
+                      </div>
+                      
+                      <div style={{ display: 'flex', gap: '15px', alignItems: 'flex-start' }}>
+                        {visitColumns.map((columnItems, colIdx) => (
+                          <div key={colIdx} style={{ width: '250px', flexShrink: 0 }}>
+                            <Timeline style={{ fontSize: '12px' }}>
+                              {columnItems.map((page, idx) => {
+                                const globalIdx = colIdx * MAX_ITEMS_PER_COLUMN + idx;
+                                const urlInfo = urlToKorean(page.clean_url || page.page_url, userMappings);
+                                const isFirst = globalIdx === 0;
+                                const isLast = globalIdx === visitPages.length - 1;
+                                
+                                return (
+                                  <Timeline.Item
+                                    key={globalIdx}
+                                    color={isFirst ? 'green' : isLast ? 'gray' : 'blue'}
+                                    style={{ paddingBottom: '8px' }}
+                                  >
+                                    <div style={{ minHeight: '50px' }}>
+                                      <div style={{ fontWeight: 'bold', marginBottom: '4px', fontSize: '12px', color: '#666' }}>
+                                        {isFirst ? '진입' : isLast ? '이탈' : `${globalIdx}단계`}
+                                        <span style={{ marginLeft: '6px', color: '#999', fontWeight: 'normal', fontSize: '11px' }}>
+                                          {dayjs(page.timestamp).format('HH:mm:ss')}
+                                        </span>
+                                      </div>
+                                      
+                                      {page.page_title && page.page_title !== '모아담다 온라인 공식몰' && (
+                                        <div style={{ 
+                                          fontSize: '11px', 
+                                          marginBottom: '3px', 
+                                          color: '#999',
+                                          fontWeight: '500'
+                                        }}>
+                                          {page.page_title}
+                                        </div>
+                                      )}
+
+                                      {showKoreanUrl ? (
+                                        <div style={{ 
+                                          fontSize: '10px', 
+                                          marginBottom: '4px', 
+                                          color: '#999'
+                                        }}>
+                                          {urlInfo.name}
+                                        </div>
+                                      ) : (
+                                        <div 
+                                          style={{ 
+                                            fontSize: '9px', 
+                                            marginBottom: '4px', 
+                                            color: '#999',
+                                            maxWidth: '250px',
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            whiteSpace: 'nowrap'
+                                          }}
+                                        >
+                                          {page.page_url}
+                                        </div>
+                                      )}
+
+                                      {page.time_spent_seconds > 0 && (
+                                        <Tag 
+                                          color="default"
+                                          style={{ fontSize: '10px', padding: '0 6px', lineHeight: '18px' }}
+                                        >
+                                          {page.time_spent_seconds >= 60 
+                                            ? `${Math.floor(page.time_spent_seconds / 60)}분 ${page.time_spent_seconds % 60}초`
+                                            : `${page.time_spent_seconds}초`}
+                                        </Tag>
+                                      )}
+                                    </div>
+                                  </Timeline.Item>
+                                );
+                              })}
+                            </Timeline>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         )}
       </div>
 

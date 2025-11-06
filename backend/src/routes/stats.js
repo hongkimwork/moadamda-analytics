@@ -1320,69 +1320,80 @@ router.get('/order-detail/:orderId', async (req, res) => {
 
     const order = orderResult.rows[0];
 
-    // 2. 페이지 이동 경로 (해당 세션의 모든 페이지뷰 + 체류 시간 계산)
-    // 중복 제거 로직 제거: 모든 pageview를 시간순으로 표시
-    // 세션 경계 검증: 30분 이상 간격은 비정상으로 간주하여 체류시간 제한
-    const pagePathQuery = `
-      WITH all_pageviews AS (
+    // 2-1. 구매 직전 경로 (마지막 UTM 접촉 이후 ~ 구매까지)
+    // 광고 효과 측정에 사용되는 핵심 경로
+    const purchaseJourneyQuery = `
+      WITH last_utm_contact AS (
+        SELECT MAX(entry_timestamp) as utm_timestamp
+        FROM utm_sessions
+        WHERE visitor_id = $1
+      ),
+      purchase_journey_pages AS (
         SELECT
           p.page_url,
           p.page_title,
           p.timestamp,
-          LAG(p.timestamp) OVER (ORDER BY p.timestamp) as prev_timestamp,
-          LEAD(p.timestamp) OVER (ORDER BY p.timestamp) as next_timestamp,
-          ROW_NUMBER() OVER (ORDER BY p.timestamp) as page_order
+          LEAD(p.timestamp) OVER (ORDER BY p.timestamp) as next_timestamp
         FROM pageviews p
-        WHERE p.session_id = $1
-      ),
-      page_times AS (
-        SELECT
-          page_url,
-          page_title,
-          timestamp,
-          next_timestamp,
-          prev_timestamp,
-          page_order,
-          -- 이전 페이지와의 간격 계산 (세션 검증용)
-          CASE 
-            WHEN prev_timestamp IS NOT NULL THEN
-              EXTRACT(EPOCH FROM (timestamp - prev_timestamp))::INTEGER
-            ELSE 0
-          END as gap_from_prev
-        FROM all_pageviews
-      ),
-      purchase_time AS (
-        SELECT MIN(e.timestamp) as purchase_timestamp
-        FROM events e
-        WHERE e.session_id = $1 AND e.event_type = 'purchase'
+        CROSS JOIN last_utm_contact
+        WHERE p.visitor_id = $1
+          AND p.timestamp >= COALESCE(last_utm_contact.utm_timestamp, p.timestamp)
+          AND p.timestamp <= $2
+        ORDER BY p.timestamp ASC
       )
       SELECT
-        pt.page_url,
-        pt.page_title,
-        pt.timestamp,
+        page_url,
+        page_title,
+        timestamp,
         CASE
-          -- 다음 페이지로 이동한 경우
-          WHEN pt.next_timestamp IS NOT NULL THEN
-            -- 30분(1800초) 이상 간격이면 세션 경계로 간주하여 0 반환
-            CASE 
-              WHEN EXTRACT(EPOCH FROM (pt.next_timestamp - pt.timestamp))::INTEGER > 1800 THEN 0
-              ELSE LEAST(
-                EXTRACT(EPOCH FROM (pt.next_timestamp - pt.timestamp))::INTEGER,
-                600  -- 최대 10분으로 제한
-              )
-            END
-          -- 마지막 페이지이고 구매가 발생한 경우
-          WHEN (SELECT purchase_timestamp FROM purchase_time) IS NOT NULL THEN
+          WHEN next_timestamp IS NOT NULL THEN
             LEAST(
-              EXTRACT(EPOCH FROM ((SELECT purchase_timestamp FROM purchase_time) - pt.timestamp))::INTEGER,
+              EXTRACT(EPOCH FROM (next_timestamp - timestamp))::INTEGER,
               600  -- 최대 10분으로 제한
             )
           ELSE 0
         END as time_spent_seconds
-      FROM page_times pt
-      ORDER BY pt.timestamp ASC
+      FROM purchase_journey_pages
     `;
-    const pagePathResult = await db.query(pagePathQuery, [order.session_id]);
+    const purchaseJourneyResult = await db.query(purchaseJourneyQuery, [order.visitor_id, order.timestamp]);
+
+    // 2-2. 과거 방문 이력 (마지막 UTM 접촉 이전)
+    // 고객이 이전에 어떤 페이지를 봤는지 참고용
+    const previousVisitsQuery = `
+      WITH last_utm_contact AS (
+        SELECT MAX(entry_timestamp) as utm_timestamp
+        FROM utm_sessions
+        WHERE visitor_id = $1
+      ),
+      previous_pageviews AS (
+        SELECT
+          p.page_url,
+          p.page_title,
+          p.timestamp,
+          DATE(p.timestamp) as visit_date,
+          LEAD(p.timestamp) OVER (PARTITION BY DATE(p.timestamp) ORDER BY p.timestamp) as next_timestamp
+        FROM pageviews p
+        CROSS JOIN last_utm_contact
+        WHERE p.visitor_id = $1
+          AND p.timestamp < COALESCE(last_utm_contact.utm_timestamp, '9999-12-31')
+      )
+      SELECT
+        visit_date,
+        page_url,
+        page_title,
+        timestamp,
+        CASE
+          WHEN next_timestamp IS NOT NULL THEN
+            LEAST(
+              EXTRACT(EPOCH FROM (next_timestamp - timestamp))::INTEGER,
+              600
+            )
+          ELSE 0
+        END as time_spent_seconds
+      FROM previous_pageviews
+      ORDER BY timestamp ASC
+    `;
+    const previousVisitsResult = await db.query(previousVisitsQuery, [order.visitor_id]);
 
     // 3. 동일 쿠키 UTM 히스토리 (동일 visitor_id의 모든 UTM 세션)
     // utm_params에서 누락된 값 복구 + 같은 광고 소재 병합 (5분 이내)
@@ -1516,6 +1527,22 @@ router.get('/order-detail/:orderId', async (req, res) => {
     `;
     const pastPurchasesResult = await db.query(pastPurchasesQuery, [order.visitor_id, orderId]);
 
+    // 과거 방문을 날짜별로 그룹화
+    const previousVisitsByDate = {};
+    previousVisitsResult.rows.forEach(row => {
+      const date = row.visit_date.toISOString().split('T')[0]; // YYYY-MM-DD
+      if (!previousVisitsByDate[date]) {
+        previousVisitsByDate[date] = [];
+      }
+      previousVisitsByDate[date].push({
+        page_url: row.page_url,
+        clean_url: cleanUrl(row.page_url),
+        page_title: row.page_title || null,
+        timestamp: row.timestamp,
+        time_spent_seconds: row.time_spent_seconds || 0
+      });
+    });
+
     // 응답 데이터 구성
     res.json({
       order: {
@@ -1537,7 +1564,27 @@ router.get('/order-detail/:orderId', async (req, res) => {
         first_visit: order.first_visit,
         entry_url: order.entry_url || null
       },
-      page_path: pagePathResult.rows.map(row => ({
+      // 구매 직전 경로 (광고 클릭 후)
+      purchase_journey: {
+        pages: purchaseJourneyResult.rows.map(row => ({
+          page_url: row.page_url,
+          clean_url: cleanUrl(row.page_url),
+          page_title: row.page_title || null,
+          timestamp: row.timestamp,
+          time_spent_seconds: row.time_spent_seconds || 0
+        })),
+        total_duration: purchaseJourneyResult.rows.reduce((sum, row) => sum + (row.time_spent_seconds || 0), 0),
+        page_count: purchaseJourneyResult.rows.length
+      },
+      // 과거 방문 이력 (날짜별)
+      previous_visits: Object.entries(previousVisitsByDate).map(([date, pages]) => ({
+        date: date,
+        pages: pages,
+        total_duration: pages.reduce((sum, p) => sum + p.time_spent_seconds, 0),
+        page_count: pages.length
+      })).sort((a, b) => a.date.localeCompare(b.date)),
+      // 기존 호환성 유지 (deprecated)
+      page_path: purchaseJourneyResult.rows.map(row => ({
         page_url: row.page_url,
         clean_url: cleanUrl(row.page_url),
         page_title: row.page_title || null,
