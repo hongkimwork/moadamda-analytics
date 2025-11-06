@@ -382,100 +382,162 @@ function OrderDetailPageContent({ orderId, userMappings = {} }) {
 
   return (
     <div style={{ background: '#fff' }}>
-      {/* 통합 상단 영역 */}
+      {/* 카드형 상단 영역 */}
       <div style={{ 
-        background: '#fafafa', 
-        padding: '20px', 
+        display: 'flex',
+        gap: '16px',
+        padding: '20px',
+        background: '#fafafa',
         borderBottom: '1px solid #e5e7eb',
         marginBottom: '20px'
       }}>
-        {/* 광고 정보 */}
-        {lastTouch && (
-          <div style={{ 
-            marginBottom: '16px'
+        {/* 광고 정보 카드 */}
+        <div style={{
+          flex: 1,
+          padding: '16px',
+          background: '#fff',
+          border: '1px solid #e5e7eb',
+          borderRadius: '8px'
+        }}>
+          <h4 style={{ 
+            fontSize: '14px', 
+            fontWeight: 'bold', 
+            color: '#000',
+            marginBottom: '12px',
+            marginTop: 0
           }}>
-            <div style={{ 
-              fontSize: '13px', 
-              color: '#000',
-              marginBottom: '8px'
-            }}>
-              <span style={{ fontWeight: '500' }}>매체: </span>
-              <span style={{ fontWeight: 'bold' }}>{lastTouch.utm_source || '-'}</span>
-              <span style={{ margin: '0 8px', color: '#bdbdbd' }}>|</span>
-              <span style={{ fontWeight: '500' }}>유형: </span>
-              <span style={{ fontWeight: 'bold' }}>{lastTouch.utm_medium || '-'}</span>
-              <span style={{ margin: '0 8px', color: '#bdbdbd' }}>|</span>
-              <span style={{ fontWeight: '500' }}>캠페인: </span>
-              <span style={{ fontWeight: 'bold' }}>{lastTouch.utm_campaign || '-'}</span>
-              <span style={{ margin: '0 8px', color: '#bdbdbd' }}>|</span>
-              <span style={{ fontWeight: '500' }}>소재: </span>
-              <span style={{ fontWeight: 'bold' }}>{lastTouch.utm_content || '-'}</span>
-            </div>
-            {adToPurchaseSeconds !== null && (
-              <div style={{ 
-                fontSize: '14px', 
-                fontWeight: 'bold', 
-                color: '#000'
-              }}>
-                광고 클릭 후 {formatDuration(adToPurchaseSeconds)} 만에 구매
+            광고 정보
+          </h4>
+          
+          {lastTouch ? (
+            <>
+              <div style={{ marginBottom: '8px' }}>
+                <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>매체</div>
+                <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#000' }}>
+                  {lastTouch.utm_source || '-'}
+                </div>
               </div>
-            )}
+              
+              <div style={{ marginBottom: '8px' }}>
+                <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>유형</div>
+                <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#000' }}>
+                  {lastTouch.utm_medium || '-'}
+                </div>
+              </div>
+              
+              <div style={{ marginBottom: '8px' }}>
+                <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>캠페인</div>
+                <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#000' }}>
+                  {lastTouch.utm_campaign || '-'}
+                </div>
+              </div>
+              
+              <div style={{ marginBottom: '8px' }}>
+                <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>소재</div>
+                <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#000' }}>
+                  {lastTouch.utm_content || '-'}
+                </div>
+              </div>
+              
+              {adToPurchaseSeconds !== null && (
+                <div>
+                  <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>전환 속도</div>
+                  <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#1890ff' }}>
+                    광고 클릭 후 {formatDuration(adToPurchaseSeconds)} 만에 구매
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div style={{ fontSize: '13px', color: '#999' }}>Direct 방문 (광고 없음)</div>
+          )}
+        </div>
+        
+        {/* 구매 정보 카드 */}
+        <div style={{
+          flex: 1,
+          padding: '16px',
+          background: '#fff',
+          border: '1px solid #e5e7eb',
+          borderRadius: '8px'
+        }}>
+          <h4 style={{ 
+            fontSize: '14px', 
+            fontWeight: 'bold', 
+            color: '#000',
+            marginBottom: '12px',
+            marginTop: 0
+          }}>
+            구매 정보
+          </h4>
+          
+          <div style={{ marginBottom: '8px' }}>
+            <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>상품명</div>
+            <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#000' }}>
+              {order.product_name || '상품명 없음'}
+            </div>
           </div>
-        )}
-        
-        {/* 구매여정 & 재구매 */}
-        <div style={{ 
-          fontSize: '13px',
-          marginBottom: '12px',
-          color: '#000'
-        }}>
-          <span>구매여정: </span>
-          <span style={{ fontWeight: '600' }}>
-            {daysSinceFirstVisit !== null ? `첫 방문 후 ${daysSinceFirstVisit}일 만에 구매` : '신규 방문'}
-          </span>
-          <span style={{ margin: '0 10px', color: '#d9d9d9' }}>|</span>
-          <span>재구매 횟수: </span>
-          <span style={{ fontWeight: '600' }}>{repurchaseCount}회</span>
+          
+          <div style={{ marginBottom: '8px' }}>
+            <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>구매금액</div>
+            <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#1890ff' }}>
+              {order.final_payment.toLocaleString()}원
+            </div>
+          </div>
+          
+          <div>
+            <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>주문시간</div>
+            <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#000' }}>
+              {dayjs(order.timestamp).format('YYYY-MM-DD HH:mm:ss')}
+            </div>
+          </div>
         </div>
         
-        {/* 상품명 */}
-        <div style={{ 
-          fontSize: '14px', 
-          fontWeight: 'bold',
-          marginBottom: '12px',
-          color: '#000'
+        {/* 고객 정보 카드 */}
+        <div style={{
+          flex: 1,
+          padding: '16px',
+          background: '#fff',
+          border: '1px solid #e5e7eb',
+          borderRadius: '8px'
         }}>
-          <span style={{ fontWeight: 'normal' }}>상품명: </span>
-          {order.product_name || '상품명 없음'}
-        </div>
-        
-        {/* 구매금액 & 주문시간 */}
-        <div style={{ 
-          fontSize: '13px',
-          marginBottom: '10px',
-          color: '#000'
-        }}>
-          <span>구매금액: </span>
-          <span style={{ fontWeight: 'bold', fontSize: '15px' }}>
-            {order.final_payment.toLocaleString()}원
-          </span>
-          <span style={{ margin: '0 10px', color: '#d9d9d9' }}>|</span>
-          <span>주문시간: </span>
-          <span>{dayjs(order.timestamp).format('YYYY-MM-DD HH:mm:ss')}</span>
-        </div>
-        
-        {/* 디바이스 & 페이지 체류시간 */}
-        <div style={{ 
-          fontSize: '12px',
-          color: '#000'
-        }}>
-          <span>디바이스: </span>
-          <span>{order.device_type === 'mobile' ? 'Mobile' : 'PC'}</span>
-          <span style={{ margin: '0 10px', color: '#d9d9d9' }}>|</span>
-          <span>페이지 체류시간: </span>
-          <span>총 {formatDuration(totalSeconds)}, </span>
-          <span>평균 {formatDuration(avgSeconds)}, </span>
-          <span>최대 {formatDuration(maxSeconds)}</span>
+          <h4 style={{ 
+            fontSize: '14px', 
+            fontWeight: 'bold', 
+            color: '#000',
+            marginBottom: '12px',
+            marginTop: 0
+          }}>
+            고객 정보
+          </h4>
+          
+          <div style={{ marginBottom: '8px' }}>
+            <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>구매여정</div>
+            <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#000' }}>
+              {daysSinceFirstVisit !== null ? `첫 방문 후 ${daysSinceFirstVisit}일 만에 구매` : '신규 방문'}
+            </div>
+          </div>
+          
+          <div style={{ marginBottom: '8px' }}>
+            <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>재구매 횟수</div>
+            <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#000' }}>
+              {repurchaseCount}회
+            </div>
+          </div>
+          
+          <div style={{ marginBottom: '8px' }}>
+            <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>디바이스</div>
+            <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#000' }}>
+              {order.device_type === 'mobile' ? 'Mobile' : 'PC'}
+            </div>
+          </div>
+          
+          <div>
+            <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>페이지 체류</div>
+            <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#000' }}>
+              총 {formatDuration(totalSeconds)}, 평균 {formatDuration(avgSeconds)}
+            </div>
+          </div>
         </div>
       </div>
 
