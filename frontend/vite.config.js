@@ -8,7 +8,15 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     server: {
       port: 3030,
-      host: '0.0.0.0'
+      host: '0.0.0.0',
+      // API 프록시 설정: /api 요청을 백엔드로 전달
+      proxy: {
+        '/api': {
+          target: 'http://localhost:3003',
+          changeOrigin: true,
+          secure: false,
+        }
+      }
     },
     define: {
       'import.meta.env.VITE_API_URL': JSON.stringify(

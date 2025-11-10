@@ -246,7 +246,7 @@ export function OrderListPage() {
 // ============================================================================
 // 주문 상세 페이지 콘텐츠 (모달과 페이지에서 공통 사용)
 // ============================================================================
-function OrderDetailPageContent({ orderId, userMappings = {} }) {
+export function OrderDetailPageContent({ orderId, userMappings = {} }) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);

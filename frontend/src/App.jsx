@@ -16,6 +16,7 @@ import {
   SettingOutlined
 } from '@ant-design/icons';
 import { OrderListPage, OrderDetailPage } from './pages/OrderAnalysis';
+import OrderAnalysis2Page from './pages/OrderAnalysis2';
 import DataTables from './pages/DataTables';
 import PageMapping from './pages/PageMapping';
 import CreativePerformance from './pages/CreativePerformance';
@@ -37,6 +38,7 @@ function AppLayout() {
     const path = location.pathname;
     if (path === '/creative-performance') return ['creative-performance'];
     if (path === '/page-mapping') return ['page-mapping'];
+    if (path === '/orders2') return ['orders2'];
     if (path.startsWith('/order/')) return ['orders'];
     if (path === '/' || path.startsWith('/order')) return ['orders'];
     if (path.startsWith('/data/')) return [path];
@@ -55,6 +57,12 @@ function AppLayout() {
           icon: <ShoppingOutlined />,
           label: '주문 분석',
           onClick: () => navigate('/')
+        },
+        {
+          key: 'orders2',
+          icon: <ShoppingOutlined />,
+          label: '주문 분석2 (개선)',
+          onClick: () => navigate('/orders2')
         },
         {
           key: 'creative-performance',
@@ -178,6 +186,9 @@ function AppLayout() {
             {/* 주문 분석 */}
             <Route path="/" element={<OrderListPage />} />
             <Route path="/order/:orderId" element={<OrderDetailPage />} />
+            
+            {/* 주문 분석2 (개선 버전) */}
+            <Route path="/orders2" element={<OrderAnalysis2Page />} />
             
             {/* 광고 소재 모수 분석 */}
             <Route path="/creative-performance" element={<CreativePerformance />} />

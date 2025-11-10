@@ -1,4 +1,6 @@
-require('dotenv').config();
+// Load environment variables from .env.local (development) or .env (production)
+const envFile = process.env.NODE_ENV === 'production' ? '.env' : '.env.local';
+require('dotenv').config({ path: require('path').join(__dirname, '..', envFile) });
 const express = require('express');
 const cors = require('cors');
 const db = require('./utils/database');

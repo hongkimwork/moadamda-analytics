@@ -1,12 +1,12 @@
 # 🎯 Moadamda Analytics - 프로젝트 현황
 
-**마지막 업데이트**: 2025-11-07 00:15
+**마지막 업데이트**: 2025-11-10 15:30
 
 ---
 
 ## 📍 현재 단계
 
-**Phase 4: 코어 시스템 안정화 완료 (v044)**
+**Phase 5: 로컬 개발 환경 개선 완료 (v045)**
 
 ---
 
@@ -163,6 +163,29 @@
   - 툴팁 최대 너비 500px 설정
   - 복사 기능 유지 (더블클릭)
 
+### Phase 5: 로컬 개발 환경 개선 (완료: 2025-11-10)
+- [x] 1. 네이버 클라우드 인프라 설정
+  - ACG(방화벽) 설정 - PostgreSQL 포트 5432 개방
+  - IP 화이트리스트 적용 (로컬 PC IP만 허용)
+  - 보안 강화 (외부 접근 차단)
+- [x] 2. 백엔드 환경별 설정 파일 분리
+  - `.env.local` 파일 구조 도입
+  - `backend/src/server.js` 환경 자동 감지 로직 추가
+  - 개발 환경: `.env.local` 사용 (서버 DB 연결)
+  - 프로덕션 환경: `.env` 사용 (기존 유지)
+- [x] 3. 프론트엔드 API 프록시 설정
+  - `frontend/vite.config.js` API 프록시 추가
+  - 개발 서버에서 `/api` 요청 자동 라우팅
+  - localhost:3003 백엔드로 프록시
+- [x] 4. 로컬-서버 DB 직접 연결 구축
+  - 서버 DB 직접 연결 방식 구축
+  - 실제 데이터로 로컬 개발 및 테스트 가능
+  - 백엔드/프론트엔드 로컬 실행 검증 완료
+- [x] 5. 프로젝트 정리
+  - Phase 4 완료 문서 9개 삭제
+  - 테스트 스크립트 제거
+  - 구버전 가이드 정리
+
 ---
 
 ## 🔄 진행 중
@@ -177,8 +200,8 @@
 
 ## 📋 다음 할 일 (보류 중)
 
-### Phase 5: 외부 결제 추적 개선 (선택적)
-- [ ] 1. tracker-v042.js 개선
+### Phase 6: 외부 결제 추적 개선 (선택적)
+- [ ] 1. tracker-v043.js 개선
   - [ ] order_attempt 이벤트 추가 (주문 버튼 클릭 시)
   - [ ] 주문 시도 시간, 금액, 상품 정보 저장
 - [ ] 2. Google Sheets API 연동
@@ -192,7 +215,7 @@
   - [ ] Google Sheets에서 order_status 읽기
   - [ ] 취소/환불 주문 자동 업데이트
 
-### Phase 6: 대시보드 고도화 (미정)
+### Phase 7: 대시보드 고도화 (미정)
 - [ ] 1. 광고 소재 분석 페이지 개선
 - [ ] 2. visitor_id 기반 사용자 여정 추적
 - [ ] 3. 전환 퍼널 분석
@@ -229,19 +252,60 @@
 
 ## 🛠️ 개발 환경
 
-### 로컬 개발
+### 로컬 개발 (2가지 방식)
+
+#### 방식 1: Docker Compose (독립 테스트 환경)
 ```bash
 # 프로젝트 디렉토리로 이동
 cd C:\analysis\moadamda-analytics
 
-# Docker Compose 실행
-docker-compose up
+# Docker Compose 실행 (로컬 PostgreSQL 사용)
+docker-compose up -d
 
 # 접속
 # - Dashboard: http://localhost:3030
 # - Backend API: http://localhost:3003
-# - PostgreSQL: localhost:5432 (DB: analytics, User: moadamda, Pass: analytics2024)
+# - PostgreSQL: localhost:5432 (로컬 DB)
 ```
+
+**특징:**
+- ✅ 로컬 PostgreSQL 사용 (독립된 데이터)
+- ✅ 테스트 데이터로만 작업
+- ✅ 서버 데이터에 영향 없음
+- ❌ 실제 주문 데이터 확인 불가
+
+#### 방식 2: 서버 DB 직접 연결 (실제 데이터) ⭐ 추천
+```bash
+# 사전 준비: backend/.env.local 파일 생성 (최초 1회)
+# DB_HOST=211.188.53.220
+# DB_PORT=5432
+# DB_USER=moadamda
+# DB_PASSWORD=analytics2024
+# DB_NAME=analytics
+
+# 1. 로컬 Docker 중지 (포트 충돌 방지)
+cd C:\analysis\moadamda-analytics
+docker-compose down
+
+# 2. 백엔드 실행 (PowerShell 창 1)
+cd backend
+node src/server.js
+
+# 3. 프론트엔드 실행 (PowerShell 창 2)
+cd frontend
+npm run dev
+
+# 접속
+# - Dashboard: http://localhost:3030
+# - Backend API: http://localhost:3003
+# - PostgreSQL: 211.188.53.220:5432 (서버 DB)
+```
+
+**특징:**
+- ✅ 서버 DB 직접 연결 (실제 데이터)
+- ✅ 실제 주문 데이터로 개발 및 테스트
+- ✅ 코드 수정 시 자동 재시작 (개발 효율↑)
+- ⚠️ 실제 데이터 수정 시 주의 필요
 
 ### 프로덕션 (네이버 클라우드)
 - **서버 IP**: 211.188.53.220
@@ -353,11 +417,11 @@ docker-compose -f docker-compose.prod.yml up -d --build
 ## 📊 프로젝트 통계
 
 - **tracker 버전**: v042 (현재 사용 중)
-- **시스템 버전**: v044 (코어 시스템 안정화)
-- **총 개발 기간**: 11일
-- **완료된 Phase**: 4 / 5
-- **다음 마일스톤**: 안정적 운영 모니터링
-- **Git 태그**: v042 (tracker) → v043 (Cafe24 API 시도) → v044 (시스템 안정화)
+- **시스템 버전**: v045 (로컬 개발 환경 개선)
+- **총 개발 기간**: 16일
+- **완료된 Phase**: 5 / 6
+- **다음 마일스톤**: 안정적 운영 모니터링 및 선택적 기능 개발
+- **Git 태그**: v042 (tracker) → v043 (Cafe24 API 시도) → v044 (시스템 안정화) → v045 (로컬 개발 환경)
 
 ---
 
