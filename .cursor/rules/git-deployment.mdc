@@ -1,9 +1,22 @@
+---
+alwaysApply: false
+description: Git 기반 배포 규칙 및 프로세스
+---
+
 # Git 기반 배포 규칙
+
+**마지막 업데이트**: 2025-11-10
+
+---
 
 ## 📋 개요
 
-moadamda-analytics 프로젝트는 **Git 기반 배포 방식**을 사용합니다.
-로컬에서 코드 수정 → GitHub 업로드 → 서버에서 pull → Docker 재빌드 순서로 진행합니다.
+moadamda-analytics 프로젝트는 **Git 기반 배포**를 사용합니다.
+
+**배포 흐름:**
+```
+로컬 개발 → GitHub Push → 서버 Pull → Docker 재빌드
+```
 
 ---
 
@@ -17,102 +30,77 @@ moadamda-analytics 프로젝트는 **Git 기반 배포 방식**을 사용합니�
 
 ## 🚀 배포 프로세스
 
-### 기본 배포 (백엔드 변경 시)
-
-### 1️⃣ 로컬에서 코드 수정 및 GitHub 업로드
-
-```bash
-# Windows 로컬 PC (C:\analysis\moadamda-analytics)
-cd C:\analysis\moadamda-analytics
-
-# 변경사항 확인
-git status
-
-# 커밋
-git add .
-git commit -m "변경 내용 설명"
-
-# GitHub에 push
-git push origin main
-```
-
-### 2️⃣ 서버 SSH 접속
-
-```bash
-# CMD 또는 PowerShell
-ssh root@211.188.53.220
-# 비밀번호: L9=FEcbJN!Yd
-```
-
-### 3️⃣ 서버에서 최신 코드 받기
-
-```bash
-cd /root/moadamda-analytics
-git pull origin main
-```
-
-### 4️⃣ Docker 재빌드 및 재시작
-
-```bash
-# 코드 변경 시 반드시 --build 옵션 사용!
-docker-compose -f docker-compose.prod.yml up -d --build
-```
-
-### 5️⃣ 배포 확인
-
-```bash
-# 로그 확인
-docker-compose -f docker-compose.prod.yml logs backend --tail 50
-
-# 실시간 로그
-docker-compose -f docker-compose.prod.yml logs backend -f
-```
-
----
-
-## 🎨 프론트엔드 변경 시 추가 단계 (중요!)
-
-**⚠️ 프론트엔드 코드 변경 시 반드시 추가 빌드 필요!**
-
-프론트엔드는 **빌드된 정적 파일(dist)**을 사용하므로, 코드 변경 후 반드시 재빌드해야 합니다.
-
-### 프론트엔드 변경이 포함된 경우 (frontend/src/ 수정)
-
-```bash
-# 1-3단계: 위의 기본 배포 과정 동일하게 진행
-
-# 4단계: Docker 재빌드
-cd /root/moadamda-analytics
-docker-compose -f docker-compose.prod.yml up -d --build
-
-# 5단계: 프론트엔드 빌드 (★ 추가 단계 ★)
-cd /root/moadamda-analytics/frontend
-npm run build
-
-# 6단계: 프론트엔드 컨테이너 재시작
-cd /root/moadamda-analytics
-docker-compose -f docker-compose.prod.yml restart frontend
-
-# 7단계: 확인
-docker-compose -f docker-compose.prod.yml logs frontend --tail 20
-```
-
-### 배포 완료 후 브라우저 확인
-
-- 브라우저에서 **Ctrl + Shift + R** (강력 새로고침) 실행
-- 캐시를 지우고 새로운 파일 로드
-
----
-
-## 📦 변경 유형별 배포 가이드
+### 📦 변경 유형별 배포 가이드
 
 | 변경 파일 위치 | 필요한 배포 단계 |
 |---------------|----------------|
-| `backend/src/**` | Docker 재빌드만 (`up -d --build`) |
-| `frontend/src/**` | Docker 재빌드 + **npm run build** + frontend 재시작 |
+| `backend/src/**` | Docker 재빌드만 |
+| `frontend/src/**` | Docker 재빌드 + **npm build** + frontend 재시작 |
 | `tracker/src/**` | 빌드 후 서버 업로드 (별도 프로세스) |
-| `.env` 파일 | Docker 컨테이너 재시작 (`restart`) |
-| `docker-compose.prod.yml` | Docker 재빌드 (`up -d --build`) |
+| `.env` 파일 | 컨테이너 재시작만 |
+| `docker-compose.prod.yml` | Docker 재빌드 |
+
+---
+
+## 🔧 배포 방법
+
+### 1️⃣ 백엔드 변경 시 (backend/src/**)
+
+```bash
+# === 로컬 PC ===
+cd C:\analysis\moadamda-analytics
+
+# Git 커밋 및 Push
+git status
+git add .
+git commit -m "[Type] 변경 내용 설명"
+git push origin main
+
+# === 서버 SSH 접속 ===
+ssh root@211.188.53.220
+# 비밀번호: L9=FEcbJN!Yd
+
+# 서버에서 배포
+cd /root/moadamda-analytics
+git pull origin main
+docker-compose -f docker-compose.prod.yml up -d --build
+
+# 로그 확인
+docker-compose -f docker-compose.prod.yml logs backend --tail 50
+```
+
+---
+
+### 2️⃣ 프론트엔드 변경 시 (frontend/src/**) ⚠️ 추가 단계 필수
+
+```bash
+# === 로컬 PC ===
+cd C:\analysis\moadamda-analytics
+git add .
+git commit -m "[Type] 변경 내용 설명"
+git push origin main
+
+# === 서버 SSH 접속 ===
+ssh root@211.188.53.220
+
+# 서버에서 배포
+cd /root/moadamda-analytics
+git pull origin main
+docker-compose -f docker-compose.prod.yml up -d --build
+
+# ★ 프론트엔드 빌드 (필수!) ★
+cd /root/moadamda-analytics/frontend
+npm run build
+
+# 프론트엔드 재시작
+cd /root/moadamda-analytics
+docker-compose -f docker-compose.prod.yml restart frontend
+
+# 로그 확인
+docker-compose -f docker-compose.prod.yml logs frontend --tail 20
+```
+
+**중요:** 브라우저에서 **Ctrl + Shift + R** (강력 새로고침) 필수!
 
 ---
 
@@ -120,63 +108,60 @@ docker-compose -f docker-compose.prod.yml logs frontend --tail 20
 
 ### 1. 코드 변경 시 반드시 `--build` 사용
 
-Docker 이미지 안에 코드가 포함되므로, 코드 변경 시 이미지를 다시 빌드해야 합니다.
+Docker 이미지 안에 코드가 포함되므로, 이미지 재빌드 필수!
 
-- ❌ **잘못된 방법**: `docker-compose restart backend`
-  - 컨테이너만 재시작, 이미지는 재빌드 안 됨
-  - 코드 변경사항이 반영되지 않음!
+```bash
+# ❌ 잘못된 방법
+docker-compose restart backend  # 코드 변경사항 미반영
 
-- ✅ **올바른 방법**: `docker-compose up -d --build`
-  - 이미지 재빌드 → 새 컨테이너 생성
-  - 코드 변경사항이 정상 반영됨
+# ✅ 올바른 방법
+docker-compose up -d --build  # 이미지 재빌드 → 코드 반영
+```
 
-### 2. 파일을 직접 수정하지 말 것
+### 2. 프론트엔드는 npm build 필수
 
-서버에서 파일을 직접 수정하면 Git 이력과 불일치가 발생합니다.
+프론트엔드는 **빌드된 정적 파일(dist)**을 사용하므로:
+- Docker 재빌드만으로는 불충분
+- `npm run build` 반드시 실행
+- 브라우저 캐시 새로고침 (**Ctrl + Shift + R**)
 
-- ❌ **하지 말 것**: 
-  - 서버에서 vim/nano로 파일 직접 수정
-  - 서버에서 cat > 파일 생성
+### 3. 서버에서 파일 직접 수정 금지
 
-- ✅ **올바른 방법**:
-  - 로컬에서 수정 → Git push → 서버에서 pull
+```bash
+# ❌ 하지 말 것
+vim /root/moadamda-analytics/backend/src/server.js  # Git 이력 불일치
 
-### 3. .env 파일은 예외
+# ✅ 올바른 방법
+# 로컬에서 수정 → Git push → 서버에서 pull
+```
 
-`.env` 파일은 Git에 포함되지 않으므로 서버에서 수동 관리합니다.
+### 4. .env 파일은 예외
 
-- 위치: `/root/moadamda-analytics/backend/.env`
-- `.env` 수정 후에도 Docker 재시작 필요:
-  ```bash
-  docker-compose -f docker-compose.prod.yml restart backend
-  ```
+`.env` 파일은 Git에 포함되지 않으므로 서버에서 수동 관리:
+
+```bash
+# 서버에서 .env 수정 후
+docker-compose -f docker-compose.prod.yml restart backend
+```
 
 ---
 
 ## 🔄 롤백 방법
 
-### Git 커밋 되돌리기
+### 이전 커밋으로 되돌리기
 
 ```bash
 # 서버에서
 cd /root/moadamda-analytics
 
-# 이전 커밋으로 되돌리기
-git log --oneline  # 커밋 해시 확인
+# 커밋 해시 확인
+git log --oneline -10
+
+# 특정 커밋으로 이동
 git checkout <commit-hash>
-
-# Docker 재시작
-docker-compose -f docker-compose.prod.yml up -d --build
-```
-
-### Git 태그로 롤백
-
-```bash
-# v042로 롤백
-git checkout v042
 docker-compose -f docker-compose.prod.yml up -d --build
 
-# 최신 버전으로 복귀
+# 최신으로 복귀
 git checkout main
 docker-compose -f docker-compose.prod.yml up -d --build
 ```
@@ -194,19 +179,11 @@ git status
 # 변경 이력 확인
 git log --oneline --graph -10
 
-# 원격 저장소 확인
-git remote -v
-
 # 최신 코드 받기
 git pull origin main
 
 # 변경사항 업로드
 git add .
-git commit -m "메시지"
-git push origin main
-
-# 특정 파일만 커밋
-git add 파일명
 git commit -m "메시지"
 git push origin main
 ```
@@ -220,147 +197,54 @@ git reset --hard HEAD
 # 충돌 발생 시 서버 코드 강제 초기화
 git fetch origin
 git reset --hard origin/main
-
-# Git 상태 확인
-git status
-git diff
 ```
 
 ---
 
 ## 🎯 AI 개발자 지침
 
-AI가 코드를 수정할 때는 다음 순서를 따릅니다:
+### AI가 해야 할 것
 
-### 1. 파일 수정 및 Git 작업
+1. ✅ 로컬 파일 수정
+2. ✅ Git 커밋 및 push
+3. ✅ 사용자에게 **변경 유형에 맞는** 배포 가이드 제공
+4. ✅ 프론트엔드 변경 시 빌드 단계 명시
+5. ✅ 브라우저 캐시 새로고침 안내
 
-1. **로컬에서 파일 수정** (search_replace, write 도구 사용)
-2. **Git 커밋 및 push** (run_terminal_cmd 도구 사용)
-
-### 2. 사용자에게 배포 안내 (변경 유형 구분!)
-
-#### 백엔드만 변경한 경우 (backend/src/**)
-
-```bash
-ssh root@211.188.53.220
-cd /root/moadamda-analytics
-git pull origin main
-docker-compose -f docker-compose.prod.yml up -d --build
-docker-compose -f docker-compose.prod.yml logs backend --tail 50
-```
-
-#### 프론트엔드 변경이 포함된 경우 (frontend/src/**)
-
-```bash
-ssh root@211.188.53.220
-cd /root/moadamda-analytics
-git pull origin main
-docker-compose -f docker-compose.prod.yml up -d --build
-
-# ★ 프론트엔드 빌드 추가 (필수!) ★
-cd /root/moadamda-analytics/frontend
-npm run build
-cd /root/moadamda-analytics
-docker-compose -f docker-compose.prod.yml restart frontend
-
-# 확인
-docker-compose -f docker-compose.prod.yml logs frontend --tail 20
-```
-
-**중요:** 프론트엔드 변경 시 반드시 "브라우저에서 Ctrl+Shift+R로 강력 새로고침 해주세요"라고 안내할 것!
-
-### AI가 직접 하지 말아야 할 것
+### AI가 하지 말아야 할 것
 
 - ❌ 서버 파일 직접 수정
 - ❌ 서버에서 cat > 파일 생성
 - ❌ SSH로 서버 접속해서 코드 수정
 - ❌ 프론트엔드 변경 시 npm build 단계 누락
 
-### AI가 해야 할 것
-
-- ✅ 로컬 파일 수정
-- ✅ Git 커밋 및 push
-- ✅ 사용자에게 **변경 유형에 맞는** 배포 가이드 제공
-- ✅ 프론트엔드 변경 시 빌드 단계 명시
-- ✅ 브라우저 캐시 새로고침 안내
-
 ---
 
 ## 📝 배포 체크리스트
 
 ### 백엔드 변경 시
-
 - [ ] 로컬에서 코드 수정 완료
 - [ ] `git status`로 변경사항 확인
-- [ ] `git add .` 실행
-- [ ] `git commit -m "의미있는 메시지"` 실행
-- [ ] `git push origin main` 실행 (성공 확인)
-- [ ] 서버 SSH 접속
-- [ ] `cd /root/moadamda-analytics` 이동
-- [ ] `git pull origin main` 실행 (Fast-forward 확인)
-- [ ] `docker-compose -f docker-compose.prod.yml up -d --build` 실행
+- [ ] `git commit -m "의미있는 메시지"`
+- [ ] `git push origin main` 성공 확인
+- [ ] 서버에서 `git pull origin main`
+- [ ] `docker-compose up -d --build` 실행
 - [ ] 로그 확인으로 정상 작동 확인
 
-### 프론트엔드 변경 시 (★ 추가 단계 필수 ★)
-
-- [ ] 로컬에서 코드 수정 완료
-- [ ] `git status`로 변경사항 확인
-- [ ] `git add .` 실행
-- [ ] `git commit -m "의미있는 메시지"` 실행
-- [ ] `git push origin main` 실행 (성공 확인)
-- [ ] 서버 SSH 접속
-- [ ] `cd /root/moadamda-analytics` 이동
-- [ ] `git pull origin main` 실행 (Fast-forward 확인)
-- [ ] `docker-compose -f docker-compose.prod.yml up -d --build` 실행
-- [ ] **`cd frontend && npm run build` 실행** ← 필수!
-- [ ] `cd .. && docker-compose -f docker-compose.prod.yml restart frontend` 실행
-- [ ] 프론트엔드 로그 확인
-- [ ] 브라우저에서 Ctrl+Shift+R로 강력 새로고침
+### 프론트엔드 변경 시 (★ 추가 단계 필수)
+- [ ] 위의 백엔드 단계 모두 수행
+- [ ] **`cd frontend && npm run build` 실행**
+- [ ] `docker-compose restart frontend` 실행
+- [ ] 브라우저에서 **Ctrl + Shift + R** 강력 새로고침
 - [ ] 변경사항 반영 확인
 
 ---
 
-## 💡 팁
-
-### 배포 스크립트 (선택사항)
-
-서버에 배포 스크립트를 만들면 더 편리합니다:
-
-```bash
-# 서버에서 실행 (최초 1회)
-cat > /root/deploy.sh << 'EOF'
-#!/bin/bash
-echo "🚀 Starting deployment..."
-cd /root/moadamda-analytics
-git pull origin main
-docker-compose -f docker-compose.prod.yml up -d --build
-echo "✅ Deployment completed!"
-docker-compose -f docker-compose.prod.yml logs backend --tail 20
-EOF
-
-chmod +x /root/deploy.sh
-```
-
-**이후 배포는 한 줄로:**
-```bash
-/root/deploy.sh
-```
-
----
-
----
-
-## ❗ 자주하는 실수
+## 🚨 자주하는 실수
 
 ### 1. 프론트엔드 변경 후 npm build 누락
 
-**증상:** 
-- 코드는 변경했는데 브라우저에서 변경사항이 안 보임
-- Docker 로그는 정상인데 UI는 그대로
-
-**원인:** 
-- 프론트엔드는 빌드된 정적 파일(dist)을 사용
-- Docker 재빌드만으로는 dist 폴더가 업데이트 안 됨
+**증상:** 코드는 변경했는데 브라우저에서 변경사항이 안 보임
 
 **해결:**
 ```bash
@@ -372,18 +256,13 @@ docker-compose -f docker-compose.prod.yml restart frontend
 
 ### 2. 브라우저 캐시 문제
 
-**증상:** 
-- 서버에는 새 파일이 배포되었는데 브라우저는 구버전 표시
+**증상:** 서버에는 새 파일이 배포되었는데 브라우저는 구버전 표시
 
-**해결:**
-- **Ctrl + Shift + R** (Chrome, Edge)
-- **Cmd + Shift + R** (Mac)
-- 또는 개발자도구 → Network 탭 → Disable cache 체크
+**해결:** **Ctrl + Shift + R** (Chrome, Edge) 또는 개발자도구에서 캐시 비활성화
 
 ### 3. Docker 캐시 문제
 
-**증상:** 
-- `--build` 옵션을 사용했는데도 변경사항 미반영
+**증상:** `--build` 옵션을 사용했는데도 변경사항 미반영
 
 **해결:**
 ```bash
@@ -394,4 +273,4 @@ docker-compose -f docker-compose.prod.yml up -d
 
 ---
 
-**마지막 업데이트**: 2025-11-05
+**규칙 버전**: v2 (2025-11-10)

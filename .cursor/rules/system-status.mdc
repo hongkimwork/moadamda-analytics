@@ -1,0 +1,124 @@
+---
+alwaysApply: false
+description: 현재 시스템 상태 및 알려진 제한사항
+---
+
+# 시스템 현황 - moadamda-analytics
+
+## 프로젝트 파일 참조
+- [프로젝트 상태](mdc:moadamda-analytics/PROJECT_STATUS.md)
+- [Tracker v042](mdc:moadamda-analytics/tracker/build/tracker-v042.js)
+- [아키텍처 분석](mdc:moadamda-analytics/ARCHITECTURE_ANALYSIS.md)
+
+---
+
+## 📌 현재 시스템 상태 (2025-11-05 업데이트)
+
+### ✅ 정상 작동 중인 기능
+
+#### 1. tracker-v042.js (일반 결제 추적)
+- visitor_id 자동 생성 및 추적
+- UTM 파라미터 수집 (광고 소스 추적)
+- 이벤트 전송: pageview, purchase, add_to_cart
+- conversions 테이블에 자동 저장
+
+#### 2. 광고 소재 분석 (일반 결제 기준)
+- UTM 기반 광고 효과 측정
+- 광고 소스별 매출 집계
+- ROI 계산
+- 대시보드 시각화
+
+---
+
+## ❌ 알려진 제한사항
+
+### 1. 외부 결제 추적 불가 (높은 우선순위)
+**문제:**
+- 카카오페이, 네이버페이 등 외부 결제 주문은 추적 안 됨
+- 외부 결제 페이지로 이동 시 tracker 이벤트 미전송
+- conversions 테이블에 기록되지 않음
+
+**영향:**
+- 외부 결제 주문의 광고 효과 측정 불가
+- 실제 매출보다 낮은 ROI 산출
+
+**현재 상태:**
+- ✅ 일반 결제: 정상 추적
+- ❌ 외부 결제: 추적 불가
+
+**향후 계획:**
+- Google Sheets + 시간 기반 매칭 로직 (보류 중)
+
+### 2. Cafe24 API 연동 제거 (2025-11-05)
+**이유:**
+- visitor_id를 제공하지 못해 실질적 효용 없음
+- API 응답에 광고 추적에 필요한 정보 부재
+
+**삭제된 파일:**
+- `backend/src/routes/cafe24.js`
+- `backend/src/utils/cafe24Client.js`
+- `backend/src/scheduler/syncCafe24Orders.js`
+
+---
+
+## 🔄 데이터 흐름 (현재)
+
+```
+고객 방문 (UTM 파라미터 포함)
+  ↓
+tracker-v042.js: visitor_id 생성
+  ↓
+사이트 탐색 (pageview 이벤트)
+  ↓
+상품 구매 (일반 결제만)
+  ↓
+purchase 이벤트 전송
+  ↓
+conversions 테이블 저장
+  ↓
+광고 소재 분석 페이지에서 조회
+```
+
+---
+
+## 🔮 미래 개선 계획 (보류 중)
+
+### 1. Google Sheets + 시간 기반 매칭 (외부 결제 추적용)
+**방법:**
+- tracker: `order_attempt` 이벤트 추가 (주문 시도 기록)
+- Cafe24 Recipe: Google Sheets에 주문 정보 자동 기록
+- 매칭 로직: 시간 + 금액 + 상품명으로 visitor_id 연결
+
+**장점:**
+- 외부 결제 주문도 추적 가능
+- Cafe24 API 없이 구현 가능
+
+**단점:**
+- 100% 정확도 보장 어려움
+- Google Sheets API 비용 발생 가능
+
+### 2. 주문 상태 동기화 (취소/환불 추적)
+**방법:**
+- Google Sheets에서 order_status 읽기
+- conversions 테이블 업데이트
+- 광고 분석 시 취소 주문 제외
+
+**장점:**
+- 정확한 ROI 계산 (취소 주문 제외)
+- 실시간 주문 상태 반영
+
+---
+
+## 📁 주요 구현 파일
+
+| 구분 | 파일 경로 | 설명 |
+|------|----------|------|
+| Tracker | `tracker/build/tracker-v042.js` | 클라이언트 추적 스크립트 |
+| DB Schema | `backend/migrations/init.sql` | conversions 테이블 정의 |
+| API | `backend/src/routes/creative-performance.js` | 광고 소재 분석 API |
+| Server | `backend/src/server.js` | 백엔드 메인 서버 |
+| Frontend | `frontend/src/pages/CreativePerformance.jsx` | 광고 분석 대시보드 |
+
+---
+
+**마지막 업데이트**: 2025-11-05

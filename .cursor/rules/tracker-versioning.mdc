@@ -1,0 +1,32 @@
+---
+description: Tracker 파일 버전 관리 규칙
+globs: tracker/**/*.js
+---
+
+# Tracker 파일 버전 관리 규칙
+
+## 중요 원칙
+
+**새로운 버전을 만들지 말고 기존 파일을 수정하세요!**
+
+- ❌ 잘못된 방법: tracker-v035.js, tracker-v036.js 등 새 파일 생성
+- ✅ 올바른 방법: 기존 [tracker-v042.js](mdc:moadamda-analytics/tracker/build/tracker-v042.js) 파일을 직접 수정
+
+## 수정 프로세스
+
+1. **소스 파일 수정**
+   - [tracker/src/tracker.js](mdc:moadamda-analytics/tracker/src/tracker.js) 수정
+
+2. **빌드 파일 동기화**
+   - [tracker/build/tracker-v042.js](mdc:moadamda-analytics/tracker/build/tracker-v042.js)에 동일한 수정 적용
+   - 파일명 변경 없음 (사용자가 직접 변경)
+
+3. **버전 정보 업데이트**
+   - 파일 상단 주석의 버전 정보만 업데이트
+   - [VERSION.txt](mdc:moadamda-analytics/tracker/build/VERSION.txt)에 변경 사항 기록
+
+## 주의사항
+
+- tracker-v042.js는 **완전한 기능**을 포함 (구매 추적, 장바구니 추적, DOM fallback 등)
+- 수정 시 기존 기능이 손실되지 않도록 주의
+- 새로운 기능을 추가할 때는 기존 코드를 유지하면서 추가만 할 것

@@ -1,0 +1,53 @@
+---
+alwaysApply: false
+description: Backend restart commands for moadamda-analytics
+---
+
+# Backend Restart Guide
+
+## 백엔드 재시작 명령어
+
+Docker Compose를 사용하여 백엔드를 재시작하는 방법입니다.
+
+### 명령어 순서
+
+```bash
+cd C:\analysis\moadamda-analytics
+docker-compose restart backend
+```
+
+### 설명
+
+1. **디렉토리 이동**: 프로젝트 루트로 이동
+2. **백엔드 재시작**: Docker Compose를 사용하여 backend 컨테이너만 재시작
+
+### 사용 시나리오
+
+- 백엔드 코드 수정 후 적용 필요 시
+- API 라우트 변경 후
+- 환경 변수 변경 후
+- 버그 수정 후 반영 필요 시
+
+### 전체 재시작 (필요 시)
+
+전체 서비스를 재시작해야 하는 경우:
+
+```bash
+cd C:\analysis\moadamda-analytics
+docker-compose down
+docker-compose up -d
+```
+
+### 로그 확인
+
+재시작 후 로그 확인:
+
+```bash
+docker-compose logs -f backend
+```
+
+### 컨테이너 상태 확인
+
+```bash
+docker-compose ps
+```
