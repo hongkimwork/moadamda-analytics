@@ -1,6 +1,6 @@
 ---
 alwaysApply: false
-description: Git 기반 배포 규칙 및 프로세스
+description: Git 기반 배포 프로세스 - 로컬→GitHub→서버 배포 절차, Docker 재빌드, 프론트엔드 npm build
 ---
 
 # Git 기반 배포 규칙

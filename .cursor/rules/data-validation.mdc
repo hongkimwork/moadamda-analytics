@@ -1,6 +1,6 @@
 ---
 alwaysApply: false
-description: 데이터 검증 및 품질 관리 규칙
+description: 데이터 검증 및 품질 관리 규칙 - 새 API/쿼리 개발, SQL 작성, 데이터 정제 시 필수 확인 사항
 ---
 
 # 데이터 검증 및 품질 관리 규칙

@@ -1,6 +1,6 @@
 ---
 alwaysApply: false
-description: 현재 시스템 상태 및 알려진 제한사항
+description: 시스템 현황 - 현재 작동 기능, 알려진 제한사항, 외부 결제 추적 불가 이슈, 데이터 흐름 개요
 ---
 
 # 시스템 현황 - moadamda-analytics

@@ -1,6 +1,6 @@
 ---
 alwaysApply: false
-description: Backend restart commands for moadamda-analytics
+description: Docker Compose 백엔드 재시작 명령어 - 백엔드 재시작, 로그 확인, 컨테이너 상태 점검 시 참조
 ---
 
 # Backend Restart Guide

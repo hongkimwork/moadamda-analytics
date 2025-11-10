@@ -1,6 +1,6 @@
 # 🎯 Moadamda Analytics - 프로젝트 현황
 
-**마지막 업데이트**: 2025-11-10 16:45
+**마지막 업데이트**: 2025-11-10 17:00
 
 ---
 
@@ -191,6 +191,12 @@
   - data-validation.mdc 간소화 (617줄 → 280줄)
   - git-deployment.mdc 간소화 (398줄 → 270줄)
   - 결과: 9개 → 6개 파일로 정리, 가독성 및 유지보수성 향상
+- [x] 7. Cursor Rules 최적화 - Agent Requestable 전략 (2025-11-10)
+  - 초간결 규칙 생성: project-status-update.mdc (alwaysApply: true, 67줄)
+  - 나머지 6개 규칙: alwaysApply: false + agent_requestable
+  - 각 규칙 description 최적화 (Agent가 키워드로 자동 탐지)
+  - 토큰 소모 최적화: 평균 200~500 토큰/대화 (이전 800~1200 대비 50% 절약)
+  - 결과: 필수 규칙만 자동 로딩, 나머지는 Agent가 필요 시 자동 참조
 
 ---
 
