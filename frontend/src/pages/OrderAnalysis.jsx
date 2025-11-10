@@ -461,7 +461,7 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
     }));
 
   // 타임라인 다단 배치 계산 함수
-  const MAX_ITEMS_PER_COLUMN = 7;
+  const MAX_ITEMS_PER_COLUMN = 6;
   const getColumns = (pages) => {
     const columnCount = Math.ceil(pages.length / MAX_ITEMS_PER_COLUMN);
     const columns = [];
