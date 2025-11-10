@@ -78,7 +78,8 @@ export function convertPagePathToFlow(pagePath, useKoreanNames = true) {
 
     // 페이지 이름 결정
     const pageName = useKoreanNames ? urlInfo.name : page.page_url;
-    const productName = page.page_title && page.page_title !== '모아담다 온라인 공식몰' 
+    // 상품명은 상품 상세 페이지(pageType === 'product')일 때만 표시
+    const productName = pageType === 'product' && page.page_title && page.page_title !== '모아담다 온라인 공식몰' 
       ? page.page_title 
       : null;
 
