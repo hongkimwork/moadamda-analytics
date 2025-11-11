@@ -1375,7 +1375,8 @@ router.get('/order-detail/:orderId', async (req, res) => {
         FROM pageviews p
         CROSS JOIN last_utm_contact
         WHERE p.visitor_id = $1
-          AND p.timestamp < COALESCE(last_utm_contact.utm_timestamp, '9999-12-31')
+          AND p.timestamp < COALESCE(last_utm_contact.utm_timestamp, $2::timestamp)
+          AND DATE(p.timestamp) < DATE($2)
       )
       SELECT
         visit_date,
@@ -1393,7 +1394,7 @@ router.get('/order-detail/:orderId', async (req, res) => {
       FROM previous_pageviews
       ORDER BY timestamp ASC
     `;
-    const previousVisitsResult = await db.query(previousVisitsQuery, [order.visitor_id]);
+    const previousVisitsResult = await db.query(previousVisitsQuery, [order.visitor_id, order.timestamp]);
 
     // 3. 동일 쿠키 UTM 히스토리 (동일 visitor_id의 모든 UTM 세션)
     // utm_params에서 누락된 값 복구 + 같은 광고 소재 병합 (5분 이내)
