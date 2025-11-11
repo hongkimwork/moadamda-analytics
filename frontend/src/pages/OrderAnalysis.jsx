@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Card, Table, DatePicker, Select, Button, Tag, Space, Typography, Descriptions, Timeline, Spin, Alert, Statistic, Row, Col, Switch, Tooltip, Modal, message } from 'antd';
-import { ReloadOutlined, ArrowLeftOutlined, ClockCircleOutlined, ShoppingOutlined, GlobalOutlined, HistoryOutlined, LinkOutlined, InfoCircleOutlined, UpOutlined, DownOutlined } from '@ant-design/icons';
+import { Card, Table, DatePicker, Select, Button, Tag, Space, Typography, Descriptions, Timeline, Spin, Alert, Statistic, Row, Col, Tooltip, Modal, message } from 'antd';
+import { ReloadOutlined, ArrowLeftOutlined, ClockCircleOutlined, ShoppingOutlined, GlobalOutlined, HistoryOutlined, InfoCircleOutlined, UpOutlined, DownOutlined } from '@ant-design/icons';
 import axios from 'axios';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ko';
 import relativeTime from 'dayjs/plugin/relativeTime';
-import { urlToKorean, getUrlDisplayMode, setUrlDisplayMode } from '../utils/urlToKorean';
+import { urlToKorean } from '../utils/urlToKorean';
 
 dayjs.extend(relativeTime);
 dayjs.locale('ko');
@@ -256,7 +256,6 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
-  const [showKoreanUrl, setShowKoreanUrl] = useState(getUrlDisplayMode() === 'korean');
   const [showPreviousVisits, setShowPreviousVisits] = useState(false);
   const [expandedJourneys, setExpandedJourneys] = useState(['purchase']); // 펼침/축소 상태
   const [selectedStartDate, setSelectedStartDate] = useState(null); // DatePicker 선택 날짜
@@ -264,11 +263,6 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
   useEffect(() => {
     fetchOrderDetail();
   }, [orderId]);
-
-  const handleUrlDisplayToggle = (checked) => {
-    setShowKoreanUrl(checked);
-    setUrlDisplayMode(checked ? 'korean' : 'original');
-  };
 
   // URL 복사 핸들러
   const handleCopyUrl = async (url) => {
@@ -593,17 +587,6 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
               );
             })}
           </div>
-          
-          <Space size="small" style={{ whiteSpace: 'nowrap' }}>
-            <LinkOutlined />
-            <span style={{ fontSize: '12px', color: '#666' }}>원본 URL</span>
-            <Switch 
-              checked={showKoreanUrl} 
-              onChange={handleUrlDisplayToggle}
-              size="small"
-            />
-            <span style={{ fontSize: '12px', color: '#666' }}>한글 이름</span>
-          </Space>
         </div>
         {onClose && (
           <Button 
@@ -663,7 +646,7 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
                     {journey.pages.length > 0 ? (
                       <div style={{ display: 'flex', gap: '15px', alignItems: 'flex-start' }}>
                         {columns.map((columnItems, colIdx) => (
-                          <div key={colIdx} style={{ width: '180px', flexShrink: 0 }}>
+                          <div key={colIdx} style={{ width: '190px', flexShrink: 0 }}>
                             <Timeline style={{ fontSize: '11px' }}>
                               {columnItems.map((page, idx) => {
                                 const globalIdx = colIdx * MAX_ITEMS_PER_COLUMN + idx;
@@ -698,7 +681,8 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
                                   boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
                                   transition: 'all 0.2s',
                                   cursor: 'default',
-                                  marginBottom: '10px'
+                                  marginBottom: '10px',
+                                  position: 'relative'
                                 };
                                 
                                 return (
@@ -718,14 +702,16 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
                                         e.currentTarget.style.transform = 'translateY(0)';
                                       }}
                                     >
-                                      {/* 첫 줄: 단계 + 체류시간 */}
-                                      <div style={{ marginBottom: '6px' }}>
+                                      {/* 콘텐츠 wrapper */}
+                                      <div style={{ paddingRight: '20px' }}>
+                                        {/* 첫 줄: 단계 + 체류시간 */}
+                                        <div style={{ marginBottom: '6px' }}>
                                         <span style={{ 
                                           fontSize: '13px', 
                                           fontWeight: 'bold',
                                           color: isFirst ? '#166534' : isExit ? '#991b1b' : isLast ? '#1e40af' : '#374151'
                                         }}>
-                                          {journey.type === 'purchase' ? (isLast ? '구매 완료' : `${globalIdx + 1}단계`) : (isLast ? '이탈' : `${globalIdx + 1}단계`)}
+                                          {journey.type === 'purchase' ? (isLast ? `${globalIdx + 1}단계: 구매 완료` : `${globalIdx + 1}단계`) : (isLast ? '이탈' : `${globalIdx + 1}단계`)}
                                         </span>
                                         {durationText && (
                                           <span style={{
@@ -768,13 +754,27 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
                                         const isDetailPage = pageName.includes('상세페이지');
                                         
                                         if (title && !isExcludedByTitle && isDetailPage) {
+                                          // 키워드별 색상 결정
+                                          let productColor = '#f97316'; // 기본 주황색
+                                          if (title.includes('피부')) {
+                                            productColor = 'rgb(79, 188, 223)'; // 하늘색
+                                          } else if (title.includes('건강')) {
+                                            productColor = 'rgb(196, 44, 68)'; // 빨간색
+                                          } else if (title.includes('다이어트')) {
+                                            productColor = 'rgb(206, 64, 110)'; // 자주색
+                                          } else if (title.includes('혈당')) {
+                                            productColor = 'rgb(121, 168, 39)'; // 녹색
+                                          } else if (title.includes('스마일')) {
+                                            productColor = 'rgb(223, 178, 42)'; // 노란색
+                                          }
+                                          
                                           return (
                                             <div style={{ 
                                               fontSize: '10px', 
                                               marginBottom: '3px'
                                             }}>
-                                              <span style={{ color: '#9ca3af' }}>상품명: </span>
-                                              <span style={{ color: '#f97316', fontWeight: '600', fontSize: '11px' }}>
+                                              <span style={{ color: '#000', fontWeight: 'bold' }}>상품명: </span>
+                                              <span style={{ color: productColor, fontWeight: '600', fontSize: '11px' }}>
                                                 {title}
                                               </span>
                                             </div>
@@ -783,44 +783,106 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
                                         return null;
                                       })()}
 
-                                      {/* 페이지명 또는 URL */}
-                                      {showKoreanUrl ? (
-                                        <div style={{ 
-                                          fontSize: '12px', 
-                                          color: '#1f2937',
-                                          lineHeight: '1.4'
-                                        }}>
-                                          <span style={{ color: '#9ca3af', fontSize: '10px' }}>방문: </span>
-                                          {urlInfo.name.replace(/_모바일$|_PC$/g, '')}
-                                        </div>
-                                      ) : (
-                                        <div 
-                                          style={{ 
-                                            fontSize: '9px', 
-                                            color: '#6b7280',
-                                            maxWidth: '100%',
-                                            overflow: 'hidden',
-                                            textOverflow: 'ellipsis',
-                                            whiteSpace: 'nowrap',
-                                            cursor: 'pointer',
-                                            padding: '3px 5px',
-                                            background: '#f9fafb',
-                                            borderRadius: '3px',
-                                            border: '1px solid #e5e7eb'
-                                          }}
-                                          title="더블클릭하면 복사됩니다"
-                                          onDoubleClick={async () => {
-                                            try {
-                                              await navigator.clipboard.writeText(page.page_url);
-                                              message.success('URL이 복사되었습니다!');
-                                            } catch (err) {
-                                              message.error('복사에 실패했습니다.');
-                                            }
-                                          }}
-                                        >
-                                          {page.page_url}
-                                        </div>
-                                      )}
+                                      {/* 페이지명 (한글 이름) */}
+                                      <div style={{ 
+                                        fontSize: '12px', 
+                                        color: '#1f2937',
+                                        lineHeight: '1.4'
+                                      }}>
+                                        <span style={{ color: '#000', fontWeight: 'bold', fontSize: '10px' }}>방문: </span>
+                                        {urlInfo.name.replace(/_모바일$|_PC$/g, '')}
+                                      </div>
+                                      
+                                      {/* 구매 완료 단계에 구매한 상품명 표시 */}
+                                      {journey.type === 'purchase' && isLast && (() => {
+                                        // 여정에서 상품 상세 페이지 찾기
+                                        const productPage = journey.pages.find(p => {
+                                          const title = p.page_title || '';
+                                          const url = p.clean_url || p.page_url || '';
+                                          const urlInfo = urlToKorean(url, userMappings);
+                                          const pageName = urlInfo.name || '';
+                                          
+                                          const excludedTitlePatterns = [
+                                            '전체상품',
+                                            '이벤트 |',
+                                            '모아담다 온라인 공식몰',
+                                            '카테고리',
+                                            '마이페이지',
+                                            '장바구니',
+                                            '주문',
+                                            '결제',
+                                            '로그인',
+                                            '회원'
+                                          ];
+                                          
+                                          const isExcludedByTitle = excludedTitlePatterns.some(pattern => 
+                                            title.includes(pattern)
+                                          );
+                                          
+                                          const isDetailPage = pageName.includes('상세페이지');
+                                          
+                                          return title && !isExcludedByTitle && isDetailPage;
+                                        });
+                                        
+                                        if (productPage) {
+                                          const title = productPage.page_title || '';
+                                          let productColor = '#f97316';
+                                          
+                                          if (title.includes('피부')) {
+                                            productColor = 'rgb(79, 188, 223)';
+                                          } else if (title.includes('건강')) {
+                                            productColor = 'rgb(196, 44, 68)';
+                                          } else if (title.includes('다이어트')) {
+                                            productColor = 'rgb(206, 64, 110)';
+                                          } else if (title.includes('혈당')) {
+                                            productColor = 'rgb(121, 168, 39)';
+                                          } else if (title.includes('스마일')) {
+                                            productColor = 'rgb(223, 178, 42)';
+                                          }
+                                          
+                                          return (
+                                            <div style={{ 
+                                              fontSize: '10px', 
+                                              marginTop: '3px'
+                                            }}>
+                                              <span style={{ color: '#000', fontWeight: 'bold' }}>구매한 상품 : </span>
+                                              <span style={{ color: productColor, fontWeight: '600', fontSize: '11px' }}>
+                                                {title}
+                                              </span>
+                                            </div>
+                                          );
+                                        }
+                                        return null;
+                                      })()}
+                                      </div>
+                                      
+                                      {/* 지구본 아이콘 - 우측 하단 */}
+                                      <GlobalOutlined
+                                        style={{
+                                          position: 'absolute',
+                                          right: '8px',
+                                          bottom: '8px',
+                                          fontSize: '14px',
+                                          color: '#6b7280',
+                                          cursor: 'pointer',
+                                          transition: 'all 0.3s ease',
+                                          opacity: 0.6
+                                        }}
+                                        onMouseEnter={(e) => {
+                                          e.currentTarget.style.transform = 'translateY(-4px)';
+                                          e.currentTarget.style.color = '#3b82f6';
+                                          e.currentTarget.style.opacity = '1';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                          e.currentTarget.style.transform = 'translateY(0)';
+                                          e.currentTarget.style.color = '#6b7280';
+                                          e.currentTarget.style.opacity = '0.6';
+                                        }}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          window.open(page.page_url, '_blank');
+                                        }}
+                                      />
                                     </div>
                                   </Timeline.Item>
                                 );

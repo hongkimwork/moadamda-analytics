@@ -12,7 +12,7 @@ description: 시스템 현황 - 현재 작동 기능, 알려진 제한사항, �
 
 ---
 
-## 📌 현재 시스템 상태 (2025-11-05 업데이트)
+## 📌 현재 시스템 상태 (2025-11-11 업데이트)
 
 ### ✅ 정상 작동 중인 기능
 
@@ -27,6 +27,29 @@ description: 시스템 현황 - 현재 작동 기능, 알려진 제한사항, �
 - 광고 소스별 매출 집계
 - ROI 계산
 - 대시보드 시각화
+
+#### 3. 고객 여정 분석
+- 구매까지의 전체 고객 여정 추적
+- 이전 방문 이력과 구매 당일 경로 구분 표시
+- 체류 시간 및 방문 페이지 상세 분석
+- 주문별 상세 고객 행동 분석
+
+---
+
+## ✅ 최근 수정된 버그 (2025-11-11)
+
+### 1. previous_visits API 버그 수정
+**문제:**
+- UTM 파라미터가 없는 Direct 방문 고객의 경우, 구매 당일 데이터가 "이전 방문"으로 잘못 표시됨
+- `COALESCE(last_utm_contact.utm_timestamp, '9999-12-31')` 로직으로 인해 모든 pageview가 previous_visits에 포함
+
+**수정 내용:**
+- `backend/src/routes/stats.js` 파일의 previousVisitsQuery 수정
+- 구매일 이전 방문만 표시하도록 `DATE(p.timestamp) < DATE($2)` 조건 추가
+
+**결과:**
+- 구매 당일과 이전 방문이 정확하게 구분됨
+- 첫 방문 즉시 구매한 고객은 previous_visits가 빈 배열로 표시
 
 ---
 
@@ -116,9 +139,11 @@ conversions 테이블 저장
 | Tracker | `tracker/build/tracker-v042.js` | 클라이언트 추적 스크립트 |
 | DB Schema | `backend/migrations/init.sql` | conversions 테이블 정의 |
 | API | `backend/src/routes/creative-performance.js` | 광고 소재 분석 API |
+| API | `backend/src/routes/stats.js` | 주문 통계 및 고객 여정 분석 API |
 | Server | `backend/src/server.js` | 백엔드 메인 서버 |
 | Frontend | `frontend/src/pages/CreativePerformance.jsx` | 광고 분석 대시보드 |
+| Frontend | `frontend/src/pages/OrderAnalysis.jsx` | 주문 분석 및 고객 여정 UI |
 
 ---
 
-**마지막 업데이트**: 2025-11-05
+**마지막 업데이트**: 2025-11-11
