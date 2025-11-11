@@ -17,6 +17,77 @@ const { Title } = Typography;
 const API_URL = import.meta.env.VITE_API_URL || '';
 
 // ============================================================================
+// 헬퍼 함수: 페이지 타입 감지
+// ============================================================================
+function getPageType(url, koreanName) {
+  const urlLower = (url || '').toLowerCase();
+  const koreanLower = (koreanName || '').toLowerCase();
+  
+  // 주문 완료 페이지 (최우선)
+  if (urlLower.includes('/order-complete') || 
+      urlLower.includes('/complete') || 
+      urlLower.includes('order_id') ||
+      koreanLower.includes('주문 완료') || 
+      koreanLower.includes('구매 완료') ||
+      koreanLower.includes('감사합니다')) {
+    return 'complete';
+  }
+  
+  // 주문서 작성 페이지 (쿠폰 선택 포함)
+  if (urlLower.includes('/order') || 
+      urlLower.includes('/checkout') ||
+      urlLower.includes('/payment') ||
+      urlLower.includes('/coupon') ||
+      koreanLower.includes('주문서') || 
+      koreanLower.includes('결제') ||
+      koreanLower.includes('배송정보') ||
+      koreanLower.includes('쿠폰')) {
+    return 'order';
+  }
+  
+  // 장바구니 페이지
+  if (urlLower.includes('/cart') || 
+      urlLower.includes('/basket') ||
+      koreanLower.includes('장바구니')) {
+    return 'cart';
+  }
+  
+  // 상품 상세 페이지
+  if (urlLower.includes('/product') || 
+      urlLower.includes('/item') ||
+      urlLower.includes('/detail') ||
+      koreanLower.includes('상품명:') ||
+      koreanLower.includes('상세페이지') ||
+      koreanLower.includes('상품 상세')) {
+    return 'product';
+  }
+  
+  // 일반 페이지 (홈, 카테고리, 로그인, Q&A 등)
+  return 'general';
+}
+
+// ============================================================================
+// 헬퍼 함수: 페이지 타입별 배경색 결정
+// ============================================================================
+function getPageBackground(pageType, isExit) {
+  // 이탈이면 무조건 빨간색 (최우선)
+  if (isExit) {
+    return '#fecaca'; // 연한 빨강
+  }
+  
+  // 페이지 타입별 배경색
+  const backgrounds = {
+    complete: '#bfdbfe',   // 진한 파란색 (주문 완료)
+    order: '#dbeafe',      // 파란색 (주문서 작성)
+    cart: '#dcfce7',       // 초록색 (장바구니)
+    product: '#fef3c7',    // 노란색 (상품 상세)
+    general: 'white'       // 흰색 (일반 페이지)
+  };
+  
+  return backgrounds[pageType] || backgrounds.general;
+}
+
+// ============================================================================
 // 주문 목록 페이지
 // ============================================================================
 export function OrderListPage() {
@@ -654,13 +725,21 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
                                 const isFirst = globalIdx === 0;
                                 const isLast = globalIdx === journey.pages.length - 1;
                                 
-                                // 체류시간 배지 스타일
+                                // 이탈 여부 판단
+                                const isExit = isLast && journey.type !== 'purchase';
+                                
+                                // 페이지 타입 감지
+                                const pageType = getPageType(page.clean_url || page.page_url, urlInfo.displayName);
+                                
+                                // 페이지 타입별 배경색 결정 (이탈이면 빨강 최우선)
+                                const pageBackground = getPageBackground(pageType, isExit);
+                                
+                                // 체류시간 배지 스타일 (회색 계열로 통일)
                                 const durationSeconds = page.time_spent_seconds || 0;
-                                const badgeStyle = durationSeconds >= 60 
-                                  ? { background: '#fecaca', color: '#dc2626' }
-                                  : durationSeconds >= 10
-                                  ? { background: '#fed7aa', color: '#c2410c' }
-                                  : { background: '#f3f4f6', color: '#6b7280' };
+                                const badgeStyle = { 
+                                  background: '#f3f4f6', 
+                                  color: '#6b7280' 
+                                };
                                 
                                 const durationText = durationSeconds > 0
                                   ? durationSeconds >= 60 
@@ -668,16 +747,13 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
                                     : `${durationSeconds}초 체류`
                                   : '';
                                 
-                                // 이탈 여부 판단
-                                const isExit = isLast && journey.type !== 'purchase';
-                                
                                 // 카드 스타일
                                 const cardStyle = {
                                   border: isFirst ? '2px solid #22c55e' : isExit ? '2px solid #dc2626' : isLast ? '2px solid #3b82f6' : '1px solid #e5e7eb',
                                   borderLeft: isFirst ? '4px solid #22c55e' : isExit ? '4px solid #dc2626' : isLast ? '4px solid #3b82f6' : '1px solid #e5e7eb',
                                   borderRadius: '6px',
                                   padding: '8px',
-                                  background: isFirst ? '#f0fdf4' : isExit ? '#fef2f2' : isLast ? '#eff6ff' : 'white',
+                                  background: pageBackground,
                                   boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
                                   transition: 'all 0.2s',
                                   cursor: 'default',

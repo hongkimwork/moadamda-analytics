@@ -55,6 +55,7 @@ function PageMapping() {
         }
       });
       
+      // Backend already sorts data (unmapped first)
       setAllData(response.data.data);
       setAllTotal(response.data.total);
       setLastUpdate(new Date());

@@ -93,6 +93,16 @@ router.get('/all', async (req, res) => {
       });
     }
     
+    // Sort: unmapped URLs first (is_mapped: false), then mapped URLs (is_mapped: true)
+    allUrls.sort((a, b) => {
+      // If both are mapped or both are unmapped, keep original order
+      if (a.is_mapped === b.is_mapped) {
+        return 0;
+      }
+      // Unmapped (false) comes before mapped (true)
+      return a.is_mapped ? 1 : -1;
+    });
+    
     // Apply pagination
     const paginatedData = allUrls.slice(
       parseInt(offset), 
