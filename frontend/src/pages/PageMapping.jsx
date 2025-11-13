@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Tabs, Table, Button, Input, Space, Tag, message, Typography, Modal, Form, Spin, Statistic, Select, Divider } from 'antd';
-import { ReloadOutlined, SearchOutlined, LinkOutlined, PlusOutlined, CloseOutlined, EyeOutlined, ClockCircleOutlined, BarChartOutlined, CheckCircleOutlined, CloseCircleOutlined, EditOutlined, RobotOutlined, MinusCircleOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Card, Tabs, Table, Button, Input, Space, Tag, message, Typography, Modal, Form, Spin, Statistic, Select, Divider, Tooltip } from 'antd';
+import { ReloadOutlined, SearchOutlined, LinkOutlined, PlusOutlined, CloseOutlined, EyeOutlined, ClockCircleOutlined, BarChartOutlined, CheckCircleOutlined, CloseCircleOutlined, EditOutlined, RobotOutlined, MinusCircleOutlined, DeleteOutlined, InfoCircleOutlined, GlobalOutlined, SettingOutlined } from '@ant-design/icons';
 import axios from 'axios';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -1062,10 +1062,21 @@ function PageMapping() {
       {/* Manual Add URL Modal - Phase 1: URL OR Operation */}
       <Modal
         title={
-          <div>
-            <PlusOutlined style={{ marginRight: 8 }} />
-            URL 수동 추가 (복합 조건)
-          </div>
+          <Space>
+            <PlusOutlined />
+            <span>URL 수동 추가</span>
+            <Tooltip 
+              title={
+                <div>
+                  여러 URL을 OR 연산으로 묶을 수 있습니다.<br/>
+                  아래 URL 중 하나라도 일치하면 매핑됩니다.<br/><br/>
+                  <strong>예:</strong> 상품 A, B, C를 "프리미엄 상품군"으로 통합
+                </div>
+              }
+            >
+              <InfoCircleOutlined style={{ color: '#1890FF', cursor: 'help' }} />
+            </Tooltip>
+          </Space>
         }
         open={manualAddModalVisible}
         onCancel={() => {
@@ -1076,37 +1087,23 @@ function PageMapping() {
         footer={null}
         width={800}
       >
-        <div style={{ 
-          marginBottom: 16, 
-          padding: '8px 12px',
-          background: '#fff7e6',
-          border: '1px solid #ffd591',
-          borderRadius: 4
-        }}>
-          <Text style={{ fontSize: '12px' }}>
-            💡 <strong>TIP:</strong> 여러 URL을 하나의 매핑으로 묶을 수 있습니다! 
-            예: 상품 A, B, C를 "프리미엄 상품군"으로 통합 관리
-          </Text>
-        </div>
-
         <Form
           form={manualAddForm}
           layout="vertical"
           onFinish={handleManualAddSubmit}
         >
-          {/* URL Groups */}
-          <div style={{ marginBottom: 16 }}>
-            <Text strong>📌 URL 조건 그룹 (OR 연산)</Text>
-            <Text type="secondary" style={{ marginLeft: 8, fontSize: '12px' }}>
-              아래 URL 중 하나라도 일치하면 매핑됩니다
-            </Text>
-          </div>
 
           {urlGroups.map((group, groupIndex) => (
             <div key={groupIndex}>
               <Card 
                 size="small" 
-                style={{ marginBottom: 16, background: '#fafafa' }}
+                style={{ 
+                  marginBottom: 16, 
+                  background: '#FFFFFF',
+                  border: '1px solid #D9D9D9',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                  borderRadius: 8
+                }}
                 title={
                   <Space>
                     <Text strong>URL 조건 {groupIndex + 1}</Text>
@@ -1125,27 +1122,48 @@ function PageMapping() {
                 }
               >
                 {/* Full URL Input with Auto-Parse */}
-                <div style={{ marginBottom: 12 }}>
-                  <Text style={{ fontSize: '12px', marginBottom: 4, display: 'block' }}>
-                    전체 URL 입력 (자동 파싱)
-                  </Text>
+                <div style={{ 
+                  marginBottom: 16, 
+                  padding: 12, 
+                  background: '#F0F2F5',
+                  border: '1px dashed #D9D9D9',
+                  borderRadius: 6
+                }}>
+                  <Space style={{ marginBottom: 4 }}>
+                    <GlobalOutlined style={{ color: '#1890FF' }} />
+                    <Text strong style={{ fontSize: '13px' }}>전체 URL</Text>
+                    <Tooltip 
+                      title={
+                        <div>
+                          쿼리 파라미터 포함 URL을 입력하면<br/>
+                          자동으로 베이스 URL과 매개변수로 분리됩니다.<br/><br/>
+                          <strong>예:</strong> https://example.com/product?no=1001<br/>
+                          → 베이스: https://example.com/product<br/>
+                          → 매개변수: no = 1001
+                        </div>
+                      }
+                    >
+                      <InfoCircleOutlined style={{ color: '#8C8C8C', cursor: 'help', fontSize: '12px' }} />
+                    </Tooltip>
+                  </Space>
                   <Input
                     placeholder="예: https://m.moadamda.com/product/detail?no=1001"
                     onChange={(e) => handleUrlInputChange(groupIndex, e.target.value)}
-                    style={{ marginBottom: 8 }}
                   />
-                  <Text type="secondary" style={{ fontSize: '11px' }}>
-                    ↓ 쿼리 파라미터 포함 URL을 입력하면 자동으로 분리됩니다
-                  </Text>
                 </div>
 
-                <Divider style={{ margin: '12px 0' }} />
-
                 {/* Base URL */}
-                <div style={{ marginBottom: 12 }}>
-                  <Text style={{ fontSize: '12px', marginBottom: 4, display: 'block' }}>
-                    베이스 URL <span style={{ color: 'red' }}>*</span>
-                  </Text>
+                <div style={{ 
+                  marginBottom: 16, 
+                  padding: 12, 
+                  background: '#FAFAFA',
+                  border: '1px solid #D9D9D9',
+                  borderRadius: 6
+                }}>
+                  <Space style={{ marginBottom: 4 }}>
+                    <LinkOutlined style={{ color: '#52C41A' }} />
+                    <Text strong style={{ fontSize: '13px' }}>베이스 URL <span style={{ color: 'red' }}>*</span></Text>
+                  </Space>
                   <Input
                     value={group.baseUrl}
                     onChange={(e) => handleUpdateBaseUrl(groupIndex, e.target.value)}
@@ -1154,13 +1172,28 @@ function PageMapping() {
                 </div>
 
                 {/* Parameters */}
-                <div>
-                  <div style={{ marginBottom: 8 }}>
-                    <Text style={{ fontSize: '12px' }}>매개변수 (AND 연산)</Text>
-                    <Text type="secondary" style={{ marginLeft: 8, fontSize: '11px' }}>
-                      모든 매개변수가 일치해야 합니다
-                    </Text>
-                  </div>
+                <div style={{ 
+                  padding: 16, 
+                  background: '#E6F7FF',
+                  border: '2px solid #91D5FF',
+                  borderRadius: 6,
+                  boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)'
+                }}>
+                  <Space style={{ marginBottom: 12 }}>
+                    <SettingOutlined style={{ color: '#1890FF' }} />
+                    <Text strong style={{ fontSize: '13px' }}>매개변수</Text>
+                    <Tooltip 
+                      title={
+                        <div>
+                          모든 매개변수가 일치해야 합니다 (AND 연산)<br/><br/>
+                          <strong>예:</strong> no=1001 AND color=black<br/>
+                          → 두 조건 모두 만족하는 URL만 매핑
+                        </div>
+                      }
+                    >
+                      <InfoCircleOutlined style={{ color: '#595959', cursor: 'help', fontSize: '12px' }} />
+                    </Tooltip>
+                  </Space>
                   
                   {group.params.map((param, paramIndex) => (
                     <Space key={paramIndex} style={{ width: '100%', marginBottom: 8 }} align="start">
@@ -1200,10 +1233,21 @@ function PageMapping() {
               </Card>
 
               {groupIndex < urlGroups.length - 1 && (
-                <div style={{ textAlign: 'center', margin: '12px 0' }}>
-                  <Divider>
-                    <Tag color="orange">OR</Tag>
-                  </Divider>
+                <div style={{ 
+                  textAlign: 'center', 
+                  margin: '20px 0',
+                  padding: '12px',
+                  background: 'linear-gradient(to right, #FF7A45, #FFA940)',
+                  borderRadius: 8,
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                }}>
+                  <Text strong style={{ 
+                    color: '#FFFFFF', 
+                    fontSize: '14px',
+                    letterSpacing: '2px'
+                  }}>
+                    OR 연산
+                  </Text>
                 </div>
               )}
             </div>
@@ -1214,17 +1258,27 @@ function PageMapping() {
             icon={<PlusOutlined />}
             onClick={handleAddUrlGroup}
             block
-            style={{ marginBottom: 16 }}
+            style={{ 
+              marginBottom: 24,
+              height: 40,
+              fontSize: '14px',
+              borderWidth: 2
+            }}
           >
-            + URL 조건 추가
+            URL 조건 추가
           </Button>
 
-          <Divider />
+          <Divider style={{ margin: '24px 0' }} />
 
           {/* Korean Name */}
           <Form.Item
             name="korean_name"
-            label="매핑명"
+            label={
+              <Space>
+                <Text strong>매핑명</Text>
+                <span style={{ color: 'red' }}>*</span>
+              </Space>
+            }
             rules={[
               { required: true, message: '매핑명을 입력해주세요' },
               { whitespace: true, message: '공백만 입력할 수 없습니다' },
@@ -1233,20 +1287,25 @@ function PageMapping() {
           >
             <Input 
               placeholder="예: 프리미엄 상품군"
+              size="large"
             />
           </Form.Item>
 
           <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
-            <Space>
-              <Button onClick={() => {
-                setManualAddModalVisible(false);
-                manualAddForm.resetFields();
-                setUrlGroups([{ baseUrl: '', params: [{ key: '', value: '' }] }]);
-              }}>
+            <Space size="middle">
+              <Button 
+                size="large"
+                onClick={() => {
+                  setManualAddModalVisible(false);
+                  manualAddForm.resetFields();
+                  setUrlGroups([{ baseUrl: '', params: [{ key: '', value: '' }] }]);
+                }}
+              >
                 취소
               </Button>
               <Button 
                 type="primary" 
+                size="large"
                 htmlType="submit"
                 loading={manualAddSubmitting}
                 icon={<PlusOutlined />}
