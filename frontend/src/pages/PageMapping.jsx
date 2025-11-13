@@ -1125,12 +1125,12 @@ function PageMapping() {
                 <div style={{ 
                   marginBottom: 16, 
                   padding: 12, 
-                  background: '#F0F2F5',
-                  border: '1px dashed #D9D9D9',
+                  background: '#FAFAFA',
+                  border: '1px solid #D9D9D9',
                   borderRadius: 6
                 }}>
                   <Space style={{ marginBottom: 4 }}>
-                    <GlobalOutlined style={{ color: '#1890FF' }} />
+                    <GlobalOutlined style={{ color: '#8C8C8C' }} />
                     <Text strong style={{ fontSize: '13px' }}>전체 URL</Text>
                     <Tooltip 
                       title={
@@ -1161,7 +1161,7 @@ function PageMapping() {
                   borderRadius: 6
                 }}>
                   <Space style={{ marginBottom: 4 }}>
-                    <LinkOutlined style={{ color: '#52C41A' }} />
+                    <LinkOutlined style={{ color: '#8C8C8C' }} />
                     <Text strong style={{ fontSize: '13px' }}>베이스 URL <span style={{ color: 'red' }}>*</span></Text>
                   </Space>
                   <Input
@@ -1174,13 +1174,12 @@ function PageMapping() {
                 {/* Parameters */}
                 <div style={{ 
                   padding: 16, 
-                  background: '#E6F7FF',
-                  border: '2px solid #91D5FF',
-                  borderRadius: 6,
-                  boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)'
+                  background: '#FAFAFA',
+                  border: '1px solid #D9D9D9',
+                  borderRadius: 6
                 }}>
                   <Space style={{ marginBottom: 12 }}>
-                    <SettingOutlined style={{ color: '#1890FF' }} />
+                    <SettingOutlined style={{ color: '#8C8C8C' }} />
                     <Text strong style={{ fontSize: '13px' }}>매개변수</Text>
                     <Tooltip 
                       title={
@@ -1191,7 +1190,7 @@ function PageMapping() {
                         </div>
                       }
                     >
-                      <InfoCircleOutlined style={{ color: '#595959', cursor: 'help', fontSize: '12px' }} />
+                      <InfoCircleOutlined style={{ color: '#8C8C8C', cursor: 'help', fontSize: '12px' }} />
                     </Tooltip>
                   </Space>
                   
@@ -1237,14 +1236,14 @@ function PageMapping() {
                   textAlign: 'center', 
                   margin: '20px 0',
                   padding: '12px',
-                  background: 'linear-gradient(to right, #FF7A45, #FFA940)',
-                  borderRadius: 8,
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                  background: '#F5F5F5',
+                  border: '1px solid #D9D9D9',
+                  borderRadius: 8
                 }}>
                   <Text strong style={{ 
-                    color: '#FFFFFF', 
-                    fontSize: '14px',
-                    letterSpacing: '2px'
+                    color: '#595959', 
+                    fontSize: '13px',
+                    letterSpacing: '1px'
                   }}>
                     OR 연산
                   </Text>
