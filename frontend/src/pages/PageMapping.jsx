@@ -1099,7 +1099,7 @@ function PageMapping() {
                 size="small" 
                 style={{ 
                   marginBottom: 16, 
-                  background: '#FFFFFF',
+                  background: '#F5F5F5',
                   border: '1px solid #D9D9D9',
                   boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
                   borderRadius: 8
@@ -1125,7 +1125,7 @@ function PageMapping() {
                 <div style={{ 
                   marginBottom: 16, 
                   padding: 12, 
-                  background: '#FAFAFA',
+                  background: '#FFFFFF',
                   border: '1px solid #D9D9D9',
                   borderRadius: 6
                 }}>
@@ -1156,7 +1156,7 @@ function PageMapping() {
                 <div style={{ 
                   marginBottom: 16, 
                   padding: 12, 
-                  background: '#FAFAFA',
+                  background: '#FFFFFF',
                   border: '1px solid #D9D9D9',
                   borderRadius: 6
                 }}>
@@ -1174,7 +1174,7 @@ function PageMapping() {
                 {/* Parameters */}
                 <div style={{ 
                   padding: 16, 
-                  background: '#FAFAFA',
+                  background: '#FFFFFF',
                   border: '1px solid #D9D9D9',
                   borderRadius: 6
                 }}>
