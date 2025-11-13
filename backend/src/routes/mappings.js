@@ -34,7 +34,8 @@ router.get('/all', async (req, res) => {
     const { 
       limit = 50, 
       offset = 0,
-      search = ''
+      search = '',
+      status = 'all'  // 'all', 'completed', 'uncompleted'
     } = req.query;
     
     // Get unique clean URLs from pageviews (don't filter here, filter later with korean_name)
@@ -97,6 +98,14 @@ router.get('/all', async (req, res) => {
       });
     }
     
+    // Apply status filter (BEFORE pagination)
+    if (status === 'completed') {
+      allUrls = allUrls.filter(item => item.is_mapped === true);
+    } else if (status === 'uncompleted') {
+      allUrls = allUrls.filter(item => item.is_mapped === false);
+    }
+    // If status === 'all', no filtering needed
+    
     // Sort: unmapped URLs first (is_mapped: false), then mapped URLs (is_mapped: true)
     allUrls.sort((a, b) => {
       // If both are mapped or both are unmapped, keep original order
@@ -107,7 +116,7 @@ router.get('/all', async (req, res) => {
       return a.is_mapped ? 1 : -1;
     });
     
-    // Apply pagination
+    // Apply pagination (AFTER filtering and sorting)
     const paginatedData = allUrls.slice(
       parseInt(offset), 
       parseInt(offset) + parseInt(limit)

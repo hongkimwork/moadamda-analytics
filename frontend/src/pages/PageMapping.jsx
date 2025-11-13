@@ -74,11 +74,12 @@ function PageMapping() {
         params: {
           limit: allPageSize,
           offset: offset,
-          search: allSearch
+          search: allSearch,
+          status: statusFilter  // 서버에서 필터링
         }
       });
       
-      // Backend already sorts data (unmapped first)
+      // Backend already sorts and filters data
       setAllData(response.data.data);
       setAllTotal(response.data.total);
       setLastUpdate(new Date());
@@ -122,7 +123,7 @@ function PageMapping() {
     } else if (activeTab === 'excluded') {
       fetchExcludedUrls();
     }
-  }, [activeTab, allPage, allPageSize, excludedPage, excludedPageSize]);
+  }, [activeTab, allPage, allPageSize, excludedPage, excludedPageSize, statusFilter]);
 
   // Handle refresh
   const handleRefresh = () => {
@@ -628,14 +629,10 @@ function PageMapping() {
     }
   ];
 
-  // Filter data based on status
-  const filteredData = allData.filter(item => {
-    if (statusFilter === 'completed') return item.is_mapped;
-    if (statusFilter === 'uncompleted') return !item.is_mapped;
-    return true; // 'all'
-  });
+  // Server-side filtering: no need for client-side filtering
+  // Data is already filtered by the backend based on statusFilter
 
-  // Calculate statistics
+  // Calculate statistics (only accurate when statusFilter === 'all')
   const mappedCount = allData.filter(item => item.is_mapped).length;
   const unmappedCount = allData.filter(item => !item.is_mapped).length;
 
@@ -646,11 +643,16 @@ function PageMapping() {
       label: (
         <span>
           📋 URL 매핑 관리
-          {allTotal > 0 && (
+          {allTotal > 0 && statusFilter === 'all' && (
             <span style={{ marginLeft: 8 }}>
               <Tag color="blue">{allTotal}개</Tag>
               <Tag color="success" icon={<CheckCircleOutlined />}>{mappedCount}</Tag>
               <Tag color="default" icon={<CloseCircleOutlined />}>{unmappedCount}</Tag>
+            </span>
+          )}
+          {allTotal > 0 && statusFilter !== 'all' && (
+            <span style={{ marginLeft: 8 }}>
+              <Tag color="blue">{allTotal}개</Tag>
             </span>
           )}
         </span>
@@ -680,8 +682,8 @@ function PageMapping() {
             </Select>
           </Space>
 
-          {/* Statistics Summary */}
-          {allTotal > 0 && (
+          {/* Statistics Summary - Only show when viewing all data */}
+          {allTotal > 0 && statusFilter === 'all' && (
             <div style={{ 
               marginBottom: 16, 
               padding: '12px 16px', 
@@ -713,16 +715,25 @@ function PageMapping() {
             </div>
           )}
 
+          {/* Filtered Results Info */}
+          {statusFilter !== 'all' && allTotal > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <Text type="secondary">
+                {statusFilter === 'completed' ? '✅ 완료된 URL' : '⚪ 미완료 URL'}: <Tag>{allTotal}개</Tag>
+              </Text>
+            </div>
+          )}
+
           {/* Table */}
           <Table
             columns={allColumns}
-            dataSource={filteredData}
+            dataSource={allData}
             rowKey="url"
             loading={allLoading}
             pagination={{
               current: allPage,
               pageSize: allPageSize,
-              total: filteredData.length,
+              total: allTotal,
               onChange: (page, pageSize) => {
                 setAllPage(page);
                 setAllPageSize(pageSize);
