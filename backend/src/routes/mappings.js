@@ -46,7 +46,7 @@ router.get('/all', async (req, res) => {
     
     // Get all mappings (excluding excluded URLs)
     const mappingsQuery = `
-      SELECT id, url, korean_name, source_type, created_at, updated_at 
+      SELECT id, url, korean_name, source_type, url_conditions, created_at, updated_at 
       FROM url_mappings 
       WHERE is_excluded = false
     `;
@@ -59,6 +59,7 @@ router.get('/all', async (req, res) => {
         id: row.id,
         korean_name: row.korean_name,
         source_type: row.source_type || 'auto',
+        url_conditions: row.url_conditions,
         created_at: row.created_at,
         updated_at: row.updated_at
       });
@@ -80,6 +81,7 @@ router.get('/all', async (req, res) => {
           korean_name: mapping ? mapping.korean_name : null,
           mapping_id: mapping ? mapping.id : null,
           source_type: mapping ? mapping.source_type : 'auto',
+          url_conditions: mapping ? mapping.url_conditions : null,
           latest_timestamp: urlData.latest_timestamp,
           is_mapped: !!mapping
         };
@@ -500,17 +502,17 @@ router.get('/', async (req, res) => {
 
 // ============================================================================
 // 8. POST /api/mappings
-// Create new URL mapping
+// Create new URL mapping (simple or complex with url_conditions)
 // ============================================================================
 router.post('/', async (req, res) => {
   try {
-    const { url, korean_name, source_type = 'auto' } = req.body;
+    const { url, korean_name, source_type = 'auto', url_conditions = null } = req.body;
     
     // Validation: Check if fields are provided
-    if (!url) {
+    if (!url && !url_conditions) {
       return res.status(400).json({ 
         error: 'Missing required field',
-        message: 'url is required' 
+        message: 'Either url or url_conditions is required' 
       });
     }
     
@@ -529,7 +531,58 @@ router.post('/', async (req, res) => {
       });
     }
     
-    // Clean the URL
+    // Handle complex URL conditions (Phase 1: URL OR operation)
+    if (url_conditions) {
+      // Validate url_conditions structure
+      if (!url_conditions.operator || !url_conditions.groups || !Array.isArray(url_conditions.groups)) {
+        return res.status(400).json({ 
+          error: 'Invalid url_conditions',
+          message: 'url_conditions must have operator and groups array' 
+        });
+      }
+      
+      if (url_conditions.groups.length === 0) {
+        return res.status(400).json({ 
+          error: 'Invalid url_conditions',
+          message: 'url_conditions.groups cannot be empty' 
+        });
+      }
+      
+      // Use the first group's base_url as the primary URL for indexing
+      const primaryUrl = url_conditions.groups[0].base_url;
+      const cleanedUrl = cleanUrl(primaryUrl);
+      
+      // Check if URL already exists
+      const checkQuery = `SELECT id FROM url_mappings WHERE url = $1`;
+      const checkResult = await db.query(checkQuery, [cleanedUrl]);
+      
+      if (checkResult.rows.length > 0) {
+        return res.status(409).json({ 
+          error: 'Duplicate URL',
+          message: 'This URL is already mapped' 
+        });
+      }
+      
+      // Insert new complex mapping
+      const insertQuery = `
+        INSERT INTO url_mappings (url, korean_name, source_type, url_conditions)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id, url, korean_name, source_type, url_conditions, created_at, updated_at
+      `;
+      const insertResult = await db.query(insertQuery, [
+        cleanedUrl, 
+        korean_name, 
+        source_type,
+        JSON.stringify(url_conditions)
+      ]);
+      
+      return res.status(201).json({
+        success: true,
+        data: insertResult.rows[0]
+      });
+    }
+    
+    // Handle simple URL mapping (backward compatibility)
     const cleanedUrl = cleanUrl(url);
     
     // Check if URL already exists
@@ -543,11 +596,11 @@ router.post('/', async (req, res) => {
       });
     }
     
-    // Insert new mapping
+    // Insert new simple mapping
     const insertQuery = `
-      INSERT INTO url_mappings (url, korean_name, source_type)
-      VALUES ($1, $2, $3)
-      RETURNING id, url, korean_name, source_type, created_at, updated_at
+      INSERT INTO url_mappings (url, korean_name, source_type, url_conditions)
+      VALUES ($1, $2, $3, NULL)
+      RETURNING id, url, korean_name, source_type, url_conditions, created_at, updated_at
     `;
     const insertResult = await db.query(insertQuery, [cleanedUrl, korean_name, source_type]);
     

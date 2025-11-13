@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Tabs, Table, Button, Input, Space, Tag, message, Typography, Modal, Form, Spin, Statistic, Select } from 'antd';
-import { ReloadOutlined, SearchOutlined, LinkOutlined, PlusOutlined, CloseOutlined, EyeOutlined, ClockCircleOutlined, BarChartOutlined, CheckCircleOutlined, CloseCircleOutlined, EditOutlined, RobotOutlined } from '@ant-design/icons';
+import { Card, Tabs, Table, Button, Input, Space, Tag, message, Typography, Modal, Form, Spin, Statistic, Select, Divider } from 'antd';
+import { ReloadOutlined, SearchOutlined, LinkOutlined, PlusOutlined, CloseOutlined, EyeOutlined, ClockCircleOutlined, BarChartOutlined, CheckCircleOutlined, CloseCircleOutlined, EditOutlined, RobotOutlined, MinusCircleOutlined, DeleteOutlined } from '@ant-design/icons';
 import axios from 'axios';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/ko';
+import { parseUrl, createUrlConditions } from '../utils/urlParser';
 
 dayjs.extend(relativeTime);
 dayjs.locale('ko');
@@ -47,6 +48,11 @@ function PageMapping() {
   const [manualAddModalVisible, setManualAddModalVisible] = useState(false);
   const [manualAddSubmitting, setManualAddSubmitting] = useState(false);
   const [manualAddForm] = Form.useForm();
+  
+  // URL Groups state for complex mapping
+  const [urlGroups, setUrlGroups] = useState([
+    { baseUrl: '', params: [{ key: '', value: '' }] }
+  ]);
   
   // Original URLs modal state
   const [originalUrlsModalVisible, setOriginalUrlsModalVisible] = useState(false);
@@ -328,22 +334,101 @@ function PageMapping() {
     setOriginalUrlsStats({ total: 0, totalVisits: 0 });
   };
 
+  // Handle URL input change with auto-parsing
+  const handleUrlInputChange = (groupIndex, value) => {
+    const parsed = parseUrl(value);
+    const newGroups = [...urlGroups];
+    newGroups[groupIndex] = {
+      baseUrl: parsed.baseUrl,
+      params: parsed.params.length > 0 ? parsed.params : [{ key: '', value: '' }]
+    };
+    setUrlGroups(newGroups);
+  };
+
+  // Add new URL group
+  const handleAddUrlGroup = () => {
+    setUrlGroups([...urlGroups, { baseUrl: '', params: [{ key: '', value: '' }] }]);
+  };
+
+  // Remove URL group
+  const handleRemoveUrlGroup = (groupIndex) => {
+    if (urlGroups.length === 1) {
+      message.warning('최소 1개의 URL이 필요합니다');
+      return;
+    }
+    const newGroups = urlGroups.filter((_, index) => index !== groupIndex);
+    setUrlGroups(newGroups);
+  };
+
+  // Add parameter to group
+  const handleAddParam = (groupIndex) => {
+    const newGroups = [...urlGroups];
+    newGroups[groupIndex].params.push({ key: '', value: '' });
+    setUrlGroups(newGroups);
+  };
+
+  // Remove parameter from group
+  const handleRemoveParam = (groupIndex, paramIndex) => {
+    const newGroups = [...urlGroups];
+    newGroups[groupIndex].params = newGroups[groupIndex].params.filter((_, i) => i !== paramIndex);
+    if (newGroups[groupIndex].params.length === 0) {
+      newGroups[groupIndex].params = [{ key: '', value: '' }];
+    }
+    setUrlGroups(newGroups);
+  };
+
+  // Update parameter
+  const handleUpdateParam = (groupIndex, paramIndex, field, value) => {
+    const newGroups = [...urlGroups];
+    newGroups[groupIndex].params[paramIndex][field] = value;
+    setUrlGroups(newGroups);
+  };
+
+  // Update base URL
+  const handleUpdateBaseUrl = (groupIndex, value) => {
+    const newGroups = [...urlGroups];
+    newGroups[groupIndex].baseUrl = value;
+    setUrlGroups(newGroups);
+  };
+
   // Submit manual URL add
   const handleManualAddSubmit = async (values) => {
     try {
       setManualAddSubmitting(true);
       
-      const response = await axios.post(`${API_URL}/api/mappings`, {
-        url: values.url.trim(),
+      // Validate that at least one URL has a base URL
+      const validGroups = urlGroups.filter(g => g.baseUrl.trim() !== '');
+      if (validGroups.length === 0) {
+        message.error('최소 1개의 베이스 URL을 입력해주세요');
+        return;
+      }
+
+      // Create URL conditions (Phase 1: URL OR operation)
+      const urlConditions = validGroups.length > 1 || validGroups[0].params.some(p => p.key && p.value)
+        ? createUrlConditions(validGroups, 'OR')
+        : null;
+
+      // Prepare request body
+      const requestBody = {
         korean_name: values.korean_name.trim(),
         source_type: 'manual'
-      });
+      };
+
+      if (urlConditions) {
+        requestBody.url_conditions = urlConditions;
+        requestBody.url = validGroups[0].baseUrl; // Primary URL for indexing
+      } else {
+        requestBody.url = validGroups[0].baseUrl;
+      }
+
+      const response = await axios.post(`${API_URL}/api/mappings`, requestBody);
       
       message.success('URL이 수동으로 추가되었습니다');
       
-      // Close modal and reset form
+      // Close modal and reset
       setManualAddModalVisible(false);
       manualAddForm.resetFields();
+      setUrlGroups([{ baseUrl: '', params: [{ key: '', value: '' }] }]);
       
       // Refresh data
       await fetchAllUrls();
@@ -354,7 +439,7 @@ function PageMapping() {
       if (error.response?.status === 409) {
         message.error('이미 존재하는 URL입니다');
       } else if (error.response?.status === 400) {
-        message.error(error.response.data.error || error.response.data.message || '입력값을 확인해주세요');
+        message.error(error.response.data.message || '입력값을 확인해주세요');
       } else {
         message.error('URL 추가에 실패했습니다');
       }
@@ -963,32 +1048,33 @@ function PageMapping() {
         </Spin>
       </Modal>
 
-      {/* Manual Add URL Modal */}
+      {/* Manual Add URL Modal - Phase 1: URL OR Operation */}
       <Modal
         title={
           <div>
             <PlusOutlined style={{ marginRight: 8 }} />
-            URL 수동 추가
+            URL 수동 추가 (복합 조건)
           </div>
         }
         open={manualAddModalVisible}
         onCancel={() => {
           setManualAddModalVisible(false);
           manualAddForm.resetFields();
+          setUrlGroups([{ baseUrl: '', params: [{ key: '', value: '' }] }]);
         }}
         footer={null}
-        width={600}
+        width={800}
       >
         <div style={{ 
           marginBottom: 16, 
           padding: '8px 12px',
-          background: '#e6f7ff',
-          border: '1px solid #91d5ff',
+          background: '#fff7e6',
+          border: '1px solid #ffd591',
           borderRadius: 4
         }}>
           <Text style={{ fontSize: '12px' }}>
-            💡 <strong>TIP:</strong> 아직 방문자가 없는 페이지도 미리 등록하여 매핑할 수 있습니다.
-            신제품 출시 전에 페이지를 준비하고, 출시 후 즉시 분석을 시작하세요!
+            💡 <strong>TIP:</strong> 여러 URL을 하나의 매핑으로 묶을 수 있습니다! 
+            예: 상품 A, B, C를 "프리미엄 상품군"으로 통합 관리
           </Text>
         </div>
 
@@ -997,21 +1083,134 @@ function PageMapping() {
           layout="vertical"
           onFinish={handleManualAddSubmit}
         >
-          <Form.Item
-            name="url"
-            label="베이스URL"
-            rules={[
-              { required: true, message: 'URL을 입력해주세요' },
-              { whitespace: true, message: '공백만 입력할 수 없습니다' },
-              { type: 'url', message: '올바른 URL 형식이 아닙니다' }
-            ]}
-          >
-            <Input 
-              placeholder="예: https://m.moadamda.com/new-page/"
-              autoFocus
-            />
-          </Form.Item>
+          {/* URL Groups */}
+          <div style={{ marginBottom: 16 }}>
+            <Text strong>📌 URL 조건 그룹 (OR 연산)</Text>
+            <Text type="secondary" style={{ marginLeft: 8, fontSize: '12px' }}>
+              아래 URL 중 하나라도 일치하면 매핑됩니다
+            </Text>
+          </div>
 
+          {urlGroups.map((group, groupIndex) => (
+            <div key={groupIndex}>
+              <Card 
+                size="small" 
+                style={{ marginBottom: 16, background: '#fafafa' }}
+                title={
+                  <Space>
+                    <Text strong>URL 조건 {groupIndex + 1}</Text>
+                    {urlGroups.length > 1 && (
+                      <Button
+                        type="text"
+                        danger
+                        size="small"
+                        icon={<DeleteOutlined />}
+                        onClick={() => handleRemoveUrlGroup(groupIndex)}
+                      >
+                        삭제
+                      </Button>
+                    )}
+                  </Space>
+                }
+              >
+                {/* Full URL Input with Auto-Parse */}
+                <div style={{ marginBottom: 12 }}>
+                  <Text style={{ fontSize: '12px', marginBottom: 4, display: 'block' }}>
+                    전체 URL 입력 (자동 파싱)
+                  </Text>
+                  <Input
+                    placeholder="예: https://m.moadamda.com/product/detail?no=1001"
+                    onChange={(e) => handleUrlInputChange(groupIndex, e.target.value)}
+                    style={{ marginBottom: 8 }}
+                  />
+                  <Text type="secondary" style={{ fontSize: '11px' }}>
+                    ↓ 쿼리 파라미터 포함 URL을 입력하면 자동으로 분리됩니다
+                  </Text>
+                </div>
+
+                <Divider style={{ margin: '12px 0' }} />
+
+                {/* Base URL */}
+                <div style={{ marginBottom: 12 }}>
+                  <Text style={{ fontSize: '12px', marginBottom: 4, display: 'block' }}>
+                    베이스 URL <span style={{ color: 'red' }}>*</span>
+                  </Text>
+                  <Input
+                    value={group.baseUrl}
+                    onChange={(e) => handleUpdateBaseUrl(groupIndex, e.target.value)}
+                    placeholder="예: https://m.moadamda.com/product/detail"
+                  />
+                </div>
+
+                {/* Parameters */}
+                <div>
+                  <div style={{ marginBottom: 8 }}>
+                    <Text style={{ fontSize: '12px' }}>매개변수 (AND 연산)</Text>
+                    <Text type="secondary" style={{ marginLeft: 8, fontSize: '11px' }}>
+                      모든 매개변수가 일치해야 합니다
+                    </Text>
+                  </div>
+                  
+                  {group.params.map((param, paramIndex) => (
+                    <Space key={paramIndex} style={{ width: '100%', marginBottom: 8 }} align="start">
+                      <Input
+                        placeholder="키 (예: no)"
+                        value={param.key}
+                        onChange={(e) => handleUpdateParam(groupIndex, paramIndex, 'key', e.target.value)}
+                        style={{ width: 150 }}
+                      />
+                      <Input
+                        placeholder="값 (예: 1001)"
+                        value={param.value}
+                        onChange={(e) => handleUpdateParam(groupIndex, paramIndex, 'value', e.target.value)}
+                        style={{ width: 150 }}
+                      />
+                      <Button
+                        type="text"
+                        danger
+                        size="small"
+                        icon={<MinusCircleOutlined />}
+                        onClick={() => handleRemoveParam(groupIndex, paramIndex)}
+                        disabled={group.params.length === 1}
+                      />
+                    </Space>
+                  ))}
+                  
+                  <Button
+                    type="dashed"
+                    size="small"
+                    icon={<PlusOutlined />}
+                    onClick={() => handleAddParam(groupIndex)}
+                    block
+                  >
+                    매개변수 추가
+                  </Button>
+                </div>
+              </Card>
+
+              {groupIndex < urlGroups.length - 1 && (
+                <div style={{ textAlign: 'center', margin: '12px 0' }}>
+                  <Divider>
+                    <Tag color="orange">OR</Tag>
+                  </Divider>
+                </div>
+              )}
+            </div>
+          ))}
+
+          <Button
+            type="dashed"
+            icon={<PlusOutlined />}
+            onClick={handleAddUrlGroup}
+            block
+            style={{ marginBottom: 16 }}
+          >
+            + URL 조건 추가
+          </Button>
+
+          <Divider />
+
+          {/* Korean Name */}
           <Form.Item
             name="korean_name"
             label="매핑명"
@@ -1022,7 +1221,7 @@ function PageMapping() {
             ]}
           >
             <Input 
-              placeholder="예: 신규 페이지"
+              placeholder="예: 프리미엄 상품군"
             />
           </Form.Item>
 
@@ -1031,6 +1230,7 @@ function PageMapping() {
               <Button onClick={() => {
                 setManualAddModalVisible(false);
                 manualAddForm.resetFields();
+                setUrlGroups([{ baseUrl: '', params: [{ key: '', value: '' }] }]);
               }}>
                 취소
               </Button>
