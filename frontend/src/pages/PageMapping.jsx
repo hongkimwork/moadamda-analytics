@@ -674,11 +674,11 @@ function PageMapping() {
             <Select
               value={statusFilter}
               onChange={setStatusFilter}
-              style={{ width: 150 }}
+              style={{ width: 120 }}
             >
               <Option value="all">전체</Option>
-              <Option value="completed">✅ 완료만 보기</Option>
-              <Option value="uncompleted">⚪ 미완료만</Option>
+              <Option value="completed">완료</Option>
+              <Option value="uncompleted">미완료</Option>
             </Select>
           </Space>
 
@@ -719,7 +719,7 @@ function PageMapping() {
           {statusFilter !== 'all' && allTotal > 0 && (
             <div style={{ marginBottom: 16 }}>
               <Text type="secondary">
-                {statusFilter === 'completed' ? '✅ 완료된 URL' : '⚪ 미완료 URL'}: <Tag>{allTotal}개</Tag>
+                {statusFilter === 'completed' ? '완료된 URL' : '미완료 URL'}: <Tag>{allTotal}개</Tag>
               </Text>
             </div>
           )}
