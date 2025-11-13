@@ -17,6 +17,19 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-11-13 | URL 수동 추가 기능 구현 | PageMapping.jsx, mappings.js |
+| 2025-11-13 | 등록유형 컬럼 추가 | PageMapping.jsx, add_source_type.sql |
+| 2025-11-13 | 매핑상태 필터 드롭다운 추가 | PageMapping.jsx |
+| 2025-11-13 | URL→베이스URL 컬럼명 변경 | PageMapping.jsx |
+| 2025-11-13 | 매핑 상태 배지 추가 | PageMapping.jsx |
+| 2025-11-13 | nodemon 자동재시작 적용 | package.json |
+| 2025-11-13 | 쿼리 파라미터 제거 설정 | urlCleaner.js |
+| 2025-11-13 | 유입URL 보기 기능 추가 | PageMapping.jsx |
+| 2025-11-13 | 제품 배지 시스템 구현 | OrderAnalysis.jsx |
+| 2025-11-13 | 구매완료 색상 조건 제거 | OrderAnalysis.jsx |
+| 2025-11-13 | 상세페이지 카드 구조 개편 | OrderAnalysis.jsx |
+| 2025-11-13 | 상품명 색상 조건 제거 | OrderAnalysis.jsx |
+| 2025-11-13 | 방문→유형 라벨 변경 | OrderAnalysis.jsx |
 | 2025-11-12 | 1초 미만 체류 배지 추가 | OrderAnalysis.jsx |
 | 2025-11-10 | 연속 중복 페이지 제거 로직 구현 | OrderAnalysis.jsx |
 | 2025-11-10 | Cursor Rules 6개로 정리 (토큰 50% 절약) | .cursor/rules/ |

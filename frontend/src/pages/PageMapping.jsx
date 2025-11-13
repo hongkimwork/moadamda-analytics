@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Tabs, Table, Button, Input, Space, Tag, message, Typography, Modal, Form } from 'antd';
-import { ReloadOutlined, SearchOutlined, LinkOutlined, PlusOutlined, CloseOutlined } from '@ant-design/icons';
+import { Card, Tabs, Table, Button, Input, Space, Tag, message, Typography, Modal, Form, Spin, Statistic, Select } from 'antd';
+import { ReloadOutlined, SearchOutlined, LinkOutlined, PlusOutlined, CloseOutlined, EyeOutlined, ClockCircleOutlined, BarChartOutlined, CheckCircleOutlined, CloseCircleOutlined, EditOutlined, RobotOutlined } from '@ant-design/icons';
 import axios from 'axios';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -10,6 +10,7 @@ dayjs.extend(relativeTime);
 dayjs.locale('ko');
 
 const { Title, Text } = Typography;
+const { Option } = Select;
 const API_URL = import.meta.env.VITE_API_URL || '';
 
 // ============================================================================
@@ -26,6 +27,7 @@ function PageMapping() {
   const [allPage, setAllPage] = useState(1);
   const [allPageSize, setAllPageSize] = useState(20);
   const [allSearch, setAllSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('completed'); // 기본값: 완료
   
   // Excluded URLs state
   const [excludedData, setExcludedData] = useState([]);
@@ -40,6 +42,21 @@ function PageMapping() {
   const [mappingUrl, setMappingUrl] = useState('');
   const [mappingSubmitting, setMappingSubmitting] = useState(false);
   const [form] = Form.useForm();
+  
+  // Manual add modal state
+  const [manualAddModalVisible, setManualAddModalVisible] = useState(false);
+  const [manualAddSubmitting, setManualAddSubmitting] = useState(false);
+  const [manualAddForm] = Form.useForm();
+  
+  // Original URLs modal state
+  const [originalUrlsModalVisible, setOriginalUrlsModalVisible] = useState(false);
+  const [originalUrlsData, setOriginalUrlsData] = useState([]);
+  const [originalUrlsLoading, setOriginalUrlsLoading] = useState(false);
+  const [currentCleanedUrl, setCurrentCleanedUrl] = useState('');
+  const [originalUrlsStats, setOriginalUrlsStats] = useState({
+    total: 0,
+    totalVisits: 0
+  });
 
   // Fetch all URLs (mapped + unmapped)
   const fetchAllUrls = async () => {
@@ -273,6 +290,79 @@ function PageMapping() {
     }
   };
 
+  // Fetch original URLs for a cleaned URL
+  const fetchOriginalUrls = async (cleanedUrl) => {
+    try {
+      setOriginalUrlsLoading(true);
+      const response = await axios.get(`${API_URL}/api/mappings/original-urls`, {
+        params: { cleaned_url: cleanedUrl }
+      });
+      
+      setOriginalUrlsData(response.data.original_urls);
+      setOriginalUrlsStats({
+        total: response.data.total_original_urls,
+        totalVisits: response.data.total_visits
+      });
+    } catch (error) {
+      console.error('Failed to fetch original URLs:', error);
+      message.error('원본 URL 목록을 불러오는데 실패했습니다');
+    } finally {
+      setOriginalUrlsLoading(false);
+    }
+  };
+
+  // Open original URLs modal
+  const handleOpenOriginalUrlsModal = async (cleanedUrl, originalUrl) => {
+    // Use original_url if available, otherwise use cleaned url
+    const urlToFetch = originalUrl || cleanedUrl;
+    setCurrentCleanedUrl(urlToFetch);
+    setOriginalUrlsModalVisible(true);
+    await fetchOriginalUrls(urlToFetch);
+  };
+
+  // Close original URLs modal
+  const handleCloseOriginalUrlsModal = () => {
+    setOriginalUrlsModalVisible(false);
+    setOriginalUrlsData([]);
+    setCurrentCleanedUrl('');
+    setOriginalUrlsStats({ total: 0, totalVisits: 0 });
+  };
+
+  // Submit manual URL add
+  const handleManualAddSubmit = async (values) => {
+    try {
+      setManualAddSubmitting(true);
+      
+      const response = await axios.post(`${API_URL}/api/mappings`, {
+        url: values.url.trim(),
+        korean_name: values.korean_name.trim(),
+        source_type: 'manual'
+      });
+      
+      message.success('URL이 수동으로 추가되었습니다');
+      
+      // Close modal and reset form
+      setManualAddModalVisible(false);
+      manualAddForm.resetFields();
+      
+      // Refresh data
+      await fetchAllUrls();
+      
+    } catch (error) {
+      console.error('Failed to add URL manually:', error);
+      
+      if (error.response?.status === 409) {
+        message.error('이미 존재하는 URL입니다');
+      } else if (error.response?.status === 400) {
+        message.error(error.response.data.error || error.response.data.message || '입력값을 확인해주세요');
+      } else {
+        message.error('URL 추가에 실패했습니다');
+      }
+    } finally {
+      setManualAddSubmitting(false);
+    }
+  };
+
   // Columns for all URLs table
   const allColumns = [
     {
@@ -283,10 +373,10 @@ function PageMapping() {
       render: (_, __, index) => (allPage - 1) * allPageSize + index + 1
     },
     {
-      title: 'URL',
+      title: '베이스URL',
       dataIndex: 'url',
       key: 'url',
-      width: 400,
+      width: 350,
       ellipsis: true,
       render: (url) => (
         <Text 
@@ -302,18 +392,58 @@ function PageMapping() {
       )
     },
     {
-      title: '매핑 완료된 URL',
+      title: '매핑상태',
+      dataIndex: 'is_mapped',
+      key: 'status',
+      width: 90,
+      align: 'center',
+      render: (isMapped) => isMapped ? (
+        <Tag color="success" icon={<CheckCircleOutlined />}>
+          완료
+        </Tag>
+      ) : (
+        <Tag color="default" icon={<CloseCircleOutlined />}>
+          미완료
+        </Tag>
+      )
+    },
+    {
+      title: '등록유형',
+      dataIndex: 'source_type',
+      key: 'source_type',
+      width: 90,
+      align: 'center',
+      render: (type) => type === 'manual' ? (
+        <Tag color="orange" icon={<EditOutlined />}>
+          수동
+        </Tag>
+      ) : (
+        <Tag color="blue" icon={<RobotOutlined />}>
+          자동
+        </Tag>
+      )
+    },
+    {
+      title: '매핑명',
       dataIndex: 'korean_name',
       key: 'korean_name',
-      width: 200,
+      width: 180,
       render: (name) => name ? <Tag color="blue">{name}</Tag> : <Text type="secondary">-</Text>
     },
     {
       title: '액션',
       key: 'action',
-      width: 300,
+      width: 400,
       render: (_, record) => (
-        <Space size="small">
+        <Space size="small" wrap>
+          <Button 
+            size="small" 
+            icon={<EyeOutlined />}
+            onClick={() => handleOpenOriginalUrlsModal(record.url, record.original_url)}
+            title="이 URL로 유입된 원본 URL 목록을 확인합니다"
+          >
+            유입URL 보기
+          </Button>
           <Button 
             size="small" 
             icon={<LinkOutlined />}
@@ -413,6 +543,17 @@ function PageMapping() {
     }
   ];
 
+  // Filter data based on status
+  const filteredData = allData.filter(item => {
+    if (statusFilter === 'completed') return item.is_mapped;
+    if (statusFilter === 'uncompleted') return !item.is_mapped;
+    return true; // 'all'
+  });
+
+  // Calculate statistics
+  const mappedCount = allData.filter(item => item.is_mapped).length;
+  const unmappedCount = allData.filter(item => !item.is_mapped).length;
+
   // Tab items
   const tabItems = [
     {
@@ -420,12 +561,18 @@ function PageMapping() {
       label: (
         <span>
           📋 URL 매핑 관리
-          {allTotal > 0 && <Tag color="blue" style={{ marginLeft: 8 }}>{allTotal}</Tag>}
+          {allTotal > 0 && (
+            <span style={{ marginLeft: 8 }}>
+              <Tag color="blue">{allTotal}개</Tag>
+              <Tag color="success" icon={<CheckCircleOutlined />}>{mappedCount}</Tag>
+              <Tag color="default" icon={<CloseCircleOutlined />}>{unmappedCount}</Tag>
+            </span>
+          )}
         </span>
       ),
       children: (
         <div>
-          {/* Search bar */}
+          {/* Search bar and filters */}
           <Space style={{ marginBottom: 16 }}>
             <Input
               placeholder="URL 검색"
@@ -437,18 +584,60 @@ function PageMapping() {
               allowClear
             />
             <Button onClick={handleAllSearch}>검색</Button>
+            <Select
+              value={statusFilter}
+              onChange={setStatusFilter}
+              style={{ width: 150 }}
+            >
+              <Option value="all">전체</Option>
+              <Option value="completed">✅ 완료만 보기</Option>
+              <Option value="uncompleted">⚪ 미완료만</Option>
+            </Select>
           </Space>
+
+          {/* Statistics Summary */}
+          {allTotal > 0 && (
+            <div style={{ 
+              marginBottom: 16, 
+              padding: '12px 16px', 
+              background: '#f5f5f5', 
+              borderRadius: 4,
+              display: 'flex',
+              gap: 24,
+              alignItems: 'center'
+            }}>
+              <Text strong>📊 매핑 현황:</Text>
+              <Space size="middle">
+                <span>
+                  <Text type="secondary">전체</Text>
+                  <Tag color="blue" style={{ marginLeft: 8 }}>{allTotal}개</Tag>
+                </span>
+                <span>
+                  <Text type="secondary">완료</Text>
+                  <Tag color="success" icon={<CheckCircleOutlined />} style={{ marginLeft: 8 }}>
+                    {mappedCount}개 ({allTotal > 0 ? Math.round((mappedCount / allTotal) * 100) : 0}%)
+                  </Tag>
+                </span>
+                <span>
+                  <Text type="secondary">미완료</Text>
+                  <Tag color="default" icon={<CloseCircleOutlined />} style={{ marginLeft: 8 }}>
+                    {unmappedCount}개 ({allTotal > 0 ? Math.round((unmappedCount / allTotal) * 100) : 0}%)
+                  </Tag>
+                </span>
+              </Space>
+            </div>
+          )}
 
           {/* Table */}
           <Table
             columns={allColumns}
-            dataSource={allData}
+            dataSource={filteredData}
             rowKey="url"
             loading={allLoading}
             pagination={{
               current: allPage,
               pageSize: allPageSize,
-              total: allTotal,
+              total: filteredData.length,
               onChange: (page, pageSize) => {
                 setAllPage(page);
                 setAllPageSize(pageSize);
@@ -527,13 +716,22 @@ function PageMapping() {
               {lastUpdate && `마지막 업데이트: ${dayjs(lastUpdate).fromNow()}`}
             </Text>
           </div>
-          <Button 
-            icon={<ReloadOutlined />}
-            onClick={handleRefresh}
-            loading={allLoading || excludedLoading}
-          >
-            새로고침
-          </Button>
+          <Space>
+            <Button 
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => setManualAddModalVisible(true)}
+            >
+              URL 추가
+            </Button>
+            <Button 
+              icon={<ReloadOutlined />}
+              onClick={handleRefresh}
+              loading={allLoading || excludedLoading}
+            >
+              새로고침
+            </Button>
+          </Space>
         </div>
 
         {/* Tabs */}
@@ -598,6 +796,251 @@ function PageMapping() {
                 loading={mappingSubmitting}
               >
                 저장
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Original URLs Modal */}
+      <Modal
+        title={
+          <div>
+            <EyeOutlined style={{ marginRight: 8 }} />
+            유입 URL 상세 보기
+          </div>
+        }
+        open={originalUrlsModalVisible}
+        onCancel={handleCloseOriginalUrlsModal}
+        footer={[
+          <Button key="close" onClick={handleCloseOriginalUrlsModal}>
+            닫기
+          </Button>
+        ]}
+        width={1000}
+      >
+        {/* Header: Cleaned URL */}
+        <div style={{ marginBottom: 16 }}>
+          <Text type="secondary">정제된 URL:</Text>
+          <div style={{ 
+            marginTop: 8, 
+            padding: '8px 12px', 
+            background: '#e6f7ff', 
+            borderRadius: 4,
+            fontFamily: 'monospace',
+            fontSize: '12px',
+            wordBreak: 'break-all',
+            border: '1px solid #91d5ff'
+          }}>
+            {decodeUrl(currentCleanedUrl)}
+          </div>
+        </div>
+
+        {/* Statistics */}
+        <div style={{ 
+          display: 'flex', 
+          gap: 16, 
+          marginBottom: 16,
+          padding: '16px',
+          background: '#fafafa',
+          borderRadius: 4
+        }}>
+          <Statistic 
+            title="원본 URL 개수" 
+            value={originalUrlsStats.total} 
+            prefix={<BarChartOutlined />}
+          />
+          <Statistic 
+            title="총 방문 횟수" 
+            value={originalUrlsStats.totalVisits} 
+            prefix={<EyeOutlined />}
+          />
+        </div>
+
+        {/* Tip */}
+        <div style={{ 
+          marginBottom: 16, 
+          padding: '8px 12px',
+          background: '#fffbe6',
+          border: '1px solid #ffe58f',
+          borderRadius: 4
+        }}>
+          <Text style={{ fontSize: '12px' }}>
+            💡 <strong>TIP:</strong> 방문 횟수가 적고 test, admin, debug 같은 파라미터가 있으면 
+            내부 테스트일 가능성이 높습니다. 제외 처리를 고려해보세요.
+          </Text>
+        </div>
+
+        {/* Original URLs Table */}
+        <Spin spinning={originalUrlsLoading}>
+          <Table
+            columns={[
+              {
+                title: '순번',
+                key: 'index',
+                width: 60,
+                align: 'center',
+                render: (_, __, index) => index + 1
+              },
+              {
+                title: '원본 URL',
+                dataIndex: 'url',
+                key: 'url',
+                ellipsis: true,
+                render: (url) => (
+                  <Text 
+                    style={{ 
+                      fontSize: '11px',
+                      fontFamily: 'monospace',
+                      wordBreak: 'break-all'
+                    }}
+                    copyable
+                    title={decodeUrl(url)}
+                  >
+                    {decodeUrl(url)}
+                  </Text>
+                )
+              },
+              {
+                title: '방문 횟수',
+                dataIndex: 'visit_count',
+                key: 'visit_count',
+                width: 100,
+                align: 'right',
+                render: (count) => (
+                  <Tag color={count > 100 ? 'green' : count > 10 ? 'blue' : 'default'}>
+                    {count.toLocaleString()}회
+                  </Tag>
+                ),
+                sorter: (a, b) => a.visit_count - b.visit_count
+              },
+              {
+                title: '최근 방문',
+                dataIndex: 'latest_visit',
+                key: 'latest_visit',
+                width: 150,
+                render: (date) => (
+                  <div>
+                    <ClockCircleOutlined style={{ marginRight: 4 }} />
+                    {dayjs(date).fromNow()}
+                    <br />
+                    <Text type="secondary" style={{ fontSize: '10px' }}>
+                      {dayjs(date).format('YYYY-MM-DD HH:mm')}
+                    </Text>
+                  </div>
+                ),
+                sorter: (a, b) => new Date(a.latest_visit) - new Date(b.latest_visit)
+              },
+              {
+                title: '액션',
+                key: 'action',
+                width: 120,
+                render: (_, record) => (
+                  <Space size="small">
+                    <Button 
+                      size="small" 
+                      icon={<LinkOutlined />}
+                      onClick={() => window.open(record.url, '_blank', 'noopener,noreferrer')}
+                      title="새 탭으로 열기"
+                    >
+                      열기
+                    </Button>
+                  </Space>
+                )
+              }
+            ]}
+            dataSource={originalUrlsData}
+            rowKey="url"
+            pagination={{
+              pageSize: 20,
+              showSizeChanger: true,
+              showTotal: (total) => `총 ${total}개`,
+              pageSizeOptions: ['10', '20', '50', '100']
+            }}
+            size="small"
+            scroll={{ y: 400 }}
+          />
+        </Spin>
+      </Modal>
+
+      {/* Manual Add URL Modal */}
+      <Modal
+        title={
+          <div>
+            <PlusOutlined style={{ marginRight: 8 }} />
+            URL 수동 추가
+          </div>
+        }
+        open={manualAddModalVisible}
+        onCancel={() => {
+          setManualAddModalVisible(false);
+          manualAddForm.resetFields();
+        }}
+        footer={null}
+        width={600}
+      >
+        <div style={{ 
+          marginBottom: 16, 
+          padding: '8px 12px',
+          background: '#e6f7ff',
+          border: '1px solid #91d5ff',
+          borderRadius: 4
+        }}>
+          <Text style={{ fontSize: '12px' }}>
+            💡 <strong>TIP:</strong> 아직 방문자가 없는 페이지도 미리 등록하여 매핑할 수 있습니다.
+            신제품 출시 전에 페이지를 준비하고, 출시 후 즉시 분석을 시작하세요!
+          </Text>
+        </div>
+
+        <Form
+          form={manualAddForm}
+          layout="vertical"
+          onFinish={handleManualAddSubmit}
+        >
+          <Form.Item
+            name="url"
+            label="베이스URL"
+            rules={[
+              { required: true, message: 'URL을 입력해주세요' },
+              { whitespace: true, message: '공백만 입력할 수 없습니다' },
+              { type: 'url', message: '올바른 URL 형식이 아닙니다' }
+            ]}
+          >
+            <Input 
+              placeholder="예: https://m.moadamda.com/new-page/"
+              autoFocus
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="korean_name"
+            label="매핑명"
+            rules={[
+              { required: true, message: '매핑명을 입력해주세요' },
+              { whitespace: true, message: '공백만 입력할 수 없습니다' },
+              { max: 255, message: '최대 255자까지 입력 가능합니다' }
+            ]}
+          >
+            <Input 
+              placeholder="예: 신규 페이지"
+            />
+          </Form.Item>
+
+          <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
+            <Space>
+              <Button onClick={() => {
+                setManualAddModalVisible(false);
+                manualAddForm.resetFields();
+              }}>
+                취소
+              </Button>
+              <Button 
+                type="primary" 
+                htmlType="submit"
+                loading={manualAddSubmitting}
+                icon={<PlusOutlined />}
+              >
+                추가
               </Button>
             </Space>
           </Form.Item>

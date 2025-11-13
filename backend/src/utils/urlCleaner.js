@@ -201,8 +201,11 @@ function cleanUrl(url) {
     }
     
     // ===== 3. Keep ONLY essential query parameters =====
-    // Essential parameters that identify unique pages (article pages, board pages, etc.)
-    const essentialParams = ['article_no', 'no'];
+    // UPDATED: Remove all query parameters for page mapping
+    // Previously: ['article_no', 'no'] - caused duplicate URL entries in page mapping
+    // Now: [] - all query params removed to consolidate page types
+    // Original URLs are preserved in pageviews table for detailed analysis
+    const essentialParams = [];
     const newSearchParams = new URLSearchParams();
     
     essentialParams.forEach(param => {

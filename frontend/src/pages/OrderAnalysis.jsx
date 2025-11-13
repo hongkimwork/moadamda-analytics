@@ -17,6 +17,50 @@ const { Title } = Typography;
 const API_URL = import.meta.env.VITE_API_URL || '';
 
 // ============================================================================
+// 제품 배지 설정
+// ============================================================================
+const BADGE_CONFIG = {
+  '건강': { color: 'rgb(196, 44, 68)', bgColor: 'rgba(196, 44, 68, 0.1)' },
+  '피부': { color: 'rgb(79, 188, 223)', bgColor: 'rgba(79, 188, 223, 0.1)' },
+  '다이어트': { color: 'rgb(206, 64, 110)', bgColor: 'rgba(206, 64, 110, 0.1)' },
+  '모로실': { color: '#f97316', bgColor: 'rgba(249, 115, 22, 0.1)' },
+  '혈당관리': { color: 'rgb(121, 168, 39)', bgColor: 'rgba(121, 168, 39, 0.1)' },
+  '스마일': { color: 'rgb(223, 178, 42)', bgColor: 'rgba(223, 178, 42, 0.1)' },
+  '숙취': { color: 'rgb(147, 51, 234)', bgColor: 'rgba(147, 51, 234, 0.1)' }
+};
+
+// 배지 우선순위 (왼쪽부터 표시)
+const BADGE_ORDER = ['건강', '피부', '다이어트', '모로실', '혈당관리', '스마일', '숙취'];
+
+// 예외 매핑 (키워드 자동 추출이 안 되는 제품)
+const SPECIAL_PRODUCT_MAPPINGS = {
+  '모로실 다이어트&혈당 관리를 모아담다': ['모로실'],
+  '모아담다 싹뺀다 SET': ['모로실', '다이어트'],
+  '종합 관리 SET': ['건강', '다이어트', '피부']
+};
+
+// 페이지명에서 제품 배지 추출
+function extractProductBadges(pageTitle) {
+  // 예외 매핑 확인
+  if (SPECIAL_PRODUCT_MAPPINGS[pageTitle]) {
+    return SPECIAL_PRODUCT_MAPPINGS[pageTitle];
+  }
+  
+  // 자동 키워드 추출
+  const badges = [];
+  if (pageTitle.includes('건강')) badges.push('건강');
+  if (pageTitle.includes('피부')) badges.push('피부');
+  if (pageTitle.includes('다이어트')) badges.push('다이어트');
+  if (pageTitle.includes('모로실')) badges.push('모로실');
+  if (pageTitle.includes('혈당')) badges.push('혈당관리');
+  if (pageTitle.includes('스마일')) badges.push('스마일');
+  if (pageTitle.includes('숙취')) badges.push('숙취');
+  
+  // 우선순위에 따라 정렬
+  return badges.sort((a, b) => BADGE_ORDER.indexOf(a) - BADGE_ORDER.indexOf(b));
+}
+
+// ============================================================================
 // 주문 목록 페이지
 // ============================================================================
 export function OrderListPage() {
@@ -750,7 +794,7 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
                                         color: '#1f2937',
                                         lineHeight: '1.4'
                                       }}>
-                                        <span style={{ color: '#000', fontWeight: 'bold', fontSize: '10px' }}>방문: </span>
+                                        <span style={{ color: '#000', fontWeight: 'bold', fontSize: '10px' }}>유형 : </span>
                                         {urlInfo.name.replace(/_모바일$|_PC$/g, '')}
                                       </div>
 
@@ -781,30 +825,50 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
                                         const isDetailPage = pageName.includes('상세페이지');
                                         
                                         if (title && !isExcludedByTitle && isDetailPage) {
-                                          // 키워드별 색상 결정
-                                          let productColor = '#f97316'; // 기본 주황색
-                                          if (title.includes('피부')) {
-                                            productColor = 'rgb(79, 188, 223)'; // 하늘색
-                                          } else if (title.includes('건강')) {
-                                            productColor = 'rgb(196, 44, 68)'; // 빨간색
-                                          } else if (title.includes('다이어트')) {
-                                            productColor = 'rgb(206, 64, 110)'; // 자주색
-                                          } else if (title.includes('혈당')) {
-                                            productColor = 'rgb(121, 168, 39)'; // 녹색
-                                          } else if (title.includes('스마일')) {
-                                            productColor = 'rgb(223, 178, 42)'; // 노란색
-                                          }
+                                          const badges = extractProductBadges(title);
                                           
                                           return (
-                                            <div style={{ 
-                                              fontSize: '10px', 
-                                              marginBottom: '3px'
-                                            }}>
-                                              <span style={{ color: '#000', fontWeight: 'bold' }}>상품명: </span>
-                                              <span style={{ color: productColor, fontWeight: '600', fontSize: '11px' }}>
-                                                {title}
-                                              </span>
-                                            </div>
+                                            <>
+                                              {/* 제품 배지 (배지가 있을 때만 표시) */}
+                                              {badges.length > 0 && (
+                                                <div style={{ 
+                                                  fontSize: '10px', 
+                                                  marginTop: '8px',
+                                                  marginBottom: '3px'
+                                                }}>
+                                                  <span style={{ color: '#000', fontWeight: 'bold' }}>제품 : </span>
+                                                  {badges.map((badge, idx) => (
+                                                    <span 
+                                                      key={idx}
+                                                      style={{
+                                                        display: 'inline-block',
+                                                        padding: '2px 6px',
+                                                        marginLeft: '4px',
+                                                        borderRadius: '3px',
+                                                        fontSize: '10px',
+                                                        fontWeight: '600',
+                                                        color: BADGE_CONFIG[badge].color,
+                                                        backgroundColor: BADGE_CONFIG[badge].bgColor
+                                                      }}
+                                                    >
+                                                      {badge}
+                                                    </span>
+                                                  ))}
+                                                </div>
+                                              )}
+                                              
+                                              {/* 페이지 명 */}
+                                              <div style={{ 
+                                                fontSize: '10px', 
+                                                marginBottom: '3px',
+                                                marginTop: badges.length > 0 ? '3px' : '8px'
+                                              }}>
+                                                <span style={{ color: '#000', fontWeight: 'bold' }}>페이지 명 : </span>
+                                                <span style={{ color: '#000', fontWeight: '600', fontSize: '11px' }}>
+                                                  {title}
+                                                </span>
+                                              </div>
+                                            </>
                                           );
                                         }
                                         return null;
@@ -843,19 +907,6 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
                                         
                                         if (productPage) {
                                           const title = productPage.page_title || '';
-                                          let productColor = '#f97316';
-                                          
-                                          if (title.includes('피부')) {
-                                            productColor = 'rgb(79, 188, 223)';
-                                          } else if (title.includes('건강')) {
-                                            productColor = 'rgb(196, 44, 68)';
-                                          } else if (title.includes('다이어트')) {
-                                            productColor = 'rgb(206, 64, 110)';
-                                          } else if (title.includes('혈당')) {
-                                            productColor = 'rgb(121, 168, 39)';
-                                          } else if (title.includes('스마일')) {
-                                            productColor = 'rgb(223, 178, 42)';
-                                          }
                                           
                                           return (
                                             <div style={{ 
@@ -863,7 +914,7 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
                                               marginTop: '3px'
                                             }}>
                                               <span style={{ color: '#000', fontWeight: 'bold' }}>구매한 상품 : </span>
-                                              <span style={{ color: productColor, fontWeight: '600', fontSize: '11px' }}>
+                                              <span style={{ color: '#000', fontWeight: '600', fontSize: '11px' }}>
                                                 {title}
                                               </span>
                                             </div>
