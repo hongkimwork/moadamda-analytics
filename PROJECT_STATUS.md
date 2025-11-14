@@ -18,6 +18,7 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-11-14 | tracker 파일 Git 포함 | .gitignore |
 | 2025-11-13 | DB 구조 문서 생성 | database-structure.md |
 | 2025-11-13 | 복합 URL Badge+Popover 표시 | PageMapping.jsx |
 | 2025-11-13 | 액션 컬럼 드롭다운 간소화 | PageMapping.jsx |
