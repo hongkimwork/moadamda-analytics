@@ -8,8 +8,9 @@
 
 - **시스템 버전**: v047 (페이지매핑 복합 조건 기능 구현 완료)
 - **Tracker 버전**: tracker-v042.js
-- **배포 환경**: 네이버 클라우드 (211.188.53.220)
-- **도메인**: https://dashboard.marketingzon.com
+- **배포 환경**: Supabase (DB) + Vercel (배포) 전환 예정 ⚠️
+- **개발 환경**: macOS + Docker
+- **상태**: 네이버 클라우드 해지, 기존 데이터 없음 (새로 시작)
 
 ---
 
@@ -17,6 +18,14 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-11-13 | DB 구조 문서 생성 | database-structure.md |
+| 2025-11-13 | 복합 URL Badge+Popover 표시 | PageMapping.jsx |
+| 2025-11-13 | 액션 컬럼 드롭다운 간소화 | PageMapping.jsx |
+| 2025-11-13 | URL 카드 배경 회색/내부 흰색 | PageMapping.jsx |
+| 2025-11-13 | URL 모달 색상 통일 (회색 팔레트) | PageMapping.jsx |
+| 2025-11-13 | URL 모달 UI/UX 개선 (툴팁/계층) | PageMapping.jsx |
+| 2025-11-13 | 필터 드롭다운 이모지 제거 | PageMapping.jsx |
+| 2025-11-13 | 필터링 버그 수정 (서버 사이드) | mappings.js, PageMapping.jsx |
 | 2025-11-13 | 페이지매핑 복합 조건 구현 | PageMapping.jsx, mappings.js |
 | 2025-11-13 | 페이지매핑 수동등록 배포 | 서버 배포 완료 |
 | 2025-11-13 | URL 수동 추가 기능 구현 | PageMapping.jsx, mappings.js |
@@ -64,58 +73,94 @@
 
 ---
 
-## 🛠️ 개발 환경
+## 🛠️ 개발 환경 (macOS)
 
-### 로컬 개발 (추천: 서버 DB 직접 연결)
+### 1️⃣ 최초 설정 (한 번만)
+
+#### Supabase 프로젝트 생성
+1. https://supabase.com 접속 및 회원가입
+2. 새 프로젝트 생성 (무료 플랜 가능)
+3. Settings > Database에서 연결 정보 확인
+4. SQL Editor에서 마이그레이션 파일 순서대로 실행:
+   - `backend/migrations/init.sql`
+   - `backend/migrations/create_url_mappings.sql`
+   - `backend/migrations/add_excluded_flag.sql`
+   - `backend/migrations/add_source_type.sql`
+   - `backend/migrations/add_url_conditions.sql`
+   - `backend/migrations/add_utm_sessions.sql`
+   - `backend/migrations/add_payment_details.sql`
+   - `backend/migrations/add_ip_tracking.sql`
+   - `backend/migrations/create_ad_spend_simple.sql`
+   - `backend/migrations/add_order_status.sql`
+   - `backend/migrations/add_cafe24_token.sql`
+   - `backend/migrations/add_dynamic_utm_params.sql`
+
+#### 환경 파일 생성
+`backend/.env.local` 파일 생성 (Supabase 연결 정보):
 ```bash
-# 1. Docker 중지
-docker-compose down
+DB_HOST=db.xxxxxxxxxxxxx.supabase.co
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=[Supabase에서 받은 비밀번호]
+DB_NAME=postgres
+```
 
-# 2. 백엔드 실행 (PowerShell 창 1)
+### 2️⃣ 로컬 개발 실행
+
+#### 방법 A: Docker 사용 (추천)
+```bash
+# 1. Docker로 전체 실행
+docker-compose up -d
+
+# 접속: http://localhost:3030
+```
+
+#### 방법 B: 직접 실행
+```bash
+# 터미널 1: 백엔드
 cd backend
+npm install
 node src/server.js
 
-# 3. 프론트엔드 실행 (PowerShell 창 2)
+# 터미널 2: 프론트엔드
 cd frontend
+npm install
 npm run dev
 
 # 접속: http://localhost:3030
 ```
 
-**사전 준비** (최초 1회): `backend/.env.local` 파일 생성
-```
-DB_HOST=211.188.53.220
-DB_PORT=5432
-DB_USER=moadamda
-DB_PASSWORD=analytics2024
-DB_NAME=analytics
+### 3️⃣ Vercel 배포
+
+#### 최초 배포 설정
+```bash
+# 1. Vercel CLI 설치
+npm install -g vercel
+
+# 2. 로그인
+vercel login
+
+# 3. 프로젝트 연결
+vercel link
+
+# 4. 환경변수 설정 (Vercel Dashboard)
+# - DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
+# - Supabase 연결 정보 입력
+
+# 5. 배포
+vercel --prod
 ```
 
-### 프로덕션 배포
+#### 이후 배포
 ```bash
 # 1. 로컬 커밋 & Push
 git add .
 git commit -m "메시지"
 git push origin main
 
-# 2. 서버 접속
-ssh root@211.188.53.220  # 비밀번호: L9=FEcbJN!Yd
-
-# 3. 배포
-cd /root/moadamda-analytics
-git pull origin main
-docker-compose -f docker-compose.prod.yml up -d --build
-
-# 4. 로그 확인
-docker-compose -f docker-compose.prod.yml logs backend --tail 50
-```
-
-**프론트엔드 변경 시 추가 단계:**
-```bash
-cd /root/moadamda-analytics/frontend
-npm run build
-cd ..
-docker-compose -f docker-compose.prod.yml restart frontend
+# 2. Vercel 자동 배포 (GitHub 연동 시)
+# 또는 수동 배포:
+vercel --prod
 ```
 
 ---
@@ -139,7 +184,7 @@ docker-compose -f docker-compose.prod.yml restart frontend
 - Tracker: `tracker/build/tracker-v042.js`
 - Backend: `backend/src/server.js`, `backend/src/routes/stats.js`
 - Frontend: `frontend/src/pages/OrderAnalysis.jsx`
-- DB: PostgreSQL (211.188.53.220:5432)
+- DB: Supabase PostgreSQL (연결 정보는 .env.local 참조)
 
 ---
 
