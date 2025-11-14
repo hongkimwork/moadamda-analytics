@@ -1,0 +1,30 @@
+v19.0 (v042)
+Updated: 2025-10-30
+
+🔥 CRITICAL FIX: 100% 신뢰할 수 있는 주문 추적
+
+NEW IN v19.0 (v042):
+✅ CRITICAL: visitor_id를 모든 주문에 자동 주입
+✅ 네이버페이/카카오페이/일반 주문 모두 추적
+✅ 누락 없는 완벽한 주문 데이터 수집
+✅ Cafe24 주문 옵션에 visitor_id 숨김 필드 추가
+✅ 다중 결제 수단 지원 (네이버페이, 카카오페이, 일반 결제)
+
+HOW IT WORKS:
+1. 사용자 방문 시 visitor_id 생성 (_ma_id 쿠키)
+2. 주문 버튼 클릭 감지 (네이버페이/카카오페이/일반)
+3. visitor_id를 Cafe24 추가옵션(ma_visitor_id)에 자동 주입
+4. 주문 완료 시 Cafe24 주문 정보에 visitor_id 포함
+5. 백엔드에서 주문 조회 시 visitor_id로 사용자 방문 기록 연결
+
+DEPLOYMENT INFO:
+- Backend: https://marketingzon.com/api/track
+- Dashboard: https://dashboard.marketingzon.com
+- Server: Naver Cloud Platform (211.188.53.220)
+- SSL: Auto-renewal (Let's Encrypt)
+
+Previous features maintained:
+- Dynamic UTM parameter collection
+- Session end tracking
+- DOM parsing fallback for order data
+- Product tracking with multiple fallback sources
