@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Tabs, Table, Button, Input, Space, Tag, message, Typography, Modal, Form, Spin, Statistic, Select, Divider, Tooltip } from 'antd';
+import { Card, Tabs, Table, Button, Input, Space, Tag, message, Typography, Modal, Form, Spin, Statistic, Select, Divider, Tooltip, Dropdown, Popover } from 'antd';
 import { ReloadOutlined, SearchOutlined, LinkOutlined, PlusOutlined, CloseOutlined, EyeOutlined, ClockCircleOutlined, BarChartOutlined, CheckCircleOutlined, CloseCircleOutlined, EditOutlined, RobotOutlined, MinusCircleOutlined, DeleteOutlined, InfoCircleOutlined, GlobalOutlined, SettingOutlined } from '@ant-design/icons';
 import axios from 'axios';
 import dayjs from 'dayjs';
@@ -459,23 +459,80 @@ function PageMapping() {
       render: (_, __, index) => (allPage - 1) * allPageSize + index + 1
     },
     {
-      title: '베이스URL',
+      title: 'URL',
       dataIndex: 'url',
       key: 'url',
-      width: 350,
+      width: 400,
       ellipsis: true,
-      render: (url) => (
-        <Text 
-          style={{ 
-            fontSize: '12px',
-            fontFamily: 'monospace',
-            wordBreak: 'break-all'
-          }}
-          title={decodeUrl(url)}
-        >
-          {decodeUrl(url)}
-        </Text>
-      )
+      render: (url, record) => {
+        const urlConditions = record.url_conditions;
+        const isComplex = urlConditions && urlConditions.groups && urlConditions.groups.length > 0;
+
+        // Popover content for complex URL conditions
+        const popoverContent = isComplex ? (
+          <div style={{ maxWidth: 500 }}>
+            <Text strong style={{ fontSize: '13px' }}>📋 URL 조건 상세 (OR 연산)</Text>
+            <Divider style={{ margin: '12px 0' }} />
+            {urlConditions.groups.map((group, index) => (
+              <div key={index}>
+                <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                  <Text strong style={{ fontSize: '12px' }}>🔗 조건 {index + 1}</Text>
+                  <Text type="secondary" style={{ fontSize: '11px', fontFamily: 'monospace' }}>
+                    베이스: {group.base_url || '-'}
+                  </Text>
+                  {group.params && group.params.conditions && group.params.conditions.length > 0 && (
+                    <Text type="secondary" style={{ fontSize: '11px', fontFamily: 'monospace' }}>
+                      매개변수: {group.params.conditions.map(p => 
+                        `${p.key}=${p.value}`
+                      ).join(' AND ')}
+                    </Text>
+                  )}
+                </Space>
+                {index < urlConditions.groups.length - 1 && (
+                  <Divider style={{ margin: '12px 0', fontSize: '11px', color: '#8C8C8C' }}>OR</Divider>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : null;
+
+        return (
+          <Space size="small" style={{ width: '100%' }}>
+            <Text 
+              style={{ 
+                fontSize: '12px',
+                fontFamily: 'monospace',
+                wordBreak: 'break-all',
+                flex: 1
+              }}
+              title={decodeUrl(url)}
+            >
+              {decodeUrl(url)}
+            </Text>
+            {isComplex && (
+              <>
+                <Tag color="orange" style={{ marginLeft: 4, fontSize: '11px' }}>
+                  +{urlConditions.groups.length} OR
+                </Tag>
+                <Popover 
+                  content={popoverContent}
+                  title={null}
+                  trigger="click"
+                  placement="bottomLeft"
+                >
+                  <InfoCircleOutlined 
+                    style={{ 
+                      color: '#1890ff', 
+                      cursor: 'pointer',
+                      fontSize: '14px'
+                    }} 
+                  />
+                </Popover>
+              </>
+            )}
+          </Space>
+        );
+      }
     },
     {
       title: '매핑상태',
@@ -519,53 +576,52 @@ function PageMapping() {
     {
       title: '액션',
       key: 'action',
-      width: 400,
-      render: (_, record) => (
-        <Space size="small" wrap>
-          <Button 
-            size="small" 
-            icon={<EyeOutlined />}
-            onClick={() => handleOpenOriginalUrlsModal(record.url, record.original_url)}
-            title="이 URL로 유입된 원본 URL 목록을 확인합니다"
+      width: 100,
+      align: 'center',
+      render: (_, record) => {
+        const menuItems = [
+          {
+            key: 'view-urls',
+            icon: <EyeOutlined />,
+            label: '유입URL 보기',
+            onClick: () => handleOpenOriginalUrlsModal(record.url, record.original_url)
+          },
+          {
+            key: 'open-new-tab',
+            icon: <LinkOutlined />,
+            label: '새 탭으로 열기',
+            onClick: () => handleOpenUrl(record.url, record.original_url)
+          },
+          {
+            key: 'edit',
+            icon: <EditOutlined />,
+            label: record.is_mapped ? '수정' : '매핑하기',
+            onClick: () => handleOpenMappingModal(record.url, record.original_url)
+          },
+          {
+            type: 'divider'
+          },
+          {
+            key: 'exclude',
+            icon: <CloseOutlined />,
+            label: '제외',
+            danger: true,
+            onClick: () => handleExcludeUrl(record.url, record.original_url)
+          }
+        ];
+
+        return (
+          <Dropdown
+            menu={{ items: menuItems }}
+            trigger={['click']}
+            placement="bottomRight"
           >
-            유입URL 보기
-          </Button>
-          <Button 
-            size="small" 
-            icon={<LinkOutlined />}
-            onClick={() => handleOpenUrl(record.url, record.original_url)}
-          >
-            새 탭으로 열기
-          </Button>
-          {record.is_mapped ? (
-            <Button 
-              type="primary" 
-              size="small"
-              onClick={() => handleOpenMappingModal(record.url, record.original_url)}
-            >
-              수정
+            <Button icon={<SettingOutlined />}>
+              설정
             </Button>
-          ) : (
-            <Button 
-              type="primary" 
-              size="small"
-              icon={<PlusOutlined />}
-              onClick={() => handleOpenMappingModal(record.url, record.original_url)}
-            >
-              매핑하기
-            </Button>
-          )}
-          <Button 
-            danger
-            size="small"
-            icon={<CloseOutlined />}
-            onClick={() => handleExcludeUrl(record.url, record.original_url)}
-            title="이 URL을 목록에서 제외합니다"
-          >
-            제외
-          </Button>
-        </Space>
-      )
+          </Dropdown>
+        );
+      }
     }
   ];
 
