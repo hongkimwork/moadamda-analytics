@@ -33,7 +33,7 @@
   
   // Configuration
   const CONFIG = {
-    apiUrl: 'https://marketingzon.com/api/track',
+    apiUrl: 'https://moadamda-analytics.co.kr/api/track',
     siteId: 'moadamda',
     cookieName: '_ma_id',
     sessionCookieName: '_ma_ses',
