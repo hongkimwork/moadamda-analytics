@@ -130,6 +130,8 @@ router.get('/all', async (req, res) => {
     res.json({
       data: paginatedData,
       total: allUrls.length,
+      mappedTotal: completedCount,
+      unmappedTotal: uncompletedCount,
       statistics: {
         total: totalBeforeFilter,
         completed: completedCount,
