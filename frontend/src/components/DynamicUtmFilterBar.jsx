@@ -85,15 +85,13 @@ function DynamicUtmFilterBar({ tableName, onFilterChange, loading = false }) {
   const handleAddFilter = async (utmKey) => {
     // 이미 추가된 필터인지 확인
     if (activeFilters.some(f => f.key === utmKey)) {
-      console.log('[DynamicUtmFilterBar] 이미 추가된 필터:', utmKey);
       return;
     }
 
     // 해당 UTM 키의 값 목록 로드
     const values = await fetchUtmValues(utmKey);
-    
+
     if (values.length === 0) {
-      console.log('[DynamicUtmFilterBar] 데이터 없음:', utmKey);
       return;
     }
 
@@ -112,7 +110,6 @@ function DynamicUtmFilterBar({ tableName, onFilterChange, loading = false }) {
     };
 
     setActiveFilters(prev => [...prev, newFilter]);
-    console.log('[DynamicUtmFilterBar] 필터 추가됨:', utmKey);
   };
 
   // 필터 값 변경 핸들러
@@ -129,13 +126,11 @@ function DynamicUtmFilterBar({ tableName, onFilterChange, loading = false }) {
   // 필터 제거 핸들러
   const handleRemoveFilter = (filterId) => {
     setActiveFilters(prev => prev.filter(f => f.id !== filterId));
-    console.log('[DynamicUtmFilterBar] 필터 제거됨:', filterId);
   };
 
   // 모든 필터 초기화
   const handleClearAllFilters = () => {
     setActiveFilters([]);
-    console.log('[DynamicUtmFilterBar] 모든 필터 초기화됨');
   };
 
   // UTM 키 이름 포맷팅 (utm_source -> Source)
@@ -154,7 +149,6 @@ function DynamicUtmFilterBar({ tableName, onFilterChange, loading = false }) {
 
   // 에러 발생 시 컴포넌트 숨김 (silent fail)
   if (hasError) {
-    console.log('[DynamicUtmFilterBar] 컴포넌트 숨김 (에러 발생)');
     return null;
   }
 

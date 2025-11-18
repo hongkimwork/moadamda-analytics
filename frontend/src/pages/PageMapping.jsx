@@ -6,6 +6,7 @@ import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/ko';
 import { parseUrl, createUrlConditions } from '../utils/urlParser';
+import { MappingModal, OriginalUrlsModal, ManualAddModal } from '../components/mappings';
 
 dayjs.extend(relativeTime);
 dayjs.locale('ko');
@@ -449,6 +450,13 @@ function PageMapping() {
     } finally {
       setManualAddSubmitting(false);
     }
+  };
+
+  // Close manual add modal and reset
+  const handleCloseManualAddModal = () => {
+    setManualAddModalVisible(false);
+    manualAddForm.resetFields();
+    setUrlGroups([{ baseUrl: '', params: [{ key: '', value: '' }] }]);
   };
 
   // Columns for all URLs table
@@ -895,482 +903,42 @@ function PageMapping() {
       </Card>
 
       {/* Mapping Modal */}
-      <Modal
-        title="페이지 매핑"
-        open={mappingModalVisible}
-        onCancel={handleCloseMappingModal}
-        footer={null}
-        width={600}
-      >
-        <div style={{ marginBottom: 16 }}>
-          <Text type="secondary">URL:</Text>
-          <div style={{ 
-            marginTop: 8, 
-            padding: '8px 12px', 
-            background: '#f5f5f5', 
-            borderRadius: 4,
-            fontFamily: 'monospace',
-            fontSize: '12px',
-            wordBreak: 'break-all'
-          }}>
-            {mappingUrl}
-          </div>
-        </div>
-
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={handleSubmitMapping}
-        >
-          <Form.Item
-            name="korean_name"
-            label="한국어 페이지명"
-            rules={[
-              { required: true, message: '한국어 페이지명을 입력해주세요' },
-              { whitespace: true, message: '공백만 입력할 수 없습니다' },
-              { max: 255, message: '최대 255자까지 입력 가능합니다' }
-            ]}
-          >
-            <Input 
-              placeholder="예: 모로실 다이어트&혈당관리를 모아담다"
-              autoFocus
-            />
-          </Form.Item>
-
-          <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
-            <Space>
-              <Button onClick={handleCloseMappingModal}>
-                취소
-              </Button>
-              <Button 
-                type="primary" 
-                htmlType="submit"
-                loading={mappingSubmitting}
-              >
-                저장
-              </Button>
-            </Space>
-          </Form.Item>
-        </Form>
-      </Modal>
+      <MappingModal
+        visible={mappingModalVisible}
+        onClose={handleCloseMappingModal}
+        onSubmit={handleSubmitMapping}
+        url={mappingUrl}
+        form={form}
+        submitting={mappingSubmitting}
+      />
 
       {/* Original URLs Modal */}
-      <Modal
-        title={
-          <div>
-            <EyeOutlined style={{ marginRight: 8 }} />
-            유입 URL 상세 보기
-          </div>
-        }
-        open={originalUrlsModalVisible}
-        onCancel={handleCloseOriginalUrlsModal}
-        footer={[
-          <Button key="close" onClick={handleCloseOriginalUrlsModal}>
-            닫기
-          </Button>
-        ]}
-        width={1000}
-      >
-        {/* Header: Cleaned URL */}
-        <div style={{ marginBottom: 16 }}>
-          <Text type="secondary">정제된 URL:</Text>
-          <div style={{ 
-            marginTop: 8, 
-            padding: '8px 12px', 
-            background: '#e6f7ff', 
-            borderRadius: 4,
-            fontFamily: 'monospace',
-            fontSize: '12px',
-            wordBreak: 'break-all',
-            border: '1px solid #91d5ff'
-          }}>
-            {decodeUrl(currentCleanedUrl)}
-          </div>
-        </div>
+      <OriginalUrlsModal
+        visible={originalUrlsModalVisible}
+        onClose={handleCloseOriginalUrlsModal}
+        cleanedUrl={currentCleanedUrl}
+        data={originalUrlsData}
+        loading={originalUrlsLoading}
+        stats={originalUrlsStats}
+        decodeUrl={decodeUrl}
+      />
 
-        {/* Statistics */}
-        <div style={{ 
-          display: 'flex', 
-          gap: 16, 
-          marginBottom: 16,
-          padding: '16px',
-          background: '#fafafa',
-          borderRadius: 4
-        }}>
-          <Statistic 
-            title="원본 URL 개수" 
-            value={originalUrlsStats.total} 
-            prefix={<BarChartOutlined />}
-          />
-          <Statistic 
-            title="총 방문 횟수" 
-            value={originalUrlsStats.totalVisits} 
-            prefix={<EyeOutlined />}
-          />
-        </div>
-
-        {/* Tip */}
-        <div style={{ 
-          marginBottom: 16, 
-          padding: '8px 12px',
-          background: '#fffbe6',
-          border: '1px solid #ffe58f',
-          borderRadius: 4
-        }}>
-          <Text style={{ fontSize: '12px' }}>
-            💡 <strong>TIP:</strong> 방문 횟수가 적고 test, admin, debug 같은 파라미터가 있으면 
-            내부 테스트일 가능성이 높습니다. 제외 처리를 고려해보세요.
-          </Text>
-        </div>
-
-        {/* Original URLs Table */}
-        <Spin spinning={originalUrlsLoading}>
-          <Table
-            columns={[
-              {
-                title: '순번',
-                key: 'index',
-                width: 60,
-                align: 'center',
-                render: (_, __, index) => index + 1
-              },
-              {
-                title: '원본 URL',
-                dataIndex: 'url',
-                key: 'url',
-                ellipsis: true,
-                render: (url) => (
-                  <Text 
-                    style={{ 
-                      fontSize: '11px',
-                      fontFamily: 'monospace',
-                      wordBreak: 'break-all'
-                    }}
-                    copyable
-                    title={decodeUrl(url)}
-                  >
-                    {decodeUrl(url)}
-                  </Text>
-                )
-              },
-              {
-                title: '방문 횟수',
-                dataIndex: 'visit_count',
-                key: 'visit_count',
-                width: 100,
-                align: 'right',
-                render: (count) => (
-                  <Tag color={count > 100 ? 'green' : count > 10 ? 'blue' : 'default'}>
-                    {count.toLocaleString()}회
-                  </Tag>
-                ),
-                sorter: (a, b) => a.visit_count - b.visit_count
-              },
-              {
-                title: '최근 방문',
-                dataIndex: 'latest_visit',
-                key: 'latest_visit',
-                width: 150,
-                render: (date) => (
-                  <div>
-                    <ClockCircleOutlined style={{ marginRight: 4 }} />
-                    {dayjs(date).fromNow()}
-                    <br />
-                    <Text type="secondary" style={{ fontSize: '10px' }}>
-                      {dayjs(date).format('YYYY-MM-DD HH:mm')}
-                    </Text>
-                  </div>
-                ),
-                sorter: (a, b) => new Date(a.latest_visit) - new Date(b.latest_visit)
-              },
-              {
-                title: '액션',
-                key: 'action',
-                width: 120,
-                render: (_, record) => (
-                  <Space size="small">
-                    <Button 
-                      size="small" 
-                      icon={<LinkOutlined />}
-                      onClick={() => window.open(record.url, '_blank', 'noopener,noreferrer')}
-                      title="새 탭으로 열기"
-                    >
-                      열기
-                    </Button>
-                  </Space>
-                )
-              }
-            ]}
-            dataSource={originalUrlsData}
-            rowKey="url"
-            pagination={{
-              pageSize: 20,
-              showSizeChanger: true,
-              showTotal: (total) => `총 ${total}개`,
-              pageSizeOptions: ['10', '20', '50', '100']
-            }}
-            size="small"
-            scroll={{ y: 400 }}
-          />
-        </Spin>
-      </Modal>
-
-      {/* Manual Add URL Modal - Phase 1: URL OR Operation */}
-      <Modal
-        title={
-          <Space>
-            <PlusOutlined />
-            <span>URL 수동 추가</span>
-            <Tooltip 
-              title={
-                <div>
-                  여러 URL을 OR 연산으로 묶을 수 있습니다.<br/>
-                  아래 URL 중 하나라도 일치하면 매핑됩니다.<br/><br/>
-                  <strong>예:</strong> 상품 A, B, C를 "프리미엄 상품군"으로 통합
-                </div>
-              }
-            >
-              <InfoCircleOutlined style={{ color: '#1890FF', cursor: 'help' }} />
-            </Tooltip>
-          </Space>
-        }
-        open={manualAddModalVisible}
-        onCancel={() => {
-          setManualAddModalVisible(false);
-          manualAddForm.resetFields();
-          setUrlGroups([{ baseUrl: '', params: [{ key: '', value: '' }] }]);
-        }}
-        footer={null}
-        width={800}
-      >
-        <Form
-          form={manualAddForm}
-          layout="vertical"
-          onFinish={handleManualAddSubmit}
-        >
-
-          {urlGroups.map((group, groupIndex) => (
-            <div key={groupIndex}>
-              <Card 
-                size="small" 
-                style={{ 
-                  marginBottom: 16, 
-                  background: '#F5F5F5',
-                  border: '1px solid #D9D9D9',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                  borderRadius: 8
-                }}
-                title={
-                  <Space>
-                    <Text strong>URL 조건 {groupIndex + 1}</Text>
-                    {urlGroups.length > 1 && (
-                      <Button
-                        type="text"
-                        danger
-                        size="small"
-                        icon={<DeleteOutlined />}
-                        onClick={() => handleRemoveUrlGroup(groupIndex)}
-                      >
-                        삭제
-                      </Button>
-                    )}
-                  </Space>
-                }
-              >
-                {/* Full URL Input with Auto-Parse */}
-                <div style={{ 
-                  marginBottom: 16, 
-                  padding: 12, 
-                  background: '#FFFFFF',
-                  border: '1px solid #D9D9D9',
-                  borderRadius: 6
-                }}>
-                  <Space style={{ marginBottom: 4 }}>
-                    <GlobalOutlined style={{ color: '#8C8C8C' }} />
-                    <Text strong style={{ fontSize: '13px' }}>전체 URL</Text>
-                    <Tooltip 
-                      title={
-                        <div>
-                          쿼리 파라미터 포함 URL을 입력하면<br/>
-                          자동으로 베이스 URL과 매개변수로 분리됩니다.<br/><br/>
-                          <strong>예:</strong> https://example.com/product?no=1001<br/>
-                          → 베이스: https://example.com/product<br/>
-                          → 매개변수: no = 1001
-                        </div>
-                      }
-                    >
-                      <InfoCircleOutlined style={{ color: '#8C8C8C', cursor: 'help', fontSize: '12px' }} />
-                    </Tooltip>
-                  </Space>
-                  <Input
-                    placeholder="예: https://m.moadamda.com/product/detail?no=1001"
-                    onChange={(e) => handleUrlInputChange(groupIndex, e.target.value)}
-                  />
-                </div>
-
-                {/* Base URL */}
-                <div style={{ 
-                  marginBottom: 16, 
-                  padding: 12, 
-                  background: '#FFFFFF',
-                  border: '1px solid #D9D9D9',
-                  borderRadius: 6
-                }}>
-                  <Space style={{ marginBottom: 4 }}>
-                    <LinkOutlined style={{ color: '#8C8C8C' }} />
-                    <Text strong style={{ fontSize: '13px' }}>베이스 URL <span style={{ color: 'red' }}>*</span></Text>
-                  </Space>
-                  <Input
-                    value={group.baseUrl}
-                    onChange={(e) => handleUpdateBaseUrl(groupIndex, e.target.value)}
-                    placeholder="예: https://m.moadamda.com/product/detail"
-                  />
-                </div>
-
-                {/* Parameters */}
-                <div style={{ 
-                  padding: 16, 
-                  background: '#FFFFFF',
-                  border: '1px solid #D9D9D9',
-                  borderRadius: 6
-                }}>
-                  <Space style={{ marginBottom: 12 }}>
-                    <SettingOutlined style={{ color: '#8C8C8C' }} />
-                    <Text strong style={{ fontSize: '13px' }}>매개변수</Text>
-                    <Tooltip 
-                      title={
-                        <div>
-                          모든 매개변수가 일치해야 합니다 (AND 연산)<br/><br/>
-                          <strong>예:</strong> no=1001 AND color=black<br/>
-                          → 두 조건 모두 만족하는 URL만 매핑
-                        </div>
-                      }
-                    >
-                      <InfoCircleOutlined style={{ color: '#8C8C8C', cursor: 'help', fontSize: '12px' }} />
-                    </Tooltip>
-                  </Space>
-                  
-                  {group.params.map((param, paramIndex) => (
-                    <Space key={paramIndex} style={{ width: '100%', marginBottom: 8 }} align="start">
-                      <Input
-                        placeholder="키 (예: no)"
-                        value={param.key}
-                        onChange={(e) => handleUpdateParam(groupIndex, paramIndex, 'key', e.target.value)}
-                        style={{ width: 150 }}
-                      />
-                      <Input
-                        placeholder="값 (예: 1001)"
-                        value={param.value}
-                        onChange={(e) => handleUpdateParam(groupIndex, paramIndex, 'value', e.target.value)}
-                        style={{ width: 150 }}
-                      />
-                      <Button
-                        type="text"
-                        danger
-                        size="small"
-                        icon={<MinusCircleOutlined />}
-                        onClick={() => handleRemoveParam(groupIndex, paramIndex)}
-                        disabled={group.params.length === 1}
-                      />
-                    </Space>
-                  ))}
-                  
-                  <Button
-                    type="dashed"
-                    size="small"
-                    icon={<PlusOutlined />}
-                    onClick={() => handleAddParam(groupIndex)}
-                    block
-                  >
-                    매개변수 추가
-                  </Button>
-                </div>
-              </Card>
-
-              {groupIndex < urlGroups.length - 1 && (
-                <div style={{ 
-                  textAlign: 'center', 
-                  margin: '20px 0',
-                  padding: '12px',
-                  background: '#F5F5F5',
-                  border: '1px solid #D9D9D9',
-                  borderRadius: 8
-                }}>
-                  <Text strong style={{ 
-                    color: '#595959', 
-                    fontSize: '13px',
-                    letterSpacing: '1px'
-                  }}>
-                    OR 연산
-                  </Text>
-                </div>
-              )}
-            </div>
-          ))}
-
-          <Button
-            type="dashed"
-            icon={<PlusOutlined />}
-            onClick={handleAddUrlGroup}
-            block
-            style={{ 
-              marginBottom: 24,
-              height: 40,
-              fontSize: '14px',
-              borderWidth: 2
-            }}
-          >
-            URL 조건 추가
-          </Button>
-
-          <Divider style={{ margin: '24px 0' }} />
-
-          {/* Korean Name */}
-          <Form.Item
-            name="korean_name"
-            label={
-              <Space>
-                <Text strong>매핑명</Text>
-                <span style={{ color: 'red' }}>*</span>
-              </Space>
-            }
-            rules={[
-              { required: true, message: '매핑명을 입력해주세요' },
-              { whitespace: true, message: '공백만 입력할 수 없습니다' },
-              { max: 255, message: '최대 255자까지 입력 가능합니다' }
-            ]}
-          >
-            <Input 
-              placeholder="예: 프리미엄 상품군"
-              size="large"
-            />
-          </Form.Item>
-
-          <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
-            <Space size="middle">
-              <Button 
-                size="large"
-                onClick={() => {
-                  setManualAddModalVisible(false);
-                  manualAddForm.resetFields();
-                  setUrlGroups([{ baseUrl: '', params: [{ key: '', value: '' }] }]);
-                }}
-              >
-                취소
-              </Button>
-              <Button 
-                type="primary" 
-                size="large"
-                htmlType="submit"
-                loading={manualAddSubmitting}
-                icon={<PlusOutlined />}
-              >
-                추가
-              </Button>
-            </Space>
-          </Form.Item>
-        </Form>
-      </Modal>
+      {/* Manual Add URL Modal */}
+      <ManualAddModal
+        visible={manualAddModalVisible}
+        onClose={handleCloseManualAddModal}
+        onSubmit={handleManualAddSubmit}
+        form={manualAddForm}
+        submitting={manualAddSubmitting}
+        urlGroups={urlGroups}
+        onUrlInputChange={handleUrlInputChange}
+        onUpdateBaseUrl={handleUpdateBaseUrl}
+        onUpdateParam={handleUpdateParam}
+        onAddParam={handleAddParam}
+        onRemoveParam={handleRemoveParam}
+        onAddUrlGroup={handleAddUrlGroup}
+        onRemoveUrlGroup={handleRemoveUrlGroup}
+      />
     </div>
   );
 }

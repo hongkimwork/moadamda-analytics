@@ -93,12 +93,7 @@ function CreativePerformance() {
         params.utm_filters = JSON.stringify(activeUtmFilters);
       }
 
-      console.log('[CreativePerformance] Fetching with params:', params);
-
       const response = await axios.get(`${API_URL}/api/creative-performance`, { params });
-
-      console.log('[CreativePerformance] Response total:', response.data.pagination?.total);
-      console.log('[CreativePerformance] Response data count:', response.data.data?.length);
 
       if (response.data.success) {
         setData(response.data.data || []);

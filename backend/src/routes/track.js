@@ -181,17 +181,7 @@ async function handleEcommerceEvent(event, clientIp) {
     final_payment
   } = event;
 
-  // Debug logging for Phase 2.6
-  if (event_type === 'purchase') {
-    console.log('[MA Backend] Purchase event received:', {
-      order_id,
-      total_amount,
-      discount_amount,
-      mileage_used,
-      shipping_fee,
-      final_payment
-    });
-  }
+  // Purchase event processing (logging removed for production)
 
   const eventTime = new Date(timestamp);
 
@@ -204,7 +194,6 @@ async function handleEcommerceEvent(event, clientIp) {
   `, [visitor_id]);
 
   if (visitorCheck.rows.length === 0) {
-    console.log('[MA Backend] Creating missing visitor:', visitor_id);
     await db.query(`
       INSERT INTO visitors (
         visitor_id, first_visit, last_visit, visit_count,
@@ -221,7 +210,6 @@ async function handleEcommerceEvent(event, clientIp) {
   `, [session_id]);
 
   if (sessionCheck.rows.length === 0) {
-    console.log('[MA Backend] Creating missing session:', session_id);
     await db.query(`
       INSERT INTO sessions (
         session_id, visitor_id, start_time, end_time,
@@ -404,7 +392,7 @@ async function handleSessionEnd(event) {
         AND exit_timestamp IS NULL
     `, [endTime, visitor_id, session_id]);
 
-    console.log(`[Session End] Closed UTM sessions for visitor ${visitor_id}, session ${session_id}`);
+    // UTM sessions closed
   } catch (error) {
     console.error('Error handling session end:', error);
   }

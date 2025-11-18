@@ -165,9 +165,7 @@ router.get('/original-urls', async (req, res) => {
         message: 'cleaned_url is required' 
       });
     }
-    
-    console.log('[ORIGINAL-URLS] Cleaned URL:', cleaned_url);
-    
+
     // Get all unique page_url from pageviews
     const pageviewsQuery = `
       SELECT 
@@ -181,8 +179,7 @@ router.get('/original-urls', async (req, res) => {
     `;
     
     const pageviewsResult = await db.query(pageviewsQuery);
-    console.log('[ORIGINAL-URLS] Total unique URLs in pageviews:', pageviewsResult.rows.length);
-    
+
     // Filter URLs that clean to the requested cleaned_url
     const matchingUrls = [];
     let totalVisits = 0;
@@ -199,10 +196,7 @@ router.get('/original-urls', async (req, res) => {
         totalVisits += parseInt(row.visit_count);
       }
     }
-    
-    console.log('[ORIGINAL-URLS] Matching URLs found:', matchingUrls.length);
-    console.log('[ORIGINAL-URLS] Total visits:', totalVisits);
-    
+
     // Sort by visit count (already sorted from query, but ensure)
     matchingUrls.sort((a, b) => b.visit_count - a.visit_count);
     
@@ -404,17 +398,9 @@ router.post('/exclude', async (req, res) => {
     
     // Clean the URL
     const cleanedUrl = cleanUrl(url);
-    
-    // Debug logging
-    console.log('[EXCLUDE] Original URL:', url);
-    console.log('[EXCLUDE] Cleaned URL:', cleanedUrl);
-    
+
     // Check if URL already exists in mappings
     const existingMapping = await db.query('SELECT id, is_excluded FROM url_mappings WHERE url = $1', [cleanedUrl]);
-    console.log('[EXCLUDE] Existing mapping found:', existingMapping.rows.length > 0);
-    if (existingMapping.rows.length > 0) {
-      console.log('[EXCLUDE] Is excluded:', existingMapping.rows[0].is_excluded);
-    }
     
     if (existingMapping.rows.length > 0) {
       // URL already exists in mappings table
