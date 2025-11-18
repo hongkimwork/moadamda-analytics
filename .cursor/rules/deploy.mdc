@@ -9,25 +9,55 @@ description: 서버 배포 매뉴얼
 - 경로: /root/moadamda-analytics
 - Docker: docker-compose.prod.yml
 
-## 배포 명령 (서버에서 실행)
+## 기본 배포 순서
 ```bash
+# 1. 서버 접속 & 코드 업데이트
+ssh root@49.50.139.223
 cd /root/moadamda-analytics
 git checkout {브랜치명}
 git pull origin {브랜치명}
-docker-compose -f docker-compose.prod.yml up -d --build
+
+# 2. 변경사항에 따라 아래 명령 실행
 ```
 
-## 빠른 재시작 (코드만 변경된 경우)
+## 케이스별 배포 명령
+
+### Case 1: 백엔드만 변경 (backend/src/)
+```bash
+cd /root/moadamda-analytics
+docker-compose -f docker-compose.prod.yml up -d --build backend
+```
+
+### Case 2: 프론트엔드만 변경 (frontend/src/)
+```bash
+cd /root/moadamda-analytics/frontend
+npm run build
+# nginx가 자동으로 새 빌드 서빙
+```
+
+### Case 3: 둘 다 변경
+```bash
+# 백엔드 빌드
+cd /root/moadamda-analytics
+docker-compose -f docker-compose.prod.yml up -d --build backend
+
+# 프론트엔드 빌드
+cd /root/moadamda-analytics/frontend
+npm run build
+```
+
+### Case 4: 설정만 변경 (.env, nginx.conf 등)
 ```bash
 cd /root/moadamda-analytics
 docker-compose -f docker-compose.prod.yml restart
 ```
 
 ## 주의사항
-- 전체 빌드: 1-2분 소요
+- 백엔드 빌드: 1-2분 소요
+- 프론트엔드 빌드: 5-10초 소요
 - 재시작만: 10-30초 소요
-- 빌드 중 서비스 일시 중단 가능
+- 프론트엔드는 Docker 빌드 아님 (npm run build 사용)
 
 ---
 
-**v1.0** (2025-11-18)
+**v2.0** (2025-11-18)
