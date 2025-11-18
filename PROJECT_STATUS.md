@@ -23,6 +23,7 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-11-18 | 매핑 통계 표시 수정 | PageMapping.jsx |
 | 2025-11-17 | Git 브랜치 관리 통합 | git-only.mdc |
 | 2025-11-17 | 배포 Rules 재구성 | .cursor/rules/ |
 | 2025-11-14 | tracker 파일 Git 포함 | .gitignore |
@@ -104,17 +105,14 @@ PORT=3003
 
 **접속:** http://localhost:3030
 
-### 3️⃣ 배포 (Git 브랜치 관리)
+### 3️⃣ 배포
 
 ```bash
-# 개발 테스트
-@git-only.mdc "dev에 push"
+# 자연어로 배포 요청 (예시)
+"main 브랜치를 서버에 배포해"
+"feature/stats 브랜치를 서버에 배포해"
 
-# 프로덕션 배포
-@git-only.mdc "main에 merge"
-
-# 긴급 롤백
-@git-only.mdc "main 롤백"
+# @deploy.mdc 참고하여 AI가 자동 실행
 ```
 
 ---
@@ -145,7 +143,7 @@ PORT=3003
 ## 📚 참고 문서
 
 - [.cursor/rules/dev.mdc](./.cursor/rules/dev.mdc) - 로컬 개발 환경
-- [.cursor/rules/git-only.mdc](./.cursor/rules/git-only.mdc) - Git 브랜치 관리 & 배포
+- [.cursor/rules/deploy.mdc](./.cursor/rules/deploy.mdc) - 서버 배포 매뉴얼
 - [.cursor/rules/data-validation.mdc](./.cursor/rules/data-validation.mdc) - 데이터 검증
 - [Git 저장소](https://github.com/hongkimwork/moadamda-analytics)
 
