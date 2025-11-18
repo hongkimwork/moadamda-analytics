@@ -98,6 +98,11 @@ router.get('/all', async (req, res) => {
       });
     }
     
+    // Calculate statistics BEFORE filtering (for full statistics)
+    const totalBeforeFilter = allUrls.length;
+    const completedCount = allUrls.filter(item => item.is_mapped).length;
+    const uncompletedCount = allUrls.filter(item => !item.is_mapped).length;
+    
     // Apply status filter (BEFORE pagination)
     if (status === 'completed') {
       allUrls = allUrls.filter(item => item.is_mapped === true);
@@ -125,6 +130,11 @@ router.get('/all', async (req, res) => {
     res.json({
       data: paginatedData,
       total: allUrls.length,
+      statistics: {
+        total: totalBeforeFilter,
+        completed: completedCount,
+        uncompleted: uncompletedCount
+      },
       limit: parseInt(limit),
       offset: parseInt(offset)
     });

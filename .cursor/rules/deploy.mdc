@@ -1,0 +1,33 @@
+---
+description: 서버 배포 매뉴얼
+---
+
+# 배포 매뉴얼
+
+## 서버 정보
+- SSH: root@49.50.139.223
+- 경로: /root/moadamda-analytics
+- Docker: docker-compose.prod.yml
+
+## 배포 명령 (서버에서 실행)
+```bash
+cd /root/moadamda-analytics
+git checkout {브랜치명}
+git pull origin {브랜치명}
+docker-compose -f docker-compose.prod.yml up -d --build
+```
+
+## 빠른 재시작 (코드만 변경된 경우)
+```bash
+cd /root/moadamda-analytics
+docker-compose -f docker-compose.prod.yml restart
+```
+
+## 주의사항
+- 전체 빌드: 1-2분 소요
+- 재시작만: 10-30초 소요
+- 빌드 중 서비스 일시 중단 가능
+
+---
+
+**v1.0** (2025-11-18)

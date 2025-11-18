@@ -1,0 +1,67 @@
+---
+description: 로컬 개발 환경 자동 구동 (배포 서버 DB 연결)
+---
+
+# 로컬 개발 환경 구동
+
+**트리거:** @dev.mdc 첨부 시
+
+---
+
+## 🎯 구조
+
+```
+로컬 Mac
+├─ Frontend (Vite) → :3030
+├─ Backend (Node.js) → :3003
+└─ DB 연결 → 49.50.139.223:5432 (배포 서버)
+```
+
+---
+
+## 🚀 AI 자동 실행 (사용자가 @dev.mdc 첨부 시)
+
+### Backend 시작
+```bash
+cd backend && npm run dev
+```
+
+### Frontend 시작 (새 터미널)
+```bash
+cd frontend && npm run dev
+```
+
+### 결과 보고
+```
+✅ 로컬 개발 서버 구동 완료
+- Frontend: http://localhost:3030
+- Backend: http://localhost:3003
+- DB: 49.50.139.223 (배포 서버)
+```
+
+---
+
+## 📋 필수 파일
+
+### backend/.env (배포 서버 DB 연결)
+```
+DB_HOST=49.50.139.223
+DB_PORT=5432
+DB_USER=moadamda
+DB_PASSWORD=MoaDamDa2025!Secure#Analytics
+DB_NAME=analytics
+NODE_ENV=development
+PORT=3003
+```
+
+---
+
+## 🛑 종료
+
+```bash
+# 각 터미널에서 Ctrl + C
+```
+
+---
+
+**v1.1** (2025-11-17)

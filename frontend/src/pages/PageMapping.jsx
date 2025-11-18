@@ -28,7 +28,8 @@ function PageMapping() {
   const [allPage, setAllPage] = useState(1);
   const [allPageSize, setAllPageSize] = useState(20);
   const [allSearch, setAllSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('completed'); // 기본값: 완료
+  const [statusFilter, setStatusFilter] = useState('all'); // 기본값: 전체
+  const [statistics, setStatistics] = useState({ total: 0, completed: 0, uncompleted: 0 });
   
   // Excluded URLs state
   const [excludedData, setExcludedData] = useState([]);
@@ -82,6 +83,7 @@ function PageMapping() {
       // Backend already sorts and filters data
       setAllData(response.data.data);
       setAllTotal(response.data.total);
+      setStatistics(response.data.statistics || { total: 0, completed: 0, uncompleted: 0 });
       setLastUpdate(new Date());
     } catch (error) {
       console.error('Failed to fetch all URLs:', error);
@@ -688,9 +690,7 @@ function PageMapping() {
   // Server-side filtering: no need for client-side filtering
   // Data is already filtered by the backend based on statusFilter
 
-  // Calculate statistics (only accurate when statusFilter === 'all')
-  const mappedCount = allData.filter(item => item.is_mapped).length;
-  const unmappedCount = allData.filter(item => !item.is_mapped).length;
+  // Use statistics from backend (always reflects full data, not filtered)
 
   // Tab items
   const tabItems = [
@@ -699,11 +699,11 @@ function PageMapping() {
       label: (
         <span>
           📋 URL 매핑 관리
-          {allTotal > 0 && statusFilter === 'all' && (
+          {statistics.total > 0 && statusFilter === 'all' && (
             <span style={{ marginLeft: 8 }}>
-              <Tag color="blue">{allTotal}개</Tag>
-              <Tag color="success" icon={<CheckCircleOutlined />}>{mappedCount}</Tag>
-              <Tag color="default" icon={<CloseCircleOutlined />}>{unmappedCount}</Tag>
+              <Tag color="blue">{statistics.total}개</Tag>
+              <Tag color="success" icon={<CheckCircleOutlined />}>{statistics.completed}</Tag>
+              <Tag color="default" icon={<CloseCircleOutlined />}>{statistics.uncompleted}</Tag>
             </span>
           )}
           {allTotal > 0 && statusFilter !== 'all' && (
@@ -739,7 +739,7 @@ function PageMapping() {
           </Space>
 
           {/* Statistics Summary - Only show when viewing all data */}
-          {allTotal > 0 && statusFilter === 'all' && (
+          {statistics.total > 0 && statusFilter === 'all' && (
             <div style={{ 
               marginBottom: 16, 
               padding: '12px 16px', 
@@ -753,18 +753,18 @@ function PageMapping() {
               <Space size="middle">
                 <span>
                   <Text type="secondary">전체</Text>
-                  <Tag color="blue" style={{ marginLeft: 8 }}>{allTotal}개</Tag>
+                  <Tag color="blue" style={{ marginLeft: 8 }}>{statistics.total}개</Tag>
                 </span>
                 <span>
                   <Text type="secondary">완료</Text>
                   <Tag color="success" icon={<CheckCircleOutlined />} style={{ marginLeft: 8 }}>
-                    {mappedCount}개 ({allTotal > 0 ? Math.round((mappedCount / allTotal) * 100) : 0}%)
+                    {statistics.completed}개 ({statistics.total > 0 ? Math.round((statistics.completed / statistics.total) * 100) : 0}%)
                   </Tag>
                 </span>
                 <span>
                   <Text type="secondary">미완료</Text>
                   <Tag color="default" icon={<CloseCircleOutlined />} style={{ marginLeft: 8 }}>
-                    {unmappedCount}개 ({allTotal > 0 ? Math.round((unmappedCount / allTotal) * 100) : 0}%)
+                    {statistics.uncompleted}개 ({statistics.total > 0 ? Math.round((statistics.uncompleted / statistics.total) * 100) : 0}%)
                   </Tag>
                 </span>
               </Space>

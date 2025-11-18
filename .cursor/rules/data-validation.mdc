@@ -1,31 +1,41 @@
 ---
 alwaysApply: false
-description: 데이터 검증 및 품질 관리 규칙 - 새 API/쿼리 개발, SQL 작성, 데이터 정제 시 필수 확인 사항
+applyIntelligently: true
+description: 데이터 검증 - SQL/API 작업 시 AI 자동 검증
 ---
 
-# 데이터 검증 및 품질 관리 규칙
+# 데이터 검증 (AI 자동 실행)
 
-**마지막 업데이트**: 2025-11-10
-**목적**: 프로덕션 데이터의 정확성 보장 및 비정상 값 조기 발견
+**업데이트**: 2025-11-17  
+**목적**: AI가 자동으로 서버 접속하여 데이터 검증
+
+---
+
+## 🤖 AI 자동 검증 트리거
+
+### 자동 참조 시나리오
+1. **SQL 쿼리 작성 시** → 자동으로 서버에서 쿼리 테스트
+2. **새 API 개발 시** → 실제 데이터 범위 확인
+3. **배포 후** (@deploy.mdc) → API 상태 체크
+4. **비정상 값 발견 시** → 원인 파악 쿼리 자동 실행
+
+### AI 자동 실행 방법
+```bash
+# AI가 자동으로 SSH 접속하여 실행
+ssh root@49.50.139.223 'docker exec ma-postgres psql -U moadamda -d analytics -c "..."'
+```
+
+**결과:**
+- 사용자는 명령어 입력 불필요
+- AI가 직접 검증 후 보고
 
 ---
 
 ## 🚨 핵심 원칙
 
-### 1. 절대 신뢰하지 말 것 (Trust Nothing, Verify Everything)
-- ❌ "이 쿼리는 잘 작동할 것이다"
-- ✅ "모든 데이터는 검증되어야 한다"
-- ✅ "계산된 값은 합리성 체크를 거쳐야 한다"
-
-### 2. 실제 데이터로 검증
-- 새 API/쿼리 개발 시 **반드시 프로덕션 데이터로 테스트**
-- 가상 시나리오만으로 개발 금지
-- 사용자에게 테스트 쿼리 실행 요청
-
-### 3. 비정상 값 감지 및 필터링
-- 계산된 값이 도메인 상식에 맞는지 확인
-- 임계값 설정 및 적용
-- 이상 값 발견 시 즉시 보고 및 조사
+1. **Trust Nothing** - 모든 데이터 검증 필수
+2. **AI 자동 검증** - 서버 접속하여 실제 데이터 확인
+3. **비정상 값 필터링** - 임계값 초과 시 자동 필터링
 
 ---
 
@@ -61,34 +71,28 @@ description: 데이터 검증 및 품질 관리 규칙 - 새 API/쿼리 개발, 
 
 ---
 
-## 🔧 개발 프로세스 (필수 3단계)
+## 🔧 AI 자동 검증 프로세스
 
-### Phase 1: 데이터 탐색 (MUST DO FIRST)
+### Phase 1: 데이터 탐색 (AI 자동 실행)
 
-**새 기능 개발 전 필수:**
+**AI가 자동으로 실행:**
 
 ```bash
-# 1. 실제 데이터 샘플 확인
-docker exec -i ma-postgres psql -U moadamda -d analytics -c "
-  SELECT * FROM [테이블명] 
-  ORDER BY timestamp DESC 
-  LIMIT 5;
-"
+# AI 내부 동작
+ssh root@49.50.139.223 '
+  docker exec ma-postgres psql -U moadamda -d analytics -c "
+    SELECT * FROM [테이블명] ORDER BY timestamp DESC LIMIT 5;
+    SELECT MIN([컬럼]), MAX([컬럼]), AVG([컬럼]) FROM [테이블명];
+  "
+'
+```
 
-# 2. 데이터 범위 확인 (MIN/MAX/AVG)
-docker exec -i ma-postgres psql -U moadamda -d analytics -c "
-  SELECT 
-    MIN([컬럼]), MAX([컬럼]), AVG([컬럼]),
-    COUNT(*), COUNT(DISTINCT [키])
-  FROM [테이블명];
-"
-
-# 3. Edge Case 확인
-docker exec -i ma-postgres psql -U moadamda -d analytics -c "
-  SELECT * FROM [테이블명]
-  WHERE [의심 조건]
-  LIMIT 10;
-"
+**사용자에게 보고:**
+```
+✅ 데이터 검증 완료
+- 샘플: 5건 확인
+- 범위: 정상 (1초~600초)
+- 비정상: 3건 발견 → 필터링 추가
 ```
 
 ### Phase 2: 쿼리 작성 및 테스트
