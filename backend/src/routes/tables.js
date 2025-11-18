@@ -317,13 +317,13 @@ router.get('/sessions', async (req, res) => {
     
     // 데이터 조회
     const dataQuery = `
-      SELECT 
+      SELECT
         s.session_id,
         s.visitor_id,
         s.start_time,
         s.end_time,
         s.pageview_count,
-        s.duration_seconds,
+        LEAST(s.duration_seconds, 7200) as duration_seconds,
         s.entry_url,
         s.exit_url,
         s.is_bounced,
@@ -507,11 +507,7 @@ router.get('/pageviews', async (req, res) => {
     if (search) {
       const encodedSearch = encodeSearchTerm(search);
       const hasNonAscii = /[^\x00-\x7F]/.test(search);
-      
-      console.log('[Pageviews] 검색어 원본:', search);
-      console.log('[Pageviews] 검색어 인코딩:', encodedSearch);
-      console.log('[Pageviews] 한글 포함:', hasNonAscii);
-      
+
       if (hasNonAscii) {
         // 한글 검색: 인코딩된 값으로 검색 (ESCAPE '!' 사용)
         const whereClause = `(
@@ -521,8 +517,7 @@ router.get('/pageviews', async (req, res) => {
           p.page_url ILIKE $${paramIndex + 3} ESCAPE '!'
         )`;
         whereConditions.push(whereClause);
-        console.log('[Pageviews] WHERE 절:', whereClause);
-        
+
         const params = [
           `%${search}%`,        // visitor_id
           `%${search}%`,        // session_id
@@ -530,7 +525,6 @@ router.get('/pageviews', async (req, res) => {
           `%${encodedSearch}%`  // page_url (인코딩)
         ];
         queryParams.push(...params);
-        console.log('[Pageviews] 파라미터:', params);
         paramIndex += 4;
       } else {
         // 영문/숫자 검색: 일반 검색
@@ -548,8 +542,6 @@ router.get('/pageviews', async (req, res) => {
         );
         paramIndex += 4;
       }
-      
-      console.log('[Pageviews] 쿼리 파라미터:', queryParams);
     }
     
     // 디바이스 필터
@@ -580,16 +572,10 @@ router.get('/pageviews', async (req, res) => {
       paramIndex++;
     }
     
-    const whereClause = whereConditions.length > 0 
+    const whereClause = whereConditions.length > 0
       ? 'WHERE ' + whereConditions.join(' AND ')
       : '';
-    
-    // 디버그: 최종 쿼리 출력
-    if (search) {
-      console.log('[Pageviews] 최종 WHERE:', whereClause);
-      console.log('[Pageviews] 최종 파라미터:', queryParams);
-    }
-    
+
     // 전체 카운트 (limit, offset 추가 전에 실행)
     const countQuery = `
       SELECT COUNT(*) as total 
@@ -631,9 +617,9 @@ router.get('/pageviews', async (req, res) => {
         pt.timestamp,
         CASE
           WHEN pt.next_timestamp IS NOT NULL THEN
-            EXTRACT(EPOCH FROM (pt.next_timestamp - pt.timestamp))::INTEGER
+            LEAST(EXTRACT(EPOCH FROM (pt.next_timestamp - pt.timestamp))::INTEGER, 600)
           WHEN pt.purchase_timestamp IS NOT NULL THEN
-            EXTRACT(EPOCH FROM (pt.purchase_timestamp - pt.timestamp))::INTEGER
+            LEAST(EXTRACT(EPOCH FROM (pt.purchase_timestamp - pt.timestamp))::INTEGER, 600)
           ELSE 0
         END as time_spent_seconds,
         pt.created_at,
