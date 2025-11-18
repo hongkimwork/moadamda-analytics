@@ -23,6 +23,11 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-11-18 | 파일 구조 정리 | docs/, scripts/ |
+| 2025-11-18 | 프론트엔드 최적화 (67% 감소) | App.jsx, vite.config.js |
+| 2025-11-18 | 컴포넌트 모듈화 완료 | components/ 10개 |
+| 2025-11-18 | 리팩토링 문서 작성 | docs/archive/ 3개 |
+| 2025-11-18 | console.log 제거 (29개) | 백엔드/프론트 6개 |
 | 2025-11-18 | 배포 매뉴얼 개선 | deploy.mdc |
 | 2025-11-18 | 매핑 통계 표시 수정 | PageMapping.jsx |
 | 2025-11-17 | Git 브랜치 관리 통합 | git-only.mdc |
@@ -33,11 +38,6 @@
 | 2025-11-13 | 액션 컬럼 드롭다운 간소화 | PageMapping.jsx |
 | 2025-11-13 | URL 카드 배경 회색/내부 흰색 | PageMapping.jsx |
 | 2025-11-13 | URL 모달 색상 통일 (회색 팔레트) | PageMapping.jsx |
-| 2025-11-13 | URL 모달 UI/UX 개선 (툴팁/계층) | PageMapping.jsx |
-| 2025-11-13 | 필터 드롭다운 이모지 제거 | PageMapping.jsx |
-| 2025-11-13 | 필터링 버그 수정 (서버 사이드) | mappings.js, PageMapping.jsx |
-| 2025-11-13 | 페이지매핑 복합 조건 구현 | PageMapping.jsx, mappings.js |
-| 2025-11-13 | 페이지매핑 수동등록 배포 | 서버 배포 완료 |
 | 2025-11-13 | URL 수동 추가 기능 구현 | PageMapping.jsx, mappings.js |
 | 2025-11-13 | 등록유형 컬럼 추가 | PageMapping.jsx, add_source_type.sql |
 | 2025-11-13 | 매핑상태 필터 드롭다운 추가 | PageMapping.jsx |
@@ -143,9 +143,20 @@ PORT=3003
 
 ## 📚 참고 문서
 
+### 핵심 가이드
 - [.cursor/rules/dev.mdc](./.cursor/rules/dev.mdc) - 로컬 개발 환경
 - [.cursor/rules/deploy.mdc](./.cursor/rules/deploy.mdc) - 서버 배포 매뉴얼
 - [.cursor/rules/data-validation.mdc](./.cursor/rules/data-validation.mdc) - 데이터 검증
+
+### 시작 가이드
+- [docs/START_GUIDE.md](./docs/START_GUIDE.md) - Phase 1 시작 가이드
+- [docs/HTTPS_SETUP_GUIDE.md](./docs/HTTPS_SETUP_GUIDE.md) - HTTPS 설정 가이드
+
+### 작업 기록 (완료)
+- [docs/archive/REFACTORING_REPORT.md](./docs/archive/REFACTORING_REPORT.md) - 리팩토링 보고서
+- [docs/archive/SQL_VALIDATION_REPORT.md](./docs/archive/SQL_VALIDATION_REPORT.md) - SQL 검증 보고서
+
+### 외부 링크
 - [Git 저장소](https://github.com/hongkimwork/moadamda-analytics)
 
 ---
