@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { Layout, Menu } from 'antd';
+import { Layout, Menu, Spin } from 'antd';
 import { 
   ShoppingOutlined, 
   DatabaseOutlined, 
@@ -15,12 +15,20 @@ import {
   BarChartOutlined,
   SettingOutlined
 } from '@ant-design/icons';
-import { OrderListPage, OrderDetailPage } from './pages/OrderAnalysis';
-import OrderAnalysis2Page from './pages/OrderAnalysis2';
-import DataTables from './pages/DataTables';
-import PageMapping from './pages/PageMapping';
-import CreativePerformance from './pages/CreativePerformance';
 import './index.css';
+
+// Lazy load pages for code splitting (reduces initial bundle size)
+// Named exports from OrderAnalysis are wrapped to work with lazy loading
+const OrderListPage = lazy(() => 
+  import('./pages/OrderAnalysis').then(module => ({ default: module.OrderListPage }))
+);
+const OrderDetailPage = lazy(() => 
+  import('./pages/OrderAnalysis').then(module => ({ default: module.OrderDetailPage }))
+);
+const OrderAnalysis2Page = lazy(() => import('./pages/OrderAnalysis2'));
+const DataTables = lazy(() => import('./pages/DataTables'));
+const PageMapping = lazy(() => import('./pages/PageMapping'));
+const CreativePerformance = lazy(() => import('./pages/CreativePerformance'));
 
 const { Sider, Content } = Layout;
 
@@ -182,23 +190,29 @@ function AppLayout() {
       {/* 컨텐츠 영역 */}
       <Layout style={{ marginLeft: collapsed ? 80 : 250, transition: 'margin-left 0.2s' }}>
         <Content style={{ minHeight: '100vh' }}>
-          <Routes>
-            {/* 주문 분석 */}
-            <Route path="/" element={<OrderListPage />} />
-            <Route path="/order/:orderId" element={<OrderDetailPage />} />
-            
-            {/* 주문 분석2 (개선 버전) */}
-            <Route path="/orders2" element={<OrderAnalysis2Page />} />
-            
-            {/* 광고 소재 모수 분석 */}
-            <Route path="/creative-performance" element={<CreativePerformance />} />
-            
-            {/* 페이지 매핑 */}
-            <Route path="/page-mapping" element={<PageMapping />} />
-            
-            {/* 데이터 테이블 */}
-            <Route path="/data/:tableName" element={<DataTables />} />
-          </Routes>
+          <Suspense fallback={
+            <div style={{ padding: '50px', textAlign: 'center' }}>
+              <Spin size="large" tip="로딩 중..." />
+            </div>
+          }>
+            <Routes>
+              {/* 주문 분석 */}
+              <Route path="/" element={<OrderListPage />} />
+              <Route path="/order/:orderId" element={<OrderDetailPage />} />
+              
+              {/* 주문 분석2 (개선 버전) */}
+              <Route path="/orders2" element={<OrderAnalysis2Page />} />
+              
+              {/* 광고 소재 모수 분석 */}
+              <Route path="/creative-performance" element={<CreativePerformance />} />
+              
+              {/* 페이지 매핑 */}
+              <Route path="/page-mapping" element={<PageMapping />} />
+              
+              {/* 데이터 테이블 */}
+              <Route path="/data/:tableName" element={<DataTables />} />
+            </Routes>
+          </Suspense>
         </Content>
       </Layout>
     </Layout>
