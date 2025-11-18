@@ -368,7 +368,13 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
 
   // 구매 직전 경로 (광고 클릭 후 ~ 구매까지)
   const journeyPages = purchase_journey?.pages || page_path || [];
-  
+
+  // 체류시간 필터링: 최대 10분(600초)으로 제한 (데이터 검증)
+  const validJourneyPages = journeyPages.map(page => ({
+    ...page,
+    time_spent_seconds: Math.min(page.time_spent_seconds || 0, 600)
+  }));
+
   // 시간 포맷 함수 (먼저 정의)
   const formatDuration = (seconds) => {
     if (seconds >= 60) {
@@ -396,8 +402,9 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
         const prevUrl = current.clean_url || current.page_url;
         
         if (currentUrl === prevUrl) {
-          // 같은 URL 연속 방문 - 체류시간만 합산
-          current.time_spent_seconds = (current.time_spent_seconds || 0) + (page.time_spent_seconds || 0);
+          // 같은 URL 연속 방문 - 체류시간만 합산 (최대 600초 제한)
+          const combinedTime = (current.time_spent_seconds || 0) + (page.time_spent_seconds || 0);
+          current.time_spent_seconds = Math.min(combinedTime, 600);
           // timestamp는 첫 방문 시간 유지
         } else {
           // 다른 URL - 이전 것을 결과에 추가하고 새로 시작
@@ -471,7 +478,7 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
     }),
     // 구매 당일 (연속 중복 제거 적용)
     (() => {
-      const deduplicatedPages = removeConcecutiveDuplicates(journeyPages);
+      const deduplicatedPages = removeConcecutiveDuplicates(validJourneyPages);
       const totalDuration = deduplicatedPages.reduce((sum, p) => sum + (p.time_spent_seconds || 0), 0);
       
       return {
@@ -511,22 +518,24 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
     return columns;
   };
 
-  // 체류시간 계산 (구매 직전 경로만)
-  const totalSeconds = purchase_journey?.total_duration || journeyPages.reduce((sum, p) => sum + (p.time_spent_seconds || 0), 0);
-  const avgSeconds = journeyPages.length > 0 ? Math.round(totalSeconds / journeyPages.length) : 0;
-  const maxPage = journeyPages.reduce((max, p) => 
-    (p.time_spent_seconds || 0) > (max.time_spent_seconds || 0) ? p : max, 
+  // 데이터 검증 (백엔드가 제대로 처리했는지 확인)
+  const overLimitPages = journeyPages.filter(p => p.time_spent_seconds > 600);
+  if (overLimitPages.length > 0) {
+    console.warn('[데이터 검증] 10분 초과 페이지 발견 (필터링 적용됨):', overLimitPages);
+  }
+
+  // 체류시간 계산 (이미 필터링된 validJourneyPages 사용)
+  const totalSeconds = validJourneyPages.reduce((sum, p) => sum + (p.time_spent_seconds || 0), 0);
+  const avgSeconds = validJourneyPages.length > 0 ? Math.round(totalSeconds / validJourneyPages.length) : 0;
+  const maxPage = validJourneyPages.reduce((max, p) =>
+    (p.time_spent_seconds || 0) > (max.time_spent_seconds || 0) ? p : max,
     { time_spent_seconds: 0 }
   );
   const maxSeconds = maxPage.time_spent_seconds || 0;
 
-  // 데이터 검증 (백엔드가 제대로 처리했는지 확인)
+  // 최종 검증
   if (totalSeconds > 3600) {
     console.warn('[데이터 검증] 비정상적으로 긴 총 체류시간:', totalSeconds, '초');
-  }
-  const overLimitPages = journeyPages.filter(p => p.time_spent_seconds > 600);
-  if (overLimitPages.length > 0) {
-    console.warn('[데이터 검증] 10분 초과 페이지 발견:', overLimitPages);
   }
 
   // 마케팅 지표 계산
