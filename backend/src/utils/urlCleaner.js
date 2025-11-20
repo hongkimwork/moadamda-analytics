@@ -255,12 +255,14 @@ async function getUniqueCleanUrls(db, options = {}) {
     paramIndex++;
   }
   
-  // Query to get all unique URLs from pageviews
+  // Query to get URLs grouped by frequency and recency
   const query = `
-    SELECT DISTINCT page_url
+    SELECT page_url
     FROM pageviews
     ${whereClause}
-    ORDER BY page_url
+    GROUP BY page_url
+    ORDER BY MAX(timestamp) DESC
+    LIMIT 10000
   `;
   
   const result = await db.query(query, queryParams);

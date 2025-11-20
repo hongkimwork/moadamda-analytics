@@ -30,6 +30,7 @@ function PageMapping() {
   const [allPageSize, setAllPageSize] = useState(20);
   const [allSearch, setAllSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // 기본값: 전체
+  const [sortOrder, setSortOrder] = useState('recent'); // 'recent' (최신순) or 'frequency' (방문 많은 순) - currently backend supports recent by default
   const [statistics, setStatistics] = useState({ total: 0, completed: 0, uncompleted: 0 });
   
   // Excluded URLs state
@@ -77,7 +78,8 @@ function PageMapping() {
           limit: allPageSize,
           offset: offset,
           search: allSearch,
-          status: statusFilter  // 서버에서 필터링
+          status: statusFilter,  // 서버에서 필터링
+          sort: sortOrder // 정렬 기준 추가 (backend 지원 필요)
         }
       });
       
@@ -126,7 +128,7 @@ function PageMapping() {
     } else if (activeTab === 'excluded') {
       fetchExcludedUrls();
     }
-  }, [activeTab, allPage, allPageSize, excludedPage, excludedPageSize, statusFilter]);
+  }, [activeTab, allPage, allPageSize, excludedPage, excludedPageSize, statusFilter, sortOrder]);
 
   // Handle refresh
   const handleRefresh = () => {
@@ -740,10 +742,20 @@ function PageMapping() {
               onChange={setStatusFilter}
               style={{ width: 120 }}
             >
-              <Option value="all">전체</Option>
-              <Option value="completed">완료</Option>
+              <Option value="all">전체 상태</Option>
+              <Option value="completed">완료됨</Option>
               <Option value="uncompleted">미완료</Option>
             </Select>
+            {/* 
+            <Select
+              value={sortOrder}
+              onChange={setSortOrder}
+              style={{ width: 140 }}
+            >
+              <Option value="recent">🕒 최신 방문순</Option>
+              <Option value="frequency">🔥 방문 많은순</Option>
+            </Select> 
+            */}
           </Space>
 
           {/* Statistics Summary - Only show when viewing all data */}
