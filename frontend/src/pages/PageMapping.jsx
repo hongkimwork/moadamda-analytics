@@ -45,6 +45,7 @@ function PageMapping() {
   const [mappingModalVisible, setMappingModalVisible] = useState(false);
   const [mappingUrl, setMappingUrl] = useState('');
   const [mappingSubmitting, setMappingSubmitting] = useState(false);
+  const [initialBadges, setInitialBadges] = useState([]);
   const [form] = Form.useForm();
 
   // Manual add modal state
@@ -180,8 +181,12 @@ function PageMapping() {
           badge_text: existingMapping.badge_text || '',
           badge_color: existingMapping.badge_color || '#1677ff'
         });
+        
+        // 기존 badges 로드 (다중 배지 지원)
+        setInitialBadges(existingMapping.badges || []);
       } else {
         form.resetFields();
+        setInitialBadges([]);
       }
     } else {
       form.resetFields();
@@ -996,6 +1001,7 @@ function PageMapping() {
         url={mappingUrl}
         form={form}
         submitting={mappingSubmitting}
+        initialBadges={initialBadges}
       />
 
       {/* Original URLs Modal */}

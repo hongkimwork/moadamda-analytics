@@ -23,6 +23,7 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-11-21 | 다중 배지 시스템 구현 | MappingModal.jsx, mappings.js, OrderAnalysis.jsx |
 | 2025-11-21 | 색상 히스토리 안내 문구 추가 | MappingModal.jsx |
 | 2025-11-21 | 색상 히스토리 기능 추가 | colorHistory.js, MappingModal.jsx |
 | 2025-11-21 | 배지 데이터 조회 버그 수정 | mappings.js, OrderAnalysis.jsx |

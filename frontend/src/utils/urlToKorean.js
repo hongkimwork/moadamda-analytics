@@ -122,7 +122,8 @@ export function urlToKorean(url, userMappings = {}) {
         originalUrl: url,
         isProductPage: mapping.is_product_page,
         badgeText: mapping.badge_text,
-        badgeColor: mapping.badge_color
+        badgeColor: mapping.badge_color,
+        badges: mapping.badges || null  // 다중 배지 지원
       };
     }
     // Backward compatibility for string mappings (if any)
@@ -132,7 +133,8 @@ export function urlToKorean(url, userMappings = {}) {
       originalUrl: url,
       isProductPage: false,
       badgeText: null,
-      badgeColor: null
+      badgeColor: null,
+      badges: null
     };
   }
 
@@ -143,7 +145,8 @@ export function urlToKorean(url, userMappings = {}) {
     originalUrl: url,
     isProductPage: false,
     badgeText: null,
-    badgeColor: null
+    badgeColor: null,
+    badges: null
   };
 }
 

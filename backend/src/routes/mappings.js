@@ -47,7 +47,7 @@ router.get('/all', async (req, res) => {
 
     // Get all mappings (excluding excluded URLs)
     const mappingsQuery = `
-      SELECT id, url, korean_name, source_type, url_conditions, is_product_page, badge_text, badge_color, created_at, updated_at 
+      SELECT id, url, korean_name, source_type, url_conditions, is_product_page, badge_text, badge_color, badges, created_at, updated_at 
       FROM url_mappings 
       WHERE is_excluded = false
     `;
@@ -64,6 +64,7 @@ router.get('/all', async (req, res) => {
         is_product_page: row.is_product_page,
         badge_text: row.badge_text,
         badge_color: row.badge_color,
+        badges: row.badges,
         created_at: row.created_at,
         updated_at: row.updated_at
       });
@@ -89,6 +90,7 @@ router.get('/all', async (req, res) => {
           is_product_page: mapping ? mapping.is_product_page : false,
           badge_text: mapping ? mapping.badge_text : null,
           badge_color: mapping ? mapping.badge_color : null,
+          badges: mapping ? mapping.badges : null,
           latest_timestamp: urlData.latest_timestamp,
           is_mapped: !!mapping
         };
@@ -237,7 +239,7 @@ router.get('/lookup', async (req, res) => {
     // If no URL parameter, return all mappings as a simple map
     if (!url) {
       const result = await db.query(
-        'SELECT url, korean_name, is_product_page, badge_text, badge_color FROM url_mappings WHERE is_excluded = false'
+        'SELECT url, korean_name, is_product_page, badge_text, badge_color, badges FROM url_mappings WHERE is_excluded = false'
       );
 
       const mappings = {};
@@ -246,7 +248,8 @@ router.get('/lookup', async (req, res) => {
           korean_name: row.korean_name,
           is_product_page: row.is_product_page || false,
           badge_text: row.badge_text,
-          badge_color: row.badge_color
+          badge_color: row.badge_color,
+          badges: row.badges || null
         };
       });
 
@@ -495,6 +498,7 @@ router.get('/', async (req, res) => {
         is_product_page,
         badge_text,
         badge_color,
+        badges,
         created_at,
         updated_at
       FROM url_mappings
@@ -585,13 +589,38 @@ router.post('/', async (req, res) => {
       }
 
       // Insert new complex mapping
-      const insertQuery = `
-        INSERT INTO url_mappings (url, korean_name, source_type, url_conditions, is_product_page, badge_text, badge_color)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING id, url, korean_name, source_type, url_conditions, is_product_page, badge_text, badge_color, created_at, updated_at
-      `;
+      const { is_product_page = false, badge_text = null, badge_color = null, badges = null } = req.body;
 
-      const { is_product_page = false, badge_text = null, badge_color = null } = req.body;
+      // Validate badges array if provided
+      if (badges) {
+        if (!Array.isArray(badges)) {
+          return res.status(400).json({
+            error: 'Invalid badges format',
+            message: 'badges must be an array'
+          });
+        }
+        if (badges.length > 10) {
+          return res.status(400).json({
+            error: 'Too many badges',
+            message: 'Maximum 10 badges allowed'
+          });
+        }
+        // Validate each badge object
+        for (const badge of badges) {
+          if (!badge.text || !badge.color) {
+            return res.status(400).json({
+              error: 'Invalid badge format',
+              message: 'Each badge must have text and color'
+            });
+          }
+        }
+      }
+
+      const insertQuery = `
+        INSERT INTO url_mappings (url, korean_name, source_type, url_conditions, is_product_page, badge_text, badge_color, badges)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING id, url, korean_name, source_type, url_conditions, is_product_page, badge_text, badge_color, badges, created_at, updated_at
+      `;
 
       const insertResult = await db.query(insertQuery, [
         cleanedUrl,
@@ -600,7 +629,8 @@ router.post('/', async (req, res) => {
         JSON.stringify(url_conditions),
         is_product_page,
         badge_text,
-        badge_color
+        badge_color,
+        badges ? JSON.stringify(badges) : null
       ]);
 
       return res.status(201).json({
@@ -624,13 +654,38 @@ router.post('/', async (req, res) => {
     }
 
     // Insert new simple mapping
-    const insertQuery = `
-      INSERT INTO url_mappings (url, korean_name, source_type, url_conditions, is_product_page, badge_text, badge_color)
-      VALUES ($1, $2, $3, NULL, $4, $5, $6)
-      RETURNING id, url, korean_name, source_type, url_conditions, is_product_page, badge_text, badge_color, created_at, updated_at
-    `;
+    const { is_product_page = false, badge_text = null, badge_color = null, badges = null } = req.body;
 
-    const { is_product_page = false, badge_text = null, badge_color = null } = req.body;
+    // Validate badges array if provided
+    if (badges) {
+      if (!Array.isArray(badges)) {
+        return res.status(400).json({
+          error: 'Invalid badges format',
+          message: 'badges must be an array'
+        });
+      }
+      if (badges.length > 10) {
+        return res.status(400).json({
+          error: 'Too many badges',
+          message: 'Maximum 10 badges allowed'
+        });
+      }
+      // Validate each badge object
+      for (const badge of badges) {
+        if (!badge.text || !badge.color) {
+          return res.status(400).json({
+            error: 'Invalid badge format',
+            message: 'Each badge must have text and color'
+          });
+        }
+      }
+    }
+
+    const insertQuery = `
+      INSERT INTO url_mappings (url, korean_name, source_type, url_conditions, is_product_page, badge_text, badge_color, badges)
+      VALUES ($1, $2, $3, NULL, $4, $5, $6, $7)
+      RETURNING id, url, korean_name, source_type, url_conditions, is_product_page, badge_text, badge_color, badges, created_at, updated_at
+    `;
 
     const insertResult = await db.query(insertQuery, [
       cleanedUrl,
@@ -638,7 +693,8 @@ router.post('/', async (req, res) => {
       source_type,
       is_product_page,
       badge_text,
-      badge_color
+      badge_color,
+      badges ? JSON.stringify(badges) : null
     ]);
 
     res.status(201).json({
@@ -670,7 +726,7 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { korean_name } = req.body;
+    const { korean_name, badges } = req.body;
 
     // Validation: Check if korean_name is provided and not empty
     if (!korean_name || korean_name.trim() === '') {
@@ -678,6 +734,31 @@ router.put('/:id', async (req, res) => {
         error: 'Missing required field',
         message: 'Korean name is required and cannot be empty'
       });
+    }
+
+    // Validate badges array if provided
+    if (badges !== undefined && badges !== null) {
+      if (!Array.isArray(badges)) {
+        return res.status(400).json({
+          error: 'Invalid badges format',
+          message: 'badges must be an array'
+        });
+      }
+      if (badges.length > 10) {
+        return res.status(400).json({
+          error: 'Too many badges',
+          message: 'Maximum 10 badges allowed'
+        });
+      }
+      // Validate each badge object
+      for (const badge of badges) {
+        if (!badge.text || !badge.color) {
+          return res.status(400).json({
+            error: 'Invalid badge format',
+            message: 'Each badge must have text and color'
+          });
+        }
+      }
     }
 
     // Check if mapping exists
@@ -699,16 +780,11 @@ router.put('/:id', async (req, res) => {
         is_product_page = COALESCE($2, is_product_page),
         badge_text = $3,
         badge_color = $4,
+        badges = $5,
         updated_at = NOW()
-      WHERE id = $5
-      RETURNING id, url, korean_name, is_product_page, badge_text, badge_color, created_at, updated_at
+      WHERE id = $6
+      RETURNING id, url, korean_name, is_product_page, badge_text, badge_color, badges, created_at, updated_at
     `;
-
-    // Handle optional fields (if undefined, they won't be updated due to COALESCE for boolean, but for text we might want to allow clearing)
-    // For badge_text and badge_color, if they are provided as null/empty string, we update them.
-    // If they are undefined in the request, we should probably keep existing values? 
-    // But PUT usually means "replace resource". 
-    // Let's assume the frontend sends all fields.
 
     const { is_product_page, badge_text, badge_color } = req.body;
 
@@ -717,6 +793,7 @@ router.put('/:id', async (req, res) => {
       is_product_page,
       badge_text,
       badge_color,
+      badges ? JSON.stringify(badges) : null,
       id
     ]);
 

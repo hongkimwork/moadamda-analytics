@@ -835,32 +835,43 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
 
                                             if (title && !isExcludedByTitle) {
                                               // Product Page with Badge
-                                              if (urlInfo.isProductPage && urlInfo.badgeText) {
-                                                return (
-                                                  <div style={{
-                                                    fontSize: '11px',
-                                                    marginTop: '8px',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: '6px'
-                                                  }}>
-                                                    <span style={{ color: '#6b7280', fontWeight: '500' }}>제품:</span>
-                                                    <span
-                                                      style={{
-                                                        display: 'inline-block',
-                                                        padding: '2px 8px',
-                                                        borderRadius: '4px',
-                                                        fontSize: '11px',
-                                                        fontWeight: '600',
-                                                        color: '#fff',
-                                                        backgroundColor: urlInfo.badgeColor || '#1677ff',
-                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
-                                                      }}
-                                                    >
-                                                      {urlInfo.badgeText}
-                                                    </span>
-                                                  </div>
-                                                );
+                                              if (urlInfo.isProductPage) {
+                                                // 다중 배지 지원: badges 배열 우선, 없으면 단일 badge 폴백
+                                                const badgesToDisplay = urlInfo.badges && urlInfo.badges.length > 0
+                                                  ? urlInfo.badges
+                                                  : (urlInfo.badgeText ? [{ text: urlInfo.badgeText, color: urlInfo.badgeColor || '#1677ff' }] : []);
+
+                                                if (badgesToDisplay.length > 0) {
+                                                  return (
+                                                    <div style={{
+                                                      fontSize: '11px',
+                                                      marginTop: '8px',
+                                                      display: 'flex',
+                                                      alignItems: 'center',
+                                                      gap: '6px',
+                                                      flexWrap: 'wrap'
+                                                    }}>
+                                                      <span style={{ color: '#6b7280', fontWeight: '500' }}>제품:</span>
+                                                      {badgesToDisplay.map((badge, idx) => (
+                                                        <span
+                                                          key={idx}
+                                                          style={{
+                                                            display: 'inline-block',
+                                                            padding: '2px 8px',
+                                                            borderRadius: '4px',
+                                                            fontSize: '11px',
+                                                            fontWeight: '600',
+                                                            color: '#fff',
+                                                            backgroundColor: badge.color,
+                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                                                          }}
+                                                        >
+                                                          {badge.text}
+                                                        </span>
+                                                      ))}
+                                                    </div>
+                                                  );
+                                                }
                                               }
                                             }
                                             return null;
