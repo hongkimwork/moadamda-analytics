@@ -185,7 +185,7 @@ function MappingModal({ visible, onClose, onSubmit, url, form, submitting, initi
                 <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
                   {/* 좌측: 미리보기 + 배지 추가 + 배지 리스트 */}
                   <div style={{ flex: 1 }}>
-                    {/* 1. 미리보기 (107px) */}
+                    {/* 1. 미리보기 (107px) - 현재 입력 중인 배지 실시간 미리보기 */}
                     <div style={{ marginBottom: '8px', fontSize: '14px', color: 'rgba(0, 0, 0, 0.88)' }}>뱃지 미리보기</div>
                     <div style={{ 
                       background: '#fff',
@@ -205,40 +205,41 @@ function MappingModal({ visible, onClose, onSubmit, url, form, submitting, initi
 
                           return (
                             <div style={{
+                              padding: '16px 20px',
+                              background: '#f9fafb',
+                              border: '1px solid #e5e7eb',
+                              borderRadius: '8px',
                               display: 'flex',
                               alignItems: 'center',
-                              gap: '6px',
-                              flexWrap: 'wrap'
+                              gap: '8px'
                             }}>
-                              <span style={{ fontSize: '12px', fontWeight: '500', color: '#374151' }}>제품:</span>
-                              {badges.map((badge, idx) => (
-                                <span key={idx} style={{
-                                  display: 'inline-block',
-                                  padding: '3px 10px',
-                                  borderRadius: '4px',
-                                  fontSize: '12px',
-                                  fontWeight: '600',
-                                  color: '#fff',
-                                  backgroundColor: badge.color,
-                                  boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
-                                }}>
-                                  {badge.text}
-                                </span>
-                              ))}
+                              <span style={{ fontSize: '13px', fontWeight: '500', color: '#374151' }}>제품:</span>
+                              <span style={{
+                                display: 'inline-block',
+                                padding: '4px 12px',
+                                borderRadius: '4px',
+                                fontSize: '13px',
+                                fontWeight: '600',
+                                color: '#fff',
+                                backgroundColor: color,
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                              }}>
+                                {text}
+                              </span>
                             </div>
                           );
                         }}
                       </Form.Item>
                     </div>
 
-                    {/* 2. 배지 추가 버튼 (48px) */}
+                    {/* 2. 배지 추가 버튼 (36px) */}
                     <Button
                       type="primary"
                       block
                       style={{ 
-                        height: '48px', 
+                        height: '36px', 
                         marginBottom: '12px',
-                        fontSize: '14px',
+                        fontSize: '13px',
                         fontWeight: '600'
                       }}
                       onClick={() => {
@@ -271,7 +272,7 @@ function MappingModal({ visible, onClose, onSubmit, url, form, submitting, initi
 
                     {/* 3. 배지 리스트 (165px, 스크롤) */}
                     <div style={{
-                      height: '153px',
+                      height: '165px',
                       border: '1px solid #e2e8f0',
                       borderRadius: '8px',
                       overflow: 'auto',
