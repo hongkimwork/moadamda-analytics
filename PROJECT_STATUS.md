@@ -23,6 +23,7 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-11-21 | 배지 UI/UX 개선 | MappingModal.jsx, colorHistory.js |
 | 2025-11-21 | 제품 뱃지 컬럼 분리 | PageMapping.jsx |
 | 2025-11-21 | 배지 미리보기 기능 복원 | MappingModal.jsx |
 | 2025-11-21 | 다중 배지 시스템 구현 | MappingModal.jsx, mappings.js, OrderAnalysis.jsx |

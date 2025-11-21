@@ -85,7 +85,21 @@ function PageMapping() {
       });
 
       // Backend already sorts and filters data
-      setAllData(response.data.data);
+      // Parse badges if they come as strings
+      const processedData = response.data.data.map(item => {
+        let parsedBadges = item.badges;
+        if (typeof item.badges === 'string' && item.badges) {
+          try {
+            parsedBadges = JSON.parse(item.badges);
+          } catch (e) {
+            console.error('Failed to parse badges for item:', item.url, e);
+            parsedBadges = null;
+          }
+        }
+        return { ...item, badges: parsedBadges };
+      });
+
+      setAllData(processedData);
       setAllTotal(response.data.total);
       setStatistics(response.data.statistics || { total: 0, completed: 0, uncompleted: 0 });
       setLastUpdate(new Date());
@@ -182,8 +196,19 @@ function PageMapping() {
           badge_color: existingMapping.badge_color || '#1677ff'
         });
         
-        // 기존 badges 로드 (다중 배지 지원)
-        setInitialBadges(existingMapping.badges || []);
+        // 기존 badges 로드 (JSON 파싱 포함)
+        let parsedBadges = [];
+        try {
+          if (typeof existingMapping.badges === 'string') {
+            parsedBadges = JSON.parse(existingMapping.badges);
+          } else if (Array.isArray(existingMapping.badges)) {
+            parsedBadges = existingMapping.badges;
+          }
+        } catch (e) {
+          console.error('Failed to parse badges:', e);
+          parsedBadges = [];
+        }
+        setInitialBadges(parsedBadges);
       } else {
         form.resetFields();
         setInitialBadges([]);
@@ -219,7 +244,8 @@ function PageMapping() {
           korean_name: values.korean_name.trim(),
           is_product_page: values.is_product_page,
           badge_text: values.is_product_page ? values.badge_text : null,
-          badge_color: values.is_product_page ? (typeof values.badge_color === 'string' ? values.badge_color : values.badge_color?.toHexString()) : null
+          badge_color: values.is_product_page ? (typeof values.badge_color === 'string' ? values.badge_color : values.badge_color?.toHexString()) : null,
+          badges: values.is_product_page && values.badges ? values.badges : null
         });
         message.success('페이지 매핑이 수정되었습니다');
       } else {
@@ -229,7 +255,8 @@ function PageMapping() {
           korean_name: values.korean_name.trim(),
           is_product_page: values.is_product_page,
           badge_text: values.is_product_page ? values.badge_text : null,
-          badge_color: values.is_product_page ? (typeof values.badge_color === 'string' ? values.badge_color : values.badge_color?.toHexString()) : null
+          badge_color: values.is_product_page ? (typeof values.badge_color === 'string' ? values.badge_color : values.badge_color?.toHexString()) : null,
+          badges: values.is_product_page && values.badges ? values.badges : null
         });
 
         message.success('페이지 매핑이 완료되었습니다');
@@ -239,6 +266,18 @@ function PageMapping() {
       handleCloseMappingModal();
 
       // Update the URL in the list - match by original_url
+      // Parse badges if it's a string
+      let parsedBadges = null;
+      try {
+        if (typeof response.data.data.badges === 'string') {
+          parsedBadges = JSON.parse(response.data.data.badges);
+        } else if (Array.isArray(response.data.data.badges)) {
+          parsedBadges = response.data.data.badges;
+        }
+      } catch (e) {
+        console.error('Failed to parse badges in response:', e);
+      }
+
       setAllData(prevData => prevData.map(item =>
         (item.original_url || item.url) === mappingUrl
           ? {
@@ -248,7 +287,8 @@ function PageMapping() {
             is_mapped: true,
             is_product_page: response.data.data.is_product_page,
             badge_text: response.data.data.badge_text,
-            badge_color: response.data.data.badge_color
+            badge_color: response.data.data.badge_color,
+            badges: parsedBadges
           }
           : item
       ));
@@ -328,7 +368,8 @@ function PageMapping() {
             is_mapped: false,
             is_product_page: false,
             badge_text: null,
-            badge_color: null
+            badge_color: null,
+            badges: null
           }
           : item
       ));
@@ -674,15 +715,27 @@ function PageMapping() {
           return <Text type="secondary">-</Text>;
         }
 
-        // badges 배열이 있으면 사용, 없으면 레거시 badge_text 사용
-        const badges = record.badges || [];
+        // badges 배열 가져오기 (JSON 파싱 포함)
+        let badges = [];
+        
+        try {
+          // badges가 문자열이면 파싱, 배열이면 그대로 사용
+          if (typeof record.badges === 'string') {
+            badges = JSON.parse(record.badges);
+          } else if (Array.isArray(record.badges)) {
+            badges = record.badges;
+          }
+        } catch (e) {
+          console.error('Failed to parse badges:', e);
+          badges = [];
+        }
         
         // 레거시: badge_text가 있으면 배열로 변환
         if (badges.length === 0 && record.badge_text) {
-          badges.push({
+          badges = [{
             text: record.badge_text,
             color: record.badge_color || '#1677ff'
-          });
+          }];
         }
 
         // 뱃지가 없으면 빈 값
@@ -690,39 +743,45 @@ function PageMapping() {
           return <Text type="secondary">-</Text>;
         }
 
-        // 첫 번째 뱃지 표시
-        const firstBadge = badges[0];
-        const remainingCount = badges.length - 1;
+        // 최대 4개 배지 표시
+        const maxDisplay = 4;
+        const displayBadges = badges.slice(0, maxDisplay);
+        const remainingCount = Math.max(0, badges.length - maxDisplay);
 
         return (
-          <Space size={4} style={{ maxWidth: '100%' }}>
-            <Tooltip title={firstBadge.text} placement="topLeft">
-              <Tag
-                color={firstBadge.color || '#1677ff'}
-                style={{
-                  marginRight: 0,
-                  fontWeight: 600,
-                  border: 'none',
-                  maxWidth: remainingCount > 0 ? '110px' : '160px',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  display: 'inline-block'
-                }}
-              >
-                {firstBadge.text}
-              </Tag>
-            </Tooltip>
+          <Space size={4} wrap style={{ maxWidth: '100%', lineHeight: '1.2' }}>
+            {displayBadges.map((badge, idx) => (
+              <Tooltip key={idx} title={badge.text} placement="top">
+                <Tag
+                  color={badge.color || '#1677ff'}
+                  style={{
+                    margin: '2px 0',
+                    fontWeight: 600,
+                    fontSize: '11px',
+                    border: 'none',
+                    maxWidth: '80px',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    display: 'inline-block',
+                    padding: '2px 8px'
+                  }}
+                >
+                  {badge.text}
+                </Tag>
+              </Tooltip>
+            ))}
             {remainingCount > 0 && (
               <Tag
                 color="default"
                 style={{
+                  margin: '2px 0',
                   fontSize: '11px',
-                  padding: '0 6px',
+                  padding: '2px 6px',
                   flexShrink: 0
                 }}
               >
-                외 {remainingCount}개
+                +{remainingCount}
               </Tag>
             )}
           </Space>
