@@ -185,11 +185,25 @@ function MappingModal({ visible, onClose, onSubmit, url, form, submitting, initi
                   📦 제품 배지 설정
                 </Typography.Title>
 
-                {/* 뱃지 텍스트 - 상단 전체 너비 */}
+                {/* 뱃지 텍스트 입력 - 상단 전체 너비 */}
                 <Form.Item
                   name="badge_text"
-                  label="뱃지 텍스트"
-                  rules={[{ required: true, message: '뱃지 텍스트를 입력해주세요' }]}
+                  label="뱃지 텍스트 입력"
+                  rules={[
+                    {
+                      validator: (_, value) => {
+                        // 이미 등록된 배지가 있으면 input이 비어있어도 OK
+                        if (badges.length > 0) {
+                          return Promise.resolve();
+                        }
+                        // 등록된 배지가 없으면 텍스트 필수
+                        if (!value || !value.trim()) {
+                          return Promise.reject(new Error('뱃지 텍스트를 입력해주세요'));
+                        }
+                        return Promise.resolve();
+                      }
+                    }
+                  ]}
                   style={{ marginBottom: 20 }}
                 >
                   <Input
@@ -416,23 +430,19 @@ function MappingModal({ visible, onClose, onSubmit, url, form, submitting, initi
                       )}
                     </Form.Item>
                     
-                    {/* 색상 히스토리 안내 - 항상 표시 */}
-                    <div style={{
-                      marginTop: '8px',
-                      fontSize: '12px',
-                      color: colorHistory.length > 0 ? '#6b7280' : '#4b5563',
-                      textAlign: 'center',
-                      padding: '4px 0',
-                      fontStyle: colorHistory.length > 0 ? 'normal' : 'italic'
-                    }}>
-                      {colorHistory.length > 0 ? (
-                        // 히스토리 있음: 개수와 함께 표시
-                        <span>🎨 최근 사용한 색상 ({colorHistory.length}개)</span>
-                      ) : (
-                        // 히스토리 없음: 안내 문구
+                    {/* 색상 히스토리 안내 - 히스토리 없을 때만 표시 */}
+                    {colorHistory.length === 0 && (
+                      <div style={{
+                        marginTop: '8px',
+                        fontSize: '12px',
+                        color: '#4b5563',
+                        textAlign: 'center',
+                        padding: '4px 0',
+                        fontStyle: 'italic'
+                      }}>
                         <span>💡 저장하면 최근 사용 색상이 여기 표시됩니다</span>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

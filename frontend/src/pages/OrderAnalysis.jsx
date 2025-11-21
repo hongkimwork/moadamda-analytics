@@ -804,7 +804,7 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
                                             lineHeight: '1.4',
                                             fontWeight: '600'
                                           }}>
-                                            {urlInfo.name.replace(/_모바일$|_PC$/g, '')}
+                                            {urlInfo.name}
                                           </div>
 
                                           {/* 상품명 (상품 상세 페이지만) */}

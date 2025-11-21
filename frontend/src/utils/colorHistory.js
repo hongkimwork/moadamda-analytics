@@ -4,7 +4,7 @@
  */
 
 const STORAGE_KEY = 'badge_color_history';
-const MAX_HISTORY_SIZE = 6;
+const MAX_HISTORY_SIZE = 16; // 2행 x 8열
 
 /**
  * 색상 히스토리 가져오기
@@ -26,7 +26,7 @@ export function getColorHistory() {
 /**
  * 색상 히스토리에 새 색상 추가
  * - 중복 제거: 이미 존재하면 맨 앞으로 이동
- * - 최대 개수 유지: 6개 초과 시 오래된 것 삭제
+ * - 최대 개수 유지: 16개 초과 시 오래된 것 삭제
  * @param {string} color - 추가할 색상 (hex 형식)
  */
 export function addColorToHistory(color) {
