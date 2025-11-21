@@ -637,23 +637,97 @@ function PageMapping() {
       dataIndex: 'korean_name',
       key: 'korean_name',
       width: 250,
-      render: (name, record) => (
-        <Space>
-          {name ? <Tag color="blue">{name}</Tag> : <Text type="secondary">-</Text>}
-          {record.is_product_page && record.badge_text && (
-            <Tag
-              color={record.badge_color || '#1677ff'}
-              style={{
-                marginRight: 0,
-                fontWeight: 600,
-                border: 'none'
+      ellipsis: {
+        showTitle: false
+      },
+      render: (name) => (
+        name ? (
+          <Tooltip title={name} placement="topLeft">
+            <Tag 
+              color="blue" 
+              style={{ 
+                maxWidth: '100%',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                display: 'inline-block'
               }}
             >
-              {record.badge_text}
+              {name}
             </Tag>
-          )}
-        </Space>
+          </Tooltip>
+        ) : (
+          <Text type="secondary">-</Text>
+        )
       )
+    },
+    {
+      title: '제품 뱃지',
+      key: 'product_badges',
+      width: 180,
+      ellipsis: {
+        showTitle: false
+      },
+      render: (_, record) => {
+        // 상품 페이지가 아니면 표시 안 함
+        if (!record.is_product_page) {
+          return <Text type="secondary">-</Text>;
+        }
+
+        // badges 배열이 있으면 사용, 없으면 레거시 badge_text 사용
+        const badges = record.badges || [];
+        
+        // 레거시: badge_text가 있으면 배열로 변환
+        if (badges.length === 0 && record.badge_text) {
+          badges.push({
+            text: record.badge_text,
+            color: record.badge_color || '#1677ff'
+          });
+        }
+
+        // 뱃지가 없으면 빈 값
+        if (badges.length === 0) {
+          return <Text type="secondary">-</Text>;
+        }
+
+        // 첫 번째 뱃지 표시
+        const firstBadge = badges[0];
+        const remainingCount = badges.length - 1;
+
+        return (
+          <Space size={4} style={{ maxWidth: '100%' }}>
+            <Tooltip title={firstBadge.text} placement="topLeft">
+              <Tag
+                color={firstBadge.color || '#1677ff'}
+                style={{
+                  marginRight: 0,
+                  fontWeight: 600,
+                  border: 'none',
+                  maxWidth: remainingCount > 0 ? '110px' : '160px',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  display: 'inline-block'
+                }}
+              >
+                {firstBadge.text}
+              </Tag>
+            </Tooltip>
+            {remainingCount > 0 && (
+              <Tag
+                color="default"
+                style={{
+                  fontSize: '11px',
+                  padding: '0 6px',
+                  flexShrink: 0
+                }}
+              >
+                외 {remainingCount}개
+              </Tag>
+            )}
+          </Space>
+        );
+      }
     },
     {
       title: '액션',

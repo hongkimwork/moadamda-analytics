@@ -138,17 +138,35 @@ function MappingModal({ visible, onClose, onSubmit, url, form, submitting, initi
           />
         </Form.Item>
 
-        <Form.Item
-          name="is_product_page"
-          label="페이지 분류"
-          valuePropName="checked"
-          style={{ marginBottom: 24 }}
-        >
-          <Switch
-            checkedChildren="상품 페이지"
-            unCheckedChildren="일반 페이지"
-          />
-        </Form.Item>
+        {/* 페이지 분류 - 레이블과 토글을 한 줄로 */}
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: '12px',
+          marginBottom: '16px'
+        }}>
+          <label 
+            htmlFor="is_product_page" 
+            style={{ 
+              fontSize: '14px', 
+              color: 'rgba(0, 0, 0, 0.88)',
+              fontWeight: '500',
+              margin: 0
+            }}
+          >
+            페이지 분류
+          </label>
+          <Form.Item
+            name="is_product_page"
+            valuePropName="checked"
+            style={{ margin: 0 }}
+          >
+            <Switch
+              checkedChildren="상품 페이지"
+              unCheckedChildren="일반 페이지"
+            />
+          </Form.Item>
+        </div>
 
         <Form.Item
           noStyle
@@ -160,7 +178,7 @@ function MappingModal({ visible, onClose, onSubmit, url, form, submitting, initi
                 padding: '20px',
                 background: '#f8fafc',
                 borderRadius: '12px',
-                marginBottom: '24px',
+                marginBottom: '16px',
                 border: '1px solid #e2e8f0'
               }}>
                 <Typography.Title level={5} style={{ marginTop: 0, marginBottom: 16, fontSize: '15px', color: '#334155', fontWeight: 600 }}>
@@ -183,7 +201,7 @@ function MappingModal({ visible, onClose, onSubmit, url, form, submitting, initi
 
                 {/* 미리보기(좌측) + 색상 선택기(우측) 좌우 분할 */}
                 <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
-                  {/* 좌측: 미리보기 + 배지 추가 + 배지 리스트 */}
+                  {/* 좌측: 미리보기 + 배지 리스트 */}
                   <div style={{ flex: 1 }}>
                     {/* 1. 미리보기 (107px) - 현재 입력 중인 배지 실시간 미리보기 */}
                     <div style={{ marginBottom: '8px', fontSize: '14px', color: 'rgba(0, 0, 0, 0.88)' }}>뱃지 미리보기</div>
@@ -232,64 +250,69 @@ function MappingModal({ visible, onClose, onSubmit, url, form, submitting, initi
                       </Form.Item>
                     </div>
 
-                    {/* 2. 배지 추가 버튼 (36px) */}
-                    <Button
-                      type="primary"
-                      block
-                      style={{ 
-                        height: '36px', 
-                        marginBottom: '12px',
-                        fontSize: '13px',
-                        fontWeight: '600'
-                      }}
-                      onClick={() => {
-                        const text = form.getFieldValue('badge_text');
-                        const color = form.getFieldValue('badge_color');
-                        
-                        if (!text || !text.trim()) {
-                          return;
-                        }
-                        
-                        if (badges.length >= 10) {
-                          return;
-                        }
-                        
-                        const newBadge = {
-                          text: text.trim(),
-                          color: color || '#1677ff',
-                          order: badges.length + 1
-                        };
-                        
-                        setBadges([...badges, newBadge]);
-                        form.setFieldsValue({ badge_text: '' });
-                        addColorToHistory(color || '#1677ff');
-                        setColorHistory(getColorHistory());
-                      }}
-                      disabled={badges.length >= 10}
-                    >
-                      + 배지 추가 {badges.length > 0 && `(${badges.length}/10)`}
-                    </Button>
-
-                    {/* 3. 배지 리스트 (165px, 스크롤) */}
+                    {/* 2. 배지 리스트 (헤더에 추가 버튼 통합) */}
                     <div style={{
-                      height: '165px',
+                      height: '213px',
                       border: '1px solid #e2e8f0',
                       borderRadius: '8px',
                       overflow: 'auto',
                       background: '#fff'
                     }}>
+                      {/* 헤더: 제목(좌) + 추가 버튼(우) */}
                       <div style={{
-                        padding: '12px',
+                        padding: '8px 12px',
                         borderBottom: '1px solid #e2e8f0',
                         fontSize: '13px',
                         fontWeight: '600',
                         color: '#374151',
                         background: '#f9fafb',
                         position: 'sticky',
-                        top: 0
+                        top: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '8px'
                       }}>
-                        📋 등록된 배지 ({badges.length}개)
+                        <span>📋 등록된 배지 ({badges.length}개)</span>
+                        <Button
+                          type="primary"
+                          size="small"
+                          style={{ 
+                            fontSize: '12px',
+                            fontWeight: '600',
+                            padding: '0 12px',
+                            height: '28px'
+                          }}
+                          onClick={() => {
+                            const text = form.getFieldValue('badge_text');
+                            const color = form.getFieldValue('badge_color');
+                            
+                            if (!text || !text.trim()) {
+                              return;
+                            }
+                            
+                            if (badges.length >= 10) {
+                              return;
+                            }
+                            
+                            const newBadge = {
+                              text: text.trim(),
+                              color: color || '#1677ff',
+                              order: badges.length + 1
+                            };
+                            
+                            setBadges([...badges, newBadge]);
+                            form.setFieldsValue({ badge_text: '' });
+                            addColorToHistory(color || '#1677ff');
+                            setColorHistory(getColorHistory());
+                          }}
+                          disabled={badges.length >= 10}
+                        >
+                          + 배지 추가
+                        </Button>
                       </div>
+                      
+                      {/* 배지 목록 */}
                       <div style={{ padding: '8px' }}>
                         {badges.length === 0 ? (
                           <div style={{
@@ -407,7 +430,7 @@ function MappingModal({ visible, onClose, onSubmit, url, form, submitting, initi
                         <span>🎨 최근 사용한 색상 ({colorHistory.length}개)</span>
                       ) : (
                         // 히스토리 없음: 안내 문구
-                        <span>💡 색상을 저장하면 여기에 표시됩니다</span>
+                        <span>💡 저장하면 최근 사용 색상이 여기 표시됩니다</span>
                       )}
                     </div>
                   </div>
