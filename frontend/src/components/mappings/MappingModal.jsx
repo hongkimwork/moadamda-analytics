@@ -1,5 +1,7 @@
 import { Modal, Form, Input, Button, Space, Typography, Switch } from 'antd';
 import { SketchPicker } from 'react-color';
+import { useState, useEffect } from 'react';
+import { getColorHistory, addColorToHistory } from '../../utils/colorHistory';
 
 const { Text } = Typography;
 
@@ -14,6 +16,30 @@ const { Text } = Typography;
  * @param {boolean} submitting - 저장 중 여부
  */
 function MappingModal({ visible, onClose, onSubmit, url, form, submitting }) {
+  // 최근 사용한 색상 히스토리 관리
+  const [colorHistory, setColorHistory] = useState([]);
+
+  // 모달이 열릴 때마다 색상 히스토리 로드
+  useEffect(() => {
+    if (visible) {
+      const history = getColorHistory();
+      setColorHistory(history);
+    }
+  }, [visible]);
+
+  // 폼 제출 핸들러 (색상 히스토리 저장 추가)
+  const handleSubmit = async (values) => {
+    // 배지 색상이 있으면 히스토리에 추가
+    if (values.is_product_page && values.badge_color) {
+      addColorToHistory(values.badge_color);
+      // 히스토리 즉시 업데이트 (다음 열 때 반영)
+      setColorHistory(getColorHistory());
+    }
+    
+    // 원래 onSubmit 호출
+    await onSubmit(values);
+  };
+
   return (
     <Modal
       title="페이지 매핑"
@@ -40,7 +66,7 @@ function MappingModal({ visible, onClose, onSubmit, url, form, submitting }) {
       <Form
         form={form}
         layout="vertical"
-        onFinish={onSubmit}
+        onFinish={handleSubmit}
         initialValues={{
           is_product_page: false,
           badge_color: '#1677ff' // Default blue
@@ -172,11 +198,7 @@ function MappingModal({ visible, onClose, onSubmit, url, form, submitting }) {
                             color={getFieldValue('badge_color') || '#1677ff'}
                             onChange={(color) => setFieldsValue({ badge_color: color.hex })}
                             disableAlpha={true}
-                            presetColors={[
-                              '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#10b981',
-                              '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#d946ef',
-                              '#f43f5e', '#64748b', '#1677ff'
-                            ]}
+                            presetColors={colorHistory}
                             styles={{
                               default: {
                                 picker: {
@@ -192,6 +214,24 @@ function MappingModal({ visible, onClose, onSubmit, url, form, submitting }) {
                         </div>
                       )}
                     </Form.Item>
+                    
+                    {/* 색상 히스토리 안내 - 항상 표시 */}
+                    <div style={{
+                      marginTop: '8px',
+                      fontSize: '12px',
+                      color: colorHistory.length > 0 ? '#6b7280' : '#4b5563',
+                      textAlign: 'center',
+                      padding: '4px 0',
+                      fontStyle: colorHistory.length > 0 ? 'normal' : 'italic'
+                    }}>
+                      {colorHistory.length > 0 ? (
+                        // 히스토리 있음: 개수와 함께 표시
+                        <span>🎨 최근 사용한 색상 ({colorHistory.length}개)</span>
+                      ) : (
+                        // 히스토리 없음: 안내 문구
+                        <span>💡 색상을 저장하면 여기에 표시됩니다</span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
