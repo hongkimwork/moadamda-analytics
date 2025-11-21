@@ -45,7 +45,7 @@ function extractProductBadges(pageTitle) {
   if (SPECIAL_PRODUCT_MAPPINGS[pageTitle]) {
     return SPECIAL_PRODUCT_MAPPINGS[pageTitle];
   }
-  
+
   // 자동 키워드 추출
   const badges = [];
   if (pageTitle.includes('건강')) badges.push('건강');
@@ -55,7 +55,7 @@ function extractProductBadges(pageTitle) {
   if (pageTitle.includes('혈당')) badges.push('혈당관리');
   if (pageTitle.includes('스마일')) badges.push('스마일');
   if (pageTitle.includes('숙취')) badges.push('숙취');
-  
+
   // 우선순위에 따라 정렬
   return badges.sort((a, b) => BADGE_ORDER.indexOf(a) - BADGE_ORDER.indexOf(b));
 }
@@ -71,7 +71,7 @@ export function OrderListPage() {
   const [deviceFilter, setDeviceFilter] = useState('all');
   const [totalOrders, setTotalOrders] = useState(0);
   const [userMappings, setUserMappings] = useState({});
-  
+
   // 모달 state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState(null);
@@ -81,7 +81,7 @@ export function OrderListPage() {
       setLoading(true);
       const startDate = dateRange[0].format('YYYY-MM-DD');
       const endDate = dateRange[1].format('YYYY-MM-DD');
-      
+
       const response = await axios.get(`${API_URL}/api/stats/orders`, {
         params: {
           start: startDate,
@@ -103,7 +103,7 @@ export function OrderListPage() {
 
   useEffect(() => {
     fetchOrders();
-    
+
     // 사용자 정의 매핑 로드
     fetch(`${API_URL}/api/mappings/lookup`)
       .then(res => res.json())
@@ -193,8 +193,8 @@ export function OrderListPage() {
       width: 100,
       fixed: 'right',
       render: (_, record) => (
-        <Button 
-          type="primary" 
+        <Button
+          type="primary"
           size="small"
           onClick={() => handleOpenModal(record.order_id)}
         >
@@ -213,8 +213,8 @@ export function OrderListPage() {
             <Title level={2} style={{ margin: 0 }}>
               주문 목록
             </Title>
-            <Button 
-              icon={<ReloadOutlined />} 
+            <Button
+              icon={<ReloadOutlined />}
               onClick={fetchOrders}
               loading={loading}
             >
@@ -230,7 +230,7 @@ export function OrderListPage() {
               onChange={(dates) => dates && setDateRange(dates)}
               format="YYYY-MM-DD"
             />
-            
+
             <span>디바이스:</span>
             <Select
               value={deviceFilter}
@@ -249,7 +249,7 @@ export function OrderListPage() {
 
       {/* 주문 목록 테이블 */}
       <Card>
-        <Table 
+        <Table
           columns={columns}
           dataSource={orders}
           rowKey="order_id"
@@ -281,9 +281,9 @@ export function OrderListPage() {
         closable={false}
       >
         {selectedOrderId && (
-          <OrderDetailPageContent 
-            orderId={selectedOrderId} 
-            userMappings={userMappings} 
+          <OrderDetailPageContent
+            orderId={selectedOrderId}
+            userMappings={userMappings}
             onClose={handleCloseModal}
           />
         )}
@@ -351,8 +351,8 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
             type="error"
             showIcon
           />
-          <Button 
-            type="primary" 
+          <Button
+            type="primary"
             icon={<ArrowLeftOutlined />}
             onClick={() => navigate('/')}
             style={{ marginTop: '16px' }}
@@ -384,23 +384,23 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
     }
     return `${seconds}초`;
   };
-  
+
   // 연속 중복 페이지 제거 함수 (같은 URL 연속 방문 시 하나로 통합 + 체류시간 합산)
   const removeConcecutiveDuplicates = (pages) => {
     if (!pages || pages.length === 0) return [];
-    
+
     const result = [];
     let current = null;
-    
+
     for (const page of pages) {
       const currentUrl = page.clean_url || page.page_url;
-      
+
       if (!current) {
         // 첫 페이지 - 깊은 복사로 시작
         current = { ...page };
       } else {
         const prevUrl = current.clean_url || current.page_url;
-        
+
         if (currentUrl === prevUrl) {
           // 같은 URL 연속 방문 - 체류시간만 합산 (최대 600초 제한)
           const combinedTime = (current.time_spent_seconds || 0) + (page.time_spent_seconds || 0);
@@ -413,31 +413,31 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
         }
       }
     }
-    
+
     // 마지막 페이지 추가
     if (current) {
       result.push(current);
     }
-    
+
     return result;
   };
-  
+
   // 구매일 계산 (order.timestamp 사용)
   const purchaseDate = dayjs(order.timestamp).format('YYYY-MM-DD');
-  
+
   // 이전 방문 필터링 로직 (기본 7일 or 사용자 선택 날짜)
   let filteredPreviousVisits = [];
   if (previous_visits && previous_visits.length > 0) {
     const purchaseDateObj = dayjs(order.timestamp);
-    
+
     filteredPreviousVisits = previous_visits.filter(visit => {
       const visitDate = dayjs(visit.date);
-      
+
       // 구매일 이후 방문은 제외 (데이터 무결성 체크)
       if (visitDate.isAfter(purchaseDateObj, 'day') || visitDate.isSame(purchaseDateObj, 'day')) {
         return false;
       }
-      
+
       if (!selectedStartDate) {
         // 기본: 구매일 기준 최근 7일
         const sevenDaysAgo = purchaseDateObj.subtract(7, 'day');
@@ -451,7 +451,7 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
 
   // 펼침/축소 토글 함수
   const toggleJourney = (journeyId) => {
-    setExpandedJourneys(prev => 
+    setExpandedJourneys(prev =>
       prev.includes(journeyId)
         ? prev.filter(id => id !== journeyId) // 축소
         : [...prev, journeyId] // 펼침
@@ -464,7 +464,7 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
     ...filteredPreviousVisits.map((visit) => {
       const deduplicatedPages = removeConcecutiveDuplicates(visit.pages || []);
       const totalDuration = deduplicatedPages.reduce((sum, p) => sum + (p.time_spent_seconds || 0), 0);
-      
+
       return {
         id: `visit-${visit.date}`,
         date: visit.date,
@@ -480,7 +480,7 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
     (() => {
       const deduplicatedPages = removeConcecutiveDuplicates(validJourneyPages);
       const totalDuration = deduplicatedPages.reduce((sum, p) => sum + (p.time_spent_seconds || 0), 0);
-      
+
       return {
         id: 'purchase',
         date: purchaseDate,
@@ -493,15 +493,15 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
       };
     })()
   ];
-  
+
   // 시간순 정렬 후 방문 순서 부여
   const allJourneys = journeys
     .sort((a, b) => new Date(a.date) - new Date(b.date))
     .map((journey, idx) => ({
       ...journey,
       visitNumber: idx + 1,
-      label: journey.type === 'purchase' 
-        ? `${idx + 1}차 방문 (구매)` 
+      label: journey.type === 'purchase'
+        ? `${idx + 1}차 방문 (구매)`
         : `${idx + 1}차 방문 (이탈)`
     }));
 
@@ -541,25 +541,25 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
   // 마케팅 지표 계산
   const purchaseCount = (past_purchases?.length || 0) + 1; // 현재 주문 포함
   const repurchaseCount = purchaseCount - 1; // 재구매 횟수
-  const daysSinceFirstVisit = order.first_visit 
+  const daysSinceFirstVisit = order.first_visit
     ? dayjs(order.timestamp).diff(dayjs(order.first_visit), 'day')
     : null;
-  
+
   // UTM Last-Touch Attribution (최종 접촉 기준)
-  const lastTouch = utm_history && utm_history.length > 0 
-    ? utm_history[utm_history.length - 1] 
+  const lastTouch = utm_history && utm_history.length > 0
+    ? utm_history[utm_history.length - 1]
     : null;
-  
+
   // 광고 클릭 후 구매까지 시간 계산
-  const adToPurchaseSeconds = lastTouch 
+  const adToPurchaseSeconds = lastTouch
     ? dayjs(order.timestamp).diff(dayjs(lastTouch.entry_time), 'second')
     : null;
 
   return (
     <div style={{ background: '#fff', height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* 헤더: 제목 + DatePicker + 미니 카드들 + URL 토글 + 닫기 */}
-      <div style={{ 
-        display: 'flex', 
+      <div style={{
+        display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         padding: '8px 20px',
@@ -571,8 +571,8 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
           <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
             고객 여정 분석
           </h3>
-          <DatePicker 
-            placeholder="시작 날짜 선택" 
+          <DatePicker
+            placeholder="시작 날짜 선택"
             style={{ width: 200 }}
             onChange={(date) => setSelectedStartDate(date)}
             disabledDate={(current) => {
@@ -585,7 +585,7 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
             allowClear
             format="YYYY-MM-DD"
           />
-          
+
           {/* 미니 카드들 */}
           <div style={{
             display: 'flex',
@@ -621,16 +621,16 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
                     }
                   }}
                 >
-                  <div style={{ 
-                    fontSize: '12px', 
+                  <div style={{
+                    fontSize: '12px',
                     fontWeight: '600',
                     color: '#374151',
                     marginBottom: '4px'
                   }}>
                     {journey.dateLabel}
                   </div>
-                  <div style={{ 
-                    fontSize: '11px', 
+                  <div style={{
+                    fontSize: '11px',
                     fontWeight: 'bold',
                     color: journey.type === 'purchase' ? '#3b82f6' : '#9ca3af'
                   }}>
@@ -642,8 +642,8 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
           </div>
         </div>
         {onClose && (
-          <Button 
-            type="text" 
+          <Button
+            type="text"
             icon={<span style={{ fontSize: '20px' }}>×</span>}
             onClick={onClose}
             style={{ fontSize: '20px', padding: '4px 8px' }}
@@ -652,15 +652,15 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
       </div>
 
       {/* 펼쳐진 여정 표시 영역 */}
-      <div style={{ 
+      <div style={{
         flex: 1,
         overflowX: 'auto',
         overflowY: 'auto',
         padding: '12px 20px'
       }}>
         {expandedJourneys.length === 0 ? (
-          <div style={{ 
-            textAlign: 'center', 
+          <div style={{
+            textAlign: 'center',
             padding: '60px',
             color: '#9ca3af'
           }}>
@@ -671,315 +671,310 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
             const expandedJourneysList = allJourneys.filter(journey => expandedJourneys.includes(journey.id));
             const isLongJourney = expandedJourneysList.length === 1 && expandedJourneysList[0].pages.length >= 34;
             const shouldCenterAlign = expandedJourneys.length === 1 && !isLongJourney;
-            
+
             return (
-              <div style={{ 
-                display: 'flex', 
-                gap: '20px', 
+              <div style={{
+                display: 'flex',
+                gap: '20px',
                 alignItems: 'flex-start',
                 justifyContent: shouldCenterAlign ? 'center' : 'flex-start'
               }}>
                 {expandedJourneysList.map(journey => {
-                const columns = getColumns(journey.pages);
-                return (
-                  <div
-                    key={journey.id}
-                    style={{
-                      border: `3px solid ${journey.color}`,
-                      borderRadius: '12px',
-                      padding: '12px 16px',
-                      background: 'white',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                      flex: '0 0 auto'
-                    }}
-                  >
-                    {/* 여정 헤더 */}
-                    <div style={{
-                      marginBottom: '16px',
-                      paddingBottom: '12px',
-                      borderBottom: `2px solid ${journey.color}`
-                    }}>
-                      <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 'bold', color: journey.color }}>
-                        {journey.label}
-                      </h3>
-                    </div>
+                  const columns = getColumns(journey.pages);
+                  return (
+                    <div
+                      key={journey.id}
+                      style={{
+                        border: `3px solid ${journey.color}`,
+                        borderRadius: '12px',
+                        padding: '12px 16px',
+                        background: 'white',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                        flex: '0 0 auto'
+                      }}
+                    >
+                      {/* 여정 헤더 */}
+                      <div style={{
+                        marginBottom: '16px',
+                        paddingBottom: '12px',
+                        borderBottom: `2px solid ${journey.color}`
+                      }}>
+                        <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 'bold', color: journey.color }}>
+                          {journey.label}
+                        </h3>
+                      </div>
 
-                    {/* 타임라인 */}
-                    {journey.pages.length > 0 ? (
-                      <div style={{ display: 'flex', gap: '15px', alignItems: 'flex-start' }}>
-                        {columns.map((columnItems, colIdx) => (
-                          <div key={colIdx} style={{ width: '190px', flexShrink: 0 }}>
-                            <Timeline style={{ fontSize: '11px' }}>
-                              {columnItems.map((page, idx) => {
-                                const globalIdx = colIdx * MAX_ITEMS_PER_COLUMN + idx;
-                                const urlInfo = urlToKorean(page.clean_url || page.page_url, userMappings);
-                                const isFirst = globalIdx === 0;
-                                const isLast = globalIdx === journey.pages.length - 1;
-                                
-                                // 체류시간 배지 스타일
-                                const durationSeconds = page.time_spent_seconds || 0;
-                                const badgeStyle = durationSeconds >= 30 
-                                  ? { background: '#dbeafe', color: '#1e40af' }
-                                  : durationSeconds >= 10
-                                  ? { background: '#fef3c7', color: '#92400e' }
-                                  : { background: '#fecaca', color: '#dc2626' };
-                                
-                                // 이탈 여부 판단
-                                const isExit = isLast && journey.type !== 'purchase';
-                                const isPurchaseComplete = isLast && journey.type === 'purchase';
-                                
-                                // 체류시간 텍스트 (구매 완료 카드는 제외)
-                                const durationText = isPurchaseComplete
-                                  ? ''
-                                  : durationSeconds >= 60 
-                                  ? `${Math.floor(durationSeconds / 60)}분 ${durationSeconds % 60}초 체류`
-                                  : durationSeconds >= 1
-                                  ? `${durationSeconds}초 체류`
-                                  : '1초미만 체류';
-                                
-                                // 카드 스타일
-                                const cardStyle = {
-                                  border: isFirst ? '2px solid #22c55e' : isExit ? '2px solid #dc2626' : isLast ? '2px solid #3b82f6' : '1px solid #e5e7eb',
-                                  borderLeft: isFirst ? '4px solid #22c55e' : isExit ? '4px solid #dc2626' : isLast ? '4px solid #3b82f6' : '1px solid #e5e7eb',
-                                  borderRadius: '6px',
-                                  padding: '8px',
-                                  background: isFirst ? '#f0fdf4' : isExit ? '#fef2f2' : isLast ? '#eff6ff' : 'white',
-                                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                                  transition: 'all 0.2s',
-                                  cursor: 'default',
-                                  marginBottom: '10px',
-                                  position: 'relative'
-                                };
-                                
-                                return (
-                                  <Timeline.Item
-                                    key={globalIdx}
-                                    color={isFirst ? 'green' : isExit ? 'red' : isLast ? 'blue' : 'gray'}
-                                    style={{ paddingBottom: '0px' }}
-                                  >
-                                    <div 
-                                      style={cardStyle}
-                                      onMouseEnter={(e) => {
-                                        e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
-                                        e.currentTarget.style.transform = 'translateY(-2px)';
-                                      }}
-                                      onMouseLeave={(e) => {
-                                        e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)';
-                                        e.currentTarget.style.transform = 'translateY(0)';
-                                      }}
+                      {/* 타임라인 */}
+                      {journey.pages.length > 0 ? (
+                        <div style={{ display: 'flex', gap: '15px', alignItems: 'flex-start' }}>
+                          {columns.map((columnItems, colIdx) => (
+                            <div key={colIdx} style={{ width: '190px', flexShrink: 0 }}>
+                              <Timeline style={{ fontSize: '11px' }}>
+                                {columnItems.map((page, idx) => {
+                                  const globalIdx = colIdx * MAX_ITEMS_PER_COLUMN + idx;
+                                  const urlInfo = urlToKorean(page.clean_url || page.page_url, userMappings);
+                                  const isFirst = globalIdx === 0;
+                                  const isLast = globalIdx === journey.pages.length - 1;
+
+                                  // 체류시간 배지 스타일
+                                  const durationSeconds = page.time_spent_seconds || 0;
+                                  const badgeStyle = durationSeconds >= 30
+                                    ? { background: '#dbeafe', color: '#1e40af' }
+                                    : durationSeconds >= 10
+                                      ? { background: '#fef3c7', color: '#92400e' }
+                                      : { background: '#fecaca', color: '#dc2626' };
+
+                                  // 이탈 여부 판단
+                                  const isExit = isLast && journey.type !== 'purchase';
+                                  const isPurchaseComplete = isLast && journey.type === 'purchase';
+
+                                  // 체류시간 텍스트 (구매 완료 카드는 제외)
+                                  const durationText = isPurchaseComplete
+                                    ? ''
+                                    : durationSeconds >= 60
+                                      ? `${Math.floor(durationSeconds / 60)}분 ${durationSeconds % 60}초 체류`
+                                      : durationSeconds >= 1
+                                        ? `${durationSeconds}초 체류`
+                                        : '1초미만 체류';
+
+                                  // 카드 스타일
+                                  const cardStyle = {
+                                    border: isFirst ? '2px solid #22c55e' : isExit ? '2px solid #dc2626' : isLast ? '2px solid #3b82f6' : '1px solid #e5e7eb',
+                                    borderLeft: isFirst ? '4px solid #22c55e' : isExit ? '4px solid #dc2626' : isLast ? '4px solid #3b82f6' : '1px solid #e5e7eb',
+                                    borderRadius: '6px',
+                                    padding: '8px',
+                                    background: isFirst ? '#f0fdf4' : isExit ? '#fef2f2' : isLast ? '#eff6ff' : 'white',
+                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                    transition: 'all 0.2s',
+                                    cursor: 'default',
+                                    marginBottom: '10px',
+                                    position: 'relative'
+                                  };
+
+                                  return (
+                                    <Timeline.Item
+                                      key={globalIdx}
+                                      color={isFirst ? 'green' : isExit ? 'red' : isLast ? 'blue' : 'gray'}
+                                      style={{ paddingBottom: '0px' }}
                                     >
-                                      {/* 체류시간 배지 - 우측 상단 고정 */}
-                                      {durationText && (
-                                        <span style={{
-                                          ...badgeStyle,
-                                          padding: '1px 6px',
-                                          borderRadius: '3px',
-                                          fontSize: '10px',
-                                          fontWeight: '500',
-                                          position: 'absolute',
-                                          top: '8px',
-                                          right: '8px'
-                                        }}>
-                                          {durationText}
-                                        </span>
-                                      )}
-                                      
-                                      {/* 콘텐츠 wrapper */}
-                                      <div style={{ paddingBottom: '12px' }}>
-                                        {/* 첫 줄: 단계 */}
-                                        <div style={{ marginBottom: '6px' }}>
-                                        <span style={{ 
-                                          fontSize: '13px', 
-                                          fontWeight: 'bold',
-                                          color: isFirst ? '#166534' : isExit ? '#991b1b' : isLast ? '#1e40af' : '#374151'
-                                        }}>
-                                          {journey.type === 'purchase' ? (isLast ? `${globalIdx + 1}단계: 구매 완료` : `${globalIdx + 1}단계`) : (isLast ? '이탈' : `${globalIdx + 1}단계`)}
-                                        </span>
-                                      </div>
-                                      
-                                      {/* 페이지명 (한글 이름) */}
-                                      <div style={{ 
-                                        fontSize: '12px', 
-                                        color: '#1f2937',
-                                        lineHeight: '1.4'
-                                      }}>
-                                        <span style={{ color: '#000', fontWeight: 'bold', fontSize: '10px' }}>유형 : </span>
-                                        {urlInfo.name.replace(/_모바일$|_PC$/g, '')}
-                                      </div>
-
-                                      {/* 상품명 (상품 상세 페이지만) */}
-                                      {(() => {
-                                        const title = page.page_title || '';
-                                        const pageName = urlInfo.name || '';
-                                        
-                                        // 제외할 패턴들 (title 기준)
-                                        const excludedTitlePatterns = [
-                                          '전체상품',
-                                          '이벤트 |',
-                                          '모아담다 온라인 공식몰',
-                                          '카테고리',
-                                          '마이페이지',
-                                          '장바구니',
-                                          '주문',
-                                          '결제',
-                                          '로그인',
-                                          '회원'
-                                        ];
-                                        
-                                        const isExcludedByTitle = excludedTitlePatterns.some(pattern => 
-                                          title.includes(pattern)
-                                        );
-                                        
-                                        // 상세페이지 판단 (매핑 이름 기준)
-                                        const isDetailPage = pageName.includes('상세페이지');
-                                        
-                                        if (title && !isExcludedByTitle && isDetailPage) {
-                                          const badges = extractProductBadges(title);
-                                          
-                                          return (
-                                            <>
-                                              {/* 제품 배지 (배지가 있을 때만 표시) */}
-                                              {badges.length > 0 && (
-                                                <div style={{ 
-                                                  fontSize: '10px', 
-                                                  marginTop: '8px',
-                                                  marginBottom: '3px'
-                                                }}>
-                                                  <span style={{ color: '#000', fontWeight: 'bold' }}>제품 : </span>
-                                                  {badges.map((badge, idx) => (
-                                                    <span 
-                                                      key={idx}
-                                                      style={{
-                                                        display: 'inline-block',
-                                                        padding: '2px 6px',
-                                                        marginLeft: '4px',
-                                                        borderRadius: '3px',
-                                                        fontSize: '10px',
-                                                        fontWeight: '600',
-                                                        color: BADGE_CONFIG[badge].color,
-                                                        backgroundColor: BADGE_CONFIG[badge].bgColor
-                                                      }}
-                                                    >
-                                                      {badge}
-                                                    </span>
-                                                  ))}
-                                                </div>
-                                              )}
-                                              
-                                              {/* 페이지 명 */}
-                                              <div style={{ 
-                                                fontSize: '10px', 
-                                                marginBottom: '3px',
-                                                marginTop: badges.length > 0 ? '3px' : '8px'
-                                              }}>
-                                                <span style={{ color: '#000', fontWeight: 'bold' }}>페이지 명 : </span>
-                                                <span style={{ color: '#000', fontWeight: '600', fontSize: '11px' }}>
-                                                  {title}
-                                                </span>
-                                              </div>
-                                            </>
-                                          );
-                                        }
-                                        return null;
-                                      })()}
-                                      
-                                      {/* 구매 완료 단계에 구매한 상품명 표시 */}
-                                      {journey.type === 'purchase' && isLast && (() => {
-                                        // 여정에서 상품 상세 페이지 찾기
-                                        const productPage = journey.pages.find(p => {
-                                          const title = p.page_title || '';
-                                          const url = p.clean_url || p.page_url || '';
-                                          const urlInfo = urlToKorean(url, userMappings);
-                                          const pageName = urlInfo.name || '';
-                                          
-                                          const excludedTitlePatterns = [
-                                            '전체상품',
-                                            '이벤트 |',
-                                            '모아담다 온라인 공식몰',
-                                            '카테고리',
-                                            '마이페이지',
-                                            '장바구니',
-                                            '주문',
-                                            '결제',
-                                            '로그인',
-                                            '회원'
-                                          ];
-                                          
-                                          const isExcludedByTitle = excludedTitlePatterns.some(pattern => 
-                                            title.includes(pattern)
-                                          );
-                                          
-                                          const isDetailPage = pageName.includes('상세페이지');
-                                          
-                                          return title && !isExcludedByTitle && isDetailPage;
-                                        });
-                                        
-                                        if (productPage) {
-                                          const title = productPage.page_title || '';
-                                          
-                                          return (
-                                            <div style={{ 
-                                              fontSize: '10px', 
-                                              marginTop: '3px'
-                                            }}>
-                                              <span style={{ color: '#000', fontWeight: 'bold' }}>구매한 상품 : </span>
-                                              <span style={{ color: '#000', fontWeight: '600', fontSize: '11px' }}>
-                                                {title}
-                                              </span>
-                                            </div>
-                                          );
-                                        }
-                                        return null;
-                                      })()}
-                                      </div>
-                                      
-                                      {/* 지구본 아이콘 - 우측 하단 */}
-                                      <GlobalOutlined
-                                        style={{
-                                          position: 'absolute',
-                                          right: '8px',
-                                          bottom: '8px',
-                                          fontSize: '14px',
-                                          color: '#6b7280',
-                                          cursor: 'pointer',
-                                          transition: 'all 0.3s ease',
-                                          opacity: 0.6
-                                        }}
+                                      <div
+                                        style={cardStyle}
                                         onMouseEnter={(e) => {
-                                          e.currentTarget.style.transform = 'translateY(-4px)';
-                                          e.currentTarget.style.color = '#3b82f6';
-                                          e.currentTarget.style.opacity = '1';
+                                          e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
+                                          e.currentTarget.style.transform = 'translateY(-2px)';
                                         }}
                                         onMouseLeave={(e) => {
+                                          e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)';
                                           e.currentTarget.style.transform = 'translateY(0)';
-                                          e.currentTarget.style.color = '#6b7280';
-                                          e.currentTarget.style.opacity = '0.6';
                                         }}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          window.open(page.page_url, '_blank');
-                                        }}
-                                      />
-                                    </div>
-                                  </Timeline.Item>
-                                );
-                              })}
-                            </Timeline>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <Alert message="페이지 이동 기록이 없습니다." type="info" />
-                    )}
-                  </div>
-                );
-              })}
-              </div>
+                                      >
+                                        {/* 체류시간 배지 - 우측 상단 고정 */}
+                                        {durationText && (
+                                          <span style={{
+                                            ...badgeStyle,
+                                            padding: '1px 6px',
+                                            borderRadius: '3px',
+                                            fontSize: '10px',
+                                            fontWeight: '500',
+                                            position: 'absolute',
+                                            top: '8px',
+                                            right: '8px'
+                                          }}>
+                                            {durationText}
+                                          </span>
+                                        )}
+
+                                        {/* 콘텐츠 wrapper */}
+                                        <div style={{ paddingBottom: '12px' }}>
+                                          {/* 첫 줄: 단계 */}
+                                          <div style={{ marginBottom: '6px' }}>
+                                            <span style={{
+                                              fontSize: '13px',
+                                              fontWeight: 'bold',
+                                              color: isFirst ? '#166534' : isExit ? '#991b1b' : isLast ? '#1e40af' : '#374151'
+                                            }}>
+                                              {journey.type === 'purchase' ? (isLast ? `${globalIdx + 1}단계: 구매 완료` : `${globalIdx + 1}단계`) : (isLast ? '이탈' : `${globalIdx + 1}단계`)}
+                                            </span>
+                                          </div>
+
+                                          {/* 페이지명 (한글 이름) */}
+                                          <div style={{
+                                            fontSize: '12px',
+                                            color: '#1f2937',
+                                            lineHeight: '1.4'
+                                          }}>
+                                            <span style={{ color: '#000', fontWeight: 'bold', fontSize: '10px' }}>유형 : </span>
+                                            {urlInfo.name.replace(/_모바일$|_PC$/g, '')}
+                                          </div>
+
+                                          {/* 상품명 (상품 상세 페이지만) */}
+                                          {(() => {
+                                            const title = page.page_title || '';
+                                            const pageName = urlInfo.name || '';
+
+                                            // 제외할 패턴들 (title 기준)
+                                            const excludedTitlePatterns = [
+                                              '전체상품',
+                                              '이벤트 |',
+                                              '모아담다 온라인 공식몰',
+                                              '카테고리',
+                                              '마이페이지',
+                                              '장바구니',
+                                              '주문',
+                                              '결제',
+                                              '로그인',
+                                              '회원'
+                                            ];
+
+                                            const isExcludedByTitle = excludedTitlePatterns.some(pattern =>
+                                              title.includes(pattern)
+                                            );
+
+                                            // 상세페이지 판단 (매핑 이름 기준)
+                                            const isDetailPage = pageName.includes('상세페이지');
+
+                                            if (title && !isExcludedByTitle) {
+                                              // 1. Product Page with Badge
+                                              if (urlInfo.isProductPage && urlInfo.badgeText) {
+                                                return (
+                                                  <>
+                                                    <div style={{
+                                                      fontSize: '11px',
+                                                      marginTop: '8px',
+                                                      marginBottom: '4px',
+                                                      display: 'flex',
+                                                      alignItems: 'center'
+                                                    }}>
+                                                      <span style={{ color: '#374151', fontWeight: 'bold', marginRight: '6px' }}>제품 :</span>
+                                                      <span
+                                                        style={{
+                                                          display: 'inline-block',
+                                                          padding: '2px 8px',
+                                                          borderRadius: '4px',
+                                                          fontSize: '11px',
+                                                          fontWeight: '600',
+                                                          color: '#fff',
+                                                          backgroundColor: urlInfo.badgeColor || '#1677ff',
+                                                          boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                                                        }}
+                                                      >
+                                                        {urlInfo.badgeText}
+                                                      </span>
+                                                    </div>
+                                                    <div style={{ fontSize: '11px', color: '#6b7280' }}>
+                                                      페이지명 : {pageName}
+                                                    </div>
+                                                  </>
+                                                );
+                                              }
+
+                                              // 2. General Page
+                                              return (
+                                                <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
+                                                  페이지명 : {pageName}
+                                                </div>
+                                              );
+                                            }
+                                            return null;
+                                          })()}
+
+                                          {/* 구매 완료 단계에 구매한 상품명 표시 */}
+                                          {journey.type === 'purchase' && isLast && (() => {
+                                            // 여정에서 상품 상세 페이지 찾기
+                                            const productPage = journey.pages.find(p => {
+                                              const title = p.page_title || '';
+                                              const url = p.clean_url || p.page_url || '';
+                                              const urlInfo = urlToKorean(url, userMappings);
+                                              const pageName = urlInfo.name || '';
+
+                                              const excludedTitlePatterns = [
+                                                '전체상품',
+                                                '이벤트 |',
+                                                '모아담다 온라인 공식몰',
+                                                '카테고리',
+                                                '마이페이지',
+                                                '장바구니',
+                                                '주문',
+                                                '결제',
+                                                '로그인',
+                                                '회원'
+                                              ];
+
+                                              const isExcludedByTitle = excludedTitlePatterns.some(pattern =>
+                                                title.includes(pattern)
+                                              );
+
+                                              const isDetailPage = pageName.includes('상세페이지');
+
+                                              return title && !isExcludedByTitle && isDetailPage;
+                                            });
+
+                                            if (productPage) {
+                                              const title = productPage.page_title || '';
+
+                                              return (
+                                                <div style={{
+                                                  fontSize: '10px',
+                                                  marginTop: '3px'
+                                                }}>
+                                                  <span style={{ color: '#000', fontWeight: 'bold' }}>구매한 상품 : </span>
+                                                  <span style={{ color: '#000', fontWeight: '600', fontSize: '11px' }}>
+                                                    {title}
+                                                  </span>
+                                                </div>
+                                              );
+                                            }
+                                            return null;
+                                          })()}
+                                        </div>
+
+                                        {/* 지구본 아이콘 - 우측 하단 */}
+                                        <GlobalOutlined
+                                          style={{
+                                            position: 'absolute',
+                                            right: '8px',
+                                            bottom: '8px',
+                                            fontSize: '14px',
+                                            color: '#6b7280',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.3s ease',
+                                            opacity: 0.6
+                                          }}
+                                          onMouseEnter={(e) => {
+                                            e.currentTarget.style.transform = 'translateY(-4px)';
+                                            e.currentTarget.style.color = '#3b82f6';
+                                            e.currentTarget.style.opacity = '1';
+                                          }}
+                                          onMouseLeave={(e) => {
+                                            e.currentTarget.style.transform = 'translateY(0)';
+                                            e.currentTarget.style.color = '#6b7280';
+                                            e.currentTarget.style.opacity = '0.6';
+                                          }}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            window.open(page.page_url, '_blank');
+                                          }}
+                                        />
+                                      </div>
+                                    </Timeline.Item>
+                                  );
+                                })}
+                              </Timeline>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <Alert message="페이지 이동 기록이 없습니다." type="info" />
+                      )}
+                    </div>
+                  );
+                })}
+              </div >
             );
           })()
         )}
-      </div>
-    </div>
+      </div >
+    </div >
   );
 }
 

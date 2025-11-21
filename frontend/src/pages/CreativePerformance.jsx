@@ -16,19 +16,19 @@ const API_URL = import.meta.env.VITE_API_URL || '';
 // 체류시간 포맷팅 (초 → 분:초)
 const formatDuration = (seconds) => {
   if (!seconds || seconds === 0) return '0초';
-  
+
   const numSeconds = parseFloat(seconds);
   if (numSeconds < 60) {
     return `${Math.round(numSeconds)}초`;
   }
-  
+
   const minutes = Math.floor(numSeconds / 60);
   const remainSeconds = Math.round(numSeconds % 60);
-  
+
   if (remainSeconds === 0) {
     return `${minutes}분`;
   }
-  
+
   return `${minutes}분 ${remainSeconds}초`;
 };
 
@@ -54,7 +54,7 @@ function CreativePerformance() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(500);
   const [error, setError] = useState(null);
-  
+
   // 검색 및 필터 state
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({
@@ -70,6 +70,19 @@ function CreativePerformance() {
 
   // 동적 UTM 필터 state
   const [activeUtmFilters, setActiveUtmFilters] = useState([]);
+
+  // 요약 통계 계산 (현재 페이지 기준)
+  const summaryStats = React.useMemo(() => {
+    if (!data || data.length === 0) return { totalRevenue: 0, totalOrders: 0, totalUV: 0, maxRevenue: 0 };
+
+    return data.reduce((acc, curr) => {
+      acc.totalRevenue += (curr.total_contributed_revenue || 0);
+      acc.totalOrders += (curr.contributed_orders_count || 0);
+      acc.totalUV += (curr.unique_visitors || 0);
+      acc.maxRevenue = Math.max(acc.maxRevenue, curr.total_contributed_revenue || 0, curr.attributed_revenue || 0);
+      return acc;
+    }, { totalRevenue: 0, totalOrders: 0, totalUV: 0, maxRevenue: 0 });
+  }, [data]);
 
   // 데이터 조회
   const fetchData = async () => {
@@ -101,7 +114,7 @@ function CreativePerformance() {
       } else {
         throw new Error(response.data.error || '데이터를 불러올 수 없습니다.');
       }
-      
+
       setLoading(false);
     } catch (err) {
       console.error('광고 소재 분석 데이터 조회 실패:', err);
@@ -202,16 +215,19 @@ function CreativePerformance() {
       dataIndex: 'creative_name',
       key: 'creative_name',
       width: 250,
+      fixed: 'left',
       render: (text) => (
-        <span 
-          style={{ 
-            fontSize: '11px',
+        <span
+          style={{
+            fontSize: '12px',
+            fontWeight: 500,
             cursor: 'pointer',
             display: 'block',
             wordBreak: 'break-all',
             lineHeight: '1.4',
-            textAlign: 'left'
-          }} 
+            textAlign: 'left',
+            color: '#1890ff'
+          }}
           onDoubleClick={() => {
             navigator.clipboard.writeText(text);
             message.success('광고 소재 이름이 복사되었습니다');
@@ -245,7 +261,7 @@ function CreativePerformance() {
       showSorterTooltip: false
     },
     {
-      title: <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>평균<br/>체류시간</div>,
+      title: <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>평균<br />체류시간</div>,
       dataIndex: 'avg_duration_seconds',
       key: 'avg_duration_seconds',
       width: 75,
@@ -254,24 +270,7 @@ function CreativePerformance() {
       sorter: true,
       showSorterTooltip: false
     },
-    {
-      title: '구매',
-      dataIndex: 'purchase_count',
-      key: 'purchase_count',
-      width: 60,
-      align: 'center',
-      render: (num) => (
-        <span style={{ 
-          color: num > 0 ? '#52c41a' : '#999',
-          fontWeight: num > 0 ? 600 : 400,
-          fontSize: '11px'
-        }}>
-          {formatNumber(num)}
-        </span>
-      ),
-      sorter: true,
-      showSorterTooltip: false
-    },
+
     {
       title: '결제액',
       dataIndex: 'total_revenue',
@@ -279,7 +278,7 @@ function CreativePerformance() {
       width: 85,
       align: 'center',
       render: (amount) => (
-        <span style={{ 
+        <span style={{
           color: amount > 0 ? '#1890ff' : '#999',
           fontWeight: amount > 0 ? 600 : 400,
           fontSize: '10px'
@@ -292,7 +291,7 @@ function CreativePerformance() {
     },
     {
       title: (
-        <Tooltip 
+        <Tooltip
           title={
             <div style={{ whiteSpace: 'pre-line' }}>
               {`이 광고를 본 고객이 구매한 주문 개수입니다.
@@ -311,7 +310,7 @@ function CreativePerformance() {
           overlayStyle={{ maxWidth: '500px' }}
         >
           <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>
-            영향 준<br/>주문 수
+            영향 준<br />주문 수
           </div>
         </Tooltip>
       ),
@@ -320,7 +319,7 @@ function CreativePerformance() {
       width: 80,
       align: 'center',
       render: (num) => (
-        <span style={{ 
+        <span style={{
           color: num > 0 ? '#52c41a' : '#999',
           fontWeight: num > 0 ? 500 : 400,
           fontSize: '11px'
@@ -333,7 +332,7 @@ function CreativePerformance() {
     },
     {
       title: (
-        <Tooltip 
+        <Tooltip
           title={
             <div style={{ whiteSpace: 'pre-line' }}>
               {`여러 광고를 거쳐 구매한 경우,
@@ -365,7 +364,7 @@ function CreativePerformance() {
           overlayStyle={{ maxWidth: '500px' }}
         >
           <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>
-            기여한<br/>매출액
+            기여한<br />매출액
           </div>
         </Tooltip>
       ),
@@ -373,21 +372,41 @@ function CreativePerformance() {
       key: 'attributed_revenue',
       width: 85,
       align: 'center',
-      render: (amount) => (
-        <span style={{ 
-          color: amount > 0 ? '#ff7a45' : '#999',
-          fontWeight: amount > 0 ? 600 : 400,
-          fontSize: '10px'
-        }}>
-          {formatCurrency(amount)}
-        </span>
-      ),
+      render: (amount) => {
+        const percent = summaryStats.maxRevenue > 0 ? (amount / summaryStats.maxRevenue) * 100 : 0;
+        return (
+          <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: '10%',
+                height: '80%',
+                width: `${percent}%`,
+                backgroundColor: 'rgba(255, 122, 69, 0.15)',
+                borderRadius: '2px',
+                transition: 'width 0.3s ease'
+              }}
+            />
+            <span style={{
+              color: amount > 0 ? '#ff7a45' : '#999',
+              fontWeight: amount > 0 ? 600 : 400,
+              fontSize: '11px',
+              position: 'relative',
+              zIndex: 1,
+              fontFamily: 'Monaco, monospace'
+            }}>
+              {formatCurrency(amount)}
+            </span>
+          </div>
+        );
+      },
       sorter: true,
       showSorterTooltip: false
     },
     {
       title: (
-        <Tooltip 
+        <Tooltip
           title={
             <div style={{ whiteSpace: 'pre-line' }}>
               {`이 광고를 본 고객들이 실제로 결제한 금액의 합계입니다.
@@ -419,7 +438,7 @@ function CreativePerformance() {
           overlayStyle={{ maxWidth: '500px' }}
         >
           <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>
-            영향 준<br/>주문 총액
+            영향 준<br />주문 총액
           </div>
         </Tooltip>
       ),
@@ -427,15 +446,35 @@ function CreativePerformance() {
       key: 'total_contributed_revenue',
       width: 95,
       align: 'center',
-      render: (amount) => (
-        <span style={{ 
-          color: amount > 0 ? '#9254de' : '#999',
-          fontWeight: amount > 0 ? 600 : 400,
-          fontSize: '10px'
-        }}>
-          {formatCurrency(amount)}
-        </span>
-      ),
+      render: (amount) => {
+        const percent = summaryStats.maxRevenue > 0 ? (amount / summaryStats.maxRevenue) * 100 : 0;
+        return (
+          <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: '10%',
+                height: '80%',
+                width: `${percent}%`,
+                backgroundColor: 'rgba(146, 84, 222, 0.15)',
+                borderRadius: '2px',
+                transition: 'width 0.3s ease'
+              }}
+            />
+            <span style={{
+              color: amount > 0 ? '#9254de' : '#999',
+              fontWeight: amount > 0 ? 600 : 400,
+              fontSize: '11px',
+              position: 'relative',
+              zIndex: 1,
+              fontFamily: 'Monaco, monospace'
+            }}>
+              {formatCurrency(amount)}
+            </span>
+          </div>
+        );
+      },
       sorter: true,
       showSorterTooltip: false
     }
@@ -443,7 +482,7 @@ function CreativePerformance() {
 
   return (
     <div style={{ padding: '24px', background: '#f0f2f5', minHeight: '100vh' }}>
-      
+
       {/* 헤더 */}
       <Card style={{ marginBottom: '16px' }}>
         <Space direction="vertical" size="small" style={{ width: '100%' }}>
@@ -457,8 +496,8 @@ function CreativePerformance() {
                 각 광고 소재의 방문자 수, 페이지뷰, 체류시간, 구매 전환을 분석합니다
               </div>
             </div>
-            <Button 
-              icon={<ReloadOutlined />} 
+            <Button
+              icon={<ReloadOutlined />}
               onClick={fetchData}
               loading={loading}
             >
@@ -468,6 +507,7 @@ function CreativePerformance() {
           <Tag color="blue">총 {total.toLocaleString()}개 광고 소재</Tag>
         </Space>
       </Card>
+
 
       {/* 검색 및 필터 */}
       <SearchFilterBar

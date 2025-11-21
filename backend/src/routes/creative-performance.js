@@ -56,12 +56,12 @@ router.get('/creative-performance', async (req, res) => {
       'utm_campaign',
       'unique_visitors',
       'avg_pageviews',
-      'avg_duration_seconds',
-      'purchase_count',
-      'total_revenue'
+      'avg_duration_seconds'
     ];
 
     const attributionSortColumns = [
+      'purchase_count',
+      'total_revenue',
       'contributed_orders_count',
       'attributed_revenue',
       'total_contributed_revenue'
@@ -110,6 +110,8 @@ router.get('/creative-performance', async (req, res) => {
     }
 
     // 6. 메인 쿼리: 광고 소재별 집계
+    // 주의: 구매 데이터(conversions)는 여기서 조인하지 않음 (중복 집계 방지)
+    // 구매 관련 데이터는 calculateCreativeAttribution에서 별도로 계산하여 병합함
     const dataQuery = `
       SELECT 
         us.utm_params->>'utm_content' as creative_name,
@@ -130,16 +132,9 @@ router.get('/creative-performance', async (req, res) => {
         ROUND(
           COALESCE(SUM(us.duration_seconds)::FLOAT / NULLIF(COUNT(DISTINCT us.visitor_id), 0), 0)::NUMERIC,
           1
-        ) as avg_duration_seconds,
-        
-        -- 구매수
-        COUNT(DISTINCT c.order_id) FILTER (WHERE c.order_id IS NOT NULL) as purchase_count,
-        
-        -- 결제금액 (총합)
-        COALESCE(SUM(c.final_payment), 0) as total_revenue
+        ) as avg_duration_seconds
 
       FROM utm_sessions us
-      LEFT JOIN conversions c ON us.visitor_id = c.visitor_id
       WHERE us.utm_params->>'utm_content' IS NOT NULL
         AND us.entry_timestamp >= $1
         AND us.entry_timestamp <= $2
@@ -197,8 +192,9 @@ router.get('/creative-performance', async (req, res) => {
       unique_visitors: parseInt(row.unique_visitors) || 0,
       avg_pageviews: parseFloat(row.avg_pageviews) || 0,
       avg_duration_seconds: parseFloat(row.avg_duration_seconds) || 0,
-      purchase_count: parseInt(row.purchase_count) || 0,
-      total_revenue: parseInt(row.total_revenue) || 0
+      // 구매 데이터는 아래에서 병합
+      purchase_count: 0,
+      total_revenue: 0
     }));
 
     // 10. 기여도 계산 (결제건 기여 포함 수, 결제건 기여 금액, 기여 결제건 총 결제금액)
@@ -207,11 +203,19 @@ router.get('/creative-performance', async (req, res) => {
     // 11. 기여도 데이터를 기본 데이터에 병합
     let finalData = data.map(row => {
       const creativeKey = `${row.creative_name}||${row.utm_source}||${row.utm_medium}||${row.utm_campaign}`;
+      const attr = attributionData[creativeKey] || {};
+      
       return {
         ...row,
-        contributed_orders_count: attributionData[creativeKey]?.contributed_orders_count || 0,
-        attributed_revenue: Math.round(attributionData[creativeKey]?.attributed_revenue || 0),
-        total_contributed_revenue: Math.round(attributionData[creativeKey]?.total_contributed_revenue || 0)
+        // 기존 purchase_count, total_revenue를 기여도 분석 결과로 대체
+        // purchase_count: 이 광고를 거쳐간 주문 수 (contributed_orders_count와 동일한 의미로 사용)
+        purchase_count: attr.contributed_orders_count || 0,
+        // total_revenue: 이 광고를 거쳐간 주문들의 총액 (total_contributed_revenue와 동일한 의미로 사용)
+        total_revenue: Math.round(attr.total_contributed_revenue || 0),
+        
+        contributed_orders_count: attr.contributed_orders_count || 0,
+        attributed_revenue: Math.round(attr.attributed_revenue || 0),
+        total_contributed_revenue: Math.round(attr.total_contributed_revenue || 0)
       };
     });
 

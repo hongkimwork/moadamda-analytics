@@ -49,7 +49,7 @@ function formatTimeSpent(seconds) {
  * @param {boolean} useKoreanNames - 한글 이름 사용 여부
  * @returns {Object} { nodes, edges }
  */
-export function convertPagePathToFlow(pagePath, useKoreanNames = true) {
+export function convertPagePathToFlow(pagePath, useKoreanNames = true, userMappings = {}) {
   if (!pagePath || pagePath.length === 0) {
     return { nodes: [], edges: [] };
   }
@@ -60,10 +60,10 @@ export function convertPagePathToFlow(pagePath, useKoreanNames = true) {
   const verticalSpacing = 100;   // 세로 간격
 
   pagePath.forEach((page, index) => {
-    const urlInfo = urlToKorean(page.page_url);
-    const pageType = index === 0 ? 'entry' : 
-                     index === pagePath.length - 1 ? 'purchase' : 
-                     getPageType(page.page_url);
+    const urlInfo = urlToKorean(page.page_url, userMappings);
+    const pageType = index === 0 ? 'entry' :
+      index === pagePath.length - 1 ? 'purchase' :
+        getPageType(page.page_url);
     const colors = PAGE_TYPE_COLORS[pageType];
 
     // 노드 라벨 생성
@@ -79,8 +79,8 @@ export function convertPagePathToFlow(pagePath, useKoreanNames = true) {
     // 페이지 이름 결정
     const pageName = useKoreanNames ? urlInfo.name : page.page_url;
     // 상품명은 상품 상세 페이지(pageType === 'product')일 때만 표시
-    const productName = pageType === 'product' && page.page_title && page.page_title !== '모아담다 온라인 공식몰' 
-      ? page.page_title 
+    const productName = pageType === 'product' && page.page_title && page.page_title !== '모아담다 온라인 공식몰'
+      ? page.page_title
       : null;
 
     // 노드 생성
@@ -90,17 +90,17 @@ export function convertPagePathToFlow(pagePath, useKoreanNames = true) {
       data: {
         label: (
           <div style={{ padding: '8px', textAlign: 'center' }}>
-            <div style={{ 
-              fontWeight: 'bold', 
-              fontSize: '13px', 
+            <div style={{
+              fontWeight: 'bold',
+              fontSize: '13px',
               marginBottom: '6px',
               color: colors.text
             }}>
               {label}
             </div>
             {productName && (
-              <div style={{ 
-                fontSize: '12px', 
+              <div style={{
+                fontSize: '12px',
                 fontWeight: '600',
                 color: '#f97316',
                 marginBottom: '4px'
@@ -108,8 +108,29 @@ export function convertPagePathToFlow(pagePath, useKoreanNames = true) {
                 📦 {productName}
               </div>
             )}
-            <div style={{ 
-              fontSize: '11px', 
+            {urlInfo.isProductPage && urlInfo.badgeText && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '6px'
+              }}>
+                <span style={{
+                  display: 'inline-block',
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                  backgroundColor: urlInfo.badgeColor || '#1677ff',
+                  color: '#fff',
+                  fontSize: '10px',
+                  fontWeight: '600',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                }}>
+                  {urlInfo.badgeText}
+                </span>
+              </div>
+            )}
+            <div style={{
+              fontSize: '11px',
               color: '#64748b',
               maxWidth: '200px',
               overflow: 'hidden',
@@ -119,7 +140,7 @@ export function convertPagePathToFlow(pagePath, useKoreanNames = true) {
               {useKoreanNames ? urlInfo.icon + ' ' + urlInfo.name : page.page_url}
             </div>
             {page.time_spent_seconds > 0 && (
-              <div style={{ 
+              <div style={{
                 marginTop: '6px',
                 fontSize: '12px',
                 fontWeight: '600',
@@ -131,9 +152,9 @@ export function convertPagePathToFlow(pagePath, useKoreanNames = true) {
           </div>
         )
       },
-      position: { 
-        x: index * horizontalSpacing, 
-        y: 0 
+      position: {
+        x: index * horizontalSpacing,
+        y: 0
       },
       style: {
         background: colors.bg,
@@ -147,10 +168,10 @@ export function convertPagePathToFlow(pagePath, useKoreanNames = true) {
 
     // 엣지 생성 (다음 노드와 연결)
     if (index < pagePath.length - 1) {
-      const timeLabel = page.time_spent_seconds > 0 
+      const timeLabel = page.time_spent_seconds > 0
         ? formatTimeSpent(page.time_spent_seconds)
         : '';
-      
+
       edges.push({
         id: `edge-${index}-${index + 1}`,
         source: `node-${index}`,
@@ -158,9 +179,9 @@ export function convertPagePathToFlow(pagePath, useKoreanNames = true) {
         label: timeLabel,
         type: 'smoothstep',
         animated: true,
-        style: { 
-          stroke: '#94a3b8', 
-          strokeWidth: 2 
+        style: {
+          stroke: '#94a3b8',
+          strokeWidth: 2
         },
         labelStyle: {
           fontSize: '11px',
@@ -195,7 +216,7 @@ export function calculateFlowStats(pagePath) {
   }
 
   const totalTime = pagePath.reduce((sum, p) => sum + (p.time_spent_seconds || 0), 0);
-  const longestPage = pagePath.reduce((max, p) => 
+  const longestPage = pagePath.reduce((max, p) =>
     (p.time_spent_seconds || 0) > (max.time_spent_seconds || 0) ? p : max,
     { time_spent_seconds: 0 }
   );

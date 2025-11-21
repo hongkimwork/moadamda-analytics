@@ -19,11 +19,12 @@ import { convertPagePathToFlow, calculateFlowStats } from '../utils/pagePathToFl
  * @param {Array} pagePath - 페이지 경로 데이터
  * @param {boolean} useKoreanNames - 한글 이름 사용 여부
  */
-export default function CustomerJourneyFlow({ pagePath, useKoreanNames = true }) {
+export default function CustomerJourneyFlow({ pagePath, useKoreanNames = true, mappings = {} }) {
   // 페이지 경로를 노드와 엣지로 변환
   const { nodes: initialNodes, edges: initialEdges } = convertPagePathToFlow(
     pagePath,
-    useKoreanNames
+    useKoreanNames,
+    mappings
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -74,7 +75,7 @@ export default function CustomerJourneyFlow({ pagePath, useKoreanNames = true })
         </div>
         <div style={{ flex: 1, textAlign: 'center', borderLeft: '1px solid #e5e7eb', paddingLeft: '16px' }}>
           <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#10b981' }}>
-            {stats.totalTime >= 60 
+            {stats.totalTime >= 60
               ? `${Math.floor(stats.totalTime / 60)}분 ${stats.totalTime % 60}초`
               : `${stats.totalTime}초`
             }
@@ -85,7 +86,7 @@ export default function CustomerJourneyFlow({ pagePath, useKoreanNames = true })
         </div>
         <div style={{ flex: 1, textAlign: 'center', borderLeft: '1px solid #e5e7eb', paddingLeft: '16px' }}>
           <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#f59e0b' }}>
-            {stats.averageTime >= 60 
+            {stats.averageTime >= 60
               ? `${Math.floor(stats.averageTime / 60)}분 ${stats.averageTime % 60}초`
               : `${stats.averageTime}초`
             }
@@ -116,7 +117,7 @@ export default function CustomerJourneyFlow({ pagePath, useKoreanNames = true })
           defaultViewport={{ x: 50, y: 100, zoom: 0.8 }}
         >
           <Background color="#f1f5f9" gap={16} />
-          <Controls 
+          <Controls
             style={{
               button: {
                 background: '#ffffff',
@@ -125,7 +126,7 @@ export default function CustomerJourneyFlow({ pagePath, useKoreanNames = true })
               }
             }}
           />
-          <MiniMap 
+          <MiniMap
             nodeColor={(node) => {
               // 노드 색상을 스타일에서 가져옴
               return node.style?.background || '#f3f4f6';

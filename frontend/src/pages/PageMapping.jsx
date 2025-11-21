@@ -21,7 +21,7 @@ const API_URL = import.meta.env.VITE_API_URL || '';
 function PageMapping() {
   const [activeTab, setActiveTab] = useState('all');
   const [lastUpdate, setLastUpdate] = useState(null);
-  
+
   // All URLs state (mapped + unmapped)
   const [allData, setAllData] = useState([]);
   const [allLoading, setAllLoading] = useState(false);
@@ -32,7 +32,7 @@ function PageMapping() {
   const [statusFilter, setStatusFilter] = useState('all'); // 기본값: 전체
   const [sortOrder, setSortOrder] = useState('recent'); // 'recent' (최신순) or 'frequency' (방문 많은 순) - currently backend supports recent by default
   const [statistics, setStatistics] = useState({ total: 0, completed: 0, uncompleted: 0 });
-  
+
   // Excluded URLs state
   const [excludedData, setExcludedData] = useState([]);
   const [excludedLoading, setExcludedLoading] = useState(false);
@@ -40,23 +40,23 @@ function PageMapping() {
   const [excludedPage, setExcludedPage] = useState(1);
   const [excludedPageSize, setExcludedPageSize] = useState(20);
   const [excludedSearch, setExcludedSearch] = useState('');
-  
+
   // Mapping modal state
   const [mappingModalVisible, setMappingModalVisible] = useState(false);
   const [mappingUrl, setMappingUrl] = useState('');
   const [mappingSubmitting, setMappingSubmitting] = useState(false);
   const [form] = Form.useForm();
-  
+
   // Manual add modal state
   const [manualAddModalVisible, setManualAddModalVisible] = useState(false);
   const [manualAddSubmitting, setManualAddSubmitting] = useState(false);
   const [manualAddForm] = Form.useForm();
-  
+
   // URL Groups state for complex mapping
   const [urlGroups, setUrlGroups] = useState([
     { baseUrl: '', params: [{ key: '', value: '' }] }
   ]);
-  
+
   // Original URLs modal state
   const [originalUrlsModalVisible, setOriginalUrlsModalVisible] = useState(false);
   const [originalUrlsData, setOriginalUrlsData] = useState([]);
@@ -72,7 +72,7 @@ function PageMapping() {
     try {
       setAllLoading(true);
       const offset = (allPage - 1) * allPageSize;
-      
+
       const response = await axios.get(`${API_URL}/api/mappings/all`, {
         params: {
           limit: allPageSize,
@@ -82,7 +82,7 @@ function PageMapping() {
           sort: sortOrder // 정렬 기준 추가 (backend 지원 필요)
         }
       });
-      
+
       // Backend already sorts and filters data
       setAllData(response.data.data);
       setAllTotal(response.data.total);
@@ -101,7 +101,7 @@ function PageMapping() {
     try {
       setExcludedLoading(true);
       const offset = (excludedPage - 1) * excludedPageSize;
-      
+
       const response = await axios.get(`${API_URL}/api/mappings/excluded`, {
         params: {
           limit: excludedPageSize,
@@ -109,7 +109,7 @@ function PageMapping() {
           search: excludedSearch
         }
       });
-      
+
       setExcludedData(response.data.data);
       setExcludedTotal(response.data.total);
       setLastUpdate(new Date());
@@ -165,16 +165,21 @@ function PageMapping() {
     // Store both display URL and original URL
     setMappingUrl(url);
     setMappingModalVisible(true);
-    
+
     // Store original URL in a ref or state for later use
     // We'll use the display URL to find the record, but original URL for API calls
     const existingMapping = allData.find(item => item.url === url);
     if (existingMapping) {
       // Store the original_url for API calls
       setMappingUrl(existingMapping.original_url || url);
-      
+
       if (existingMapping.korean_name) {
-        form.setFieldsValue({ korean_name: existingMapping.korean_name });
+        form.setFieldsValue({
+          korean_name: existingMapping.korean_name,
+          is_product_page: existingMapping.is_product_page || false,
+          badge_text: existingMapping.badge_text || '',
+          badge_color: existingMapping.badge_color || '#1677ff'
+        });
       } else {
         form.resetFields();
       }
@@ -194,49 +199,58 @@ function PageMapping() {
   const handleSubmitMapping = async (values) => {
     try {
       setMappingSubmitting(true);
-      
+
       // mappingUrl is now the original_url (encoded) from handleOpenMappingModal
       // Find the record by matching original_url
-      const existingMapping = allData.find(item => 
+      const existingMapping = allData.find(item =>
         (item.original_url || item.url) === mappingUrl
       );
       const isUpdate = existingMapping && existingMapping.is_mapped;
-      
+
       let response;
       if (isUpdate) {
         // Update existing mapping
         response = await axios.put(`${API_URL}/api/mappings/${existingMapping.mapping_id}`, {
-          korean_name: values.korean_name.trim()
+          korean_name: values.korean_name.trim(),
+          is_product_page: values.is_product_page,
+          badge_text: values.is_product_page ? values.badge_text : null,
+          badge_color: values.is_product_page ? (typeof values.badge_color === 'string' ? values.badge_color : values.badge_color?.toHexString()) : null
         });
         message.success('페이지 매핑이 수정되었습니다');
       } else {
         // Create new mapping - use mappingUrl which is already the original_url
         response = await axios.post(`${API_URL}/api/mappings`, {
           url: mappingUrl,
-          korean_name: values.korean_name.trim()
+          korean_name: values.korean_name.trim(),
+          is_product_page: values.is_product_page,
+          badge_text: values.is_product_page ? values.badge_text : null,
+          badge_color: values.is_product_page ? (typeof values.badge_color === 'string' ? values.badge_color : values.badge_color?.toHexString()) : null
         });
-        
-          message.success('페이지 매핑이 완료되었습니다');
+
+        message.success('페이지 매핑이 완료되었습니다');
       }
 
       // Close modal
       handleCloseMappingModal();
 
       // Update the URL in the list - match by original_url
-      setAllData(prevData => prevData.map(item => 
-        (item.original_url || item.url) === mappingUrl 
-          ? { 
-              ...item, 
-              korean_name: values.korean_name.trim(), 
-              mapping_id: response.data.data.id, 
-              is_mapped: true 
-            }
+      setAllData(prevData => prevData.map(item =>
+        (item.original_url || item.url) === mappingUrl
+          ? {
+            ...item,
+            korean_name: values.korean_name.trim(),
+            mapping_id: response.data.data.id,
+            is_mapped: true,
+            is_product_page: response.data.data.is_product_page,
+            badge_text: response.data.data.badge_text,
+            badge_color: response.data.data.badge_color
+          }
           : item
       ));
 
     } catch (error) {
       console.error('Failed to save mapping:', error);
-      
+
       if (error.response?.status === 409) {
         message.error('이미 매핑된 URL입니다');
       } else if (error.response?.status === 400) {
@@ -257,16 +271,16 @@ function PageMapping() {
       // Use original_url (encoded) for API call, not the decoded display URL
       const urlToExclude = originalUrl || displayUrl;
       await axios.post(`${API_URL}/api/mappings/exclude`, { url: urlToExclude });
-      
+
       message.success('URL이 제외되었습니다');
-      
+
       // Remove the excluded URL from all list (match by display URL)
       setAllData(prevData => prevData.filter(item => item.url !== displayUrl));
       setAllTotal(prevTotal => prevTotal - 1);
-      
+
     } catch (error) {
       console.error('Failed to exclude URL:', error);
-      
+
       if (error.response?.status === 409) {
         message.error(error.response.data.message || '이미 처리된 URL입니다');
       } else {
@@ -279,16 +293,51 @@ function PageMapping() {
   const handleRestoreUrl = async (id) => {
     try {
       await axios.delete(`${API_URL}/api/mappings/excluded/${id}`);
-      
+
       message.success('제외가 해제되었습니다. 매핑하지 않은 URL 탭에서 다시 확인할 수 있습니다');
-      
+
       // Remove from excluded list
       setExcludedData(prevData => prevData.filter(item => item.id !== id));
       setExcludedTotal(prevTotal => prevTotal - 1);
-      
+
     } catch (error) {
       console.error('Failed to restore URL:', error);
       message.error('제외 해제에 실패했습니다');
+    }
+  };
+
+  // Unmap URL (remove mapping, keep URL in list)
+  const handleUnmapUrl = async (mappingId, displayUrl) => {
+    try {
+      await axios.delete(`${API_URL}/api/mappings/${mappingId}`);
+
+      message.success('매핑이 해제되었습니다');
+
+      // Update the URL in the list to show as unmapped
+      setAllData(prevData => prevData.map(item =>
+        item.mapping_id === mappingId
+          ? {
+            ...item,
+            korean_name: null,
+            mapping_id: null,
+            is_mapped: false,
+            is_product_page: false,
+            badge_text: null,
+            badge_color: null
+          }
+          : item
+      ));
+
+      // Update statistics
+      setStatistics(prev => ({
+        ...prev,
+        completed: prev.completed - 1,
+        uncompleted: prev.uncompleted + 1
+      }));
+
+    } catch (error) {
+      console.error('Failed to unmap URL:', error);
+      message.error('매핑 해제에 실패했습니다');
     }
   };
 
@@ -309,7 +358,7 @@ function PageMapping() {
       const response = await axios.get(`${API_URL}/api/mappings/original-urls`, {
         params: { cleaned_url: cleanedUrl }
       });
-      
+
       setOriginalUrlsData(response.data.original_urls);
       setOriginalUrlsStats({
         total: response.data.total_original_urls,
@@ -401,7 +450,7 @@ function PageMapping() {
   const handleManualAddSubmit = async (values) => {
     try {
       setManualAddSubmitting(true);
-      
+
       // Validate that at least one URL has a base URL
       const validGroups = urlGroups.filter(g => g.baseUrl.trim() !== '');
       if (validGroups.length === 0) {
@@ -428,20 +477,20 @@ function PageMapping() {
       }
 
       const response = await axios.post(`${API_URL}/api/mappings`, requestBody);
-      
+
       message.success('URL이 수동으로 추가되었습니다');
-      
+
       // Close modal and reset
       setManualAddModalVisible(false);
       manualAddForm.resetFields();
       setUrlGroups([{ baseUrl: '', params: [{ key: '', value: '' }] }]);
-      
+
       // Refresh data
       await fetchAllUrls();
-      
+
     } catch (error) {
       console.error('Failed to add URL manually:', error);
-      
+
       if (error.response?.status === 409) {
         message.error('이미 존재하는 URL입니다');
       } else if (error.response?.status === 400) {
@@ -494,7 +543,7 @@ function PageMapping() {
                   </Text>
                   {group.params && group.params.conditions && group.params.conditions.length > 0 && (
                     <Text type="secondary" style={{ fontSize: '11px', fontFamily: 'monospace' }}>
-                      매개변수: {group.params.conditions.map(p => 
+                      매개변수: {group.params.conditions.map(p =>
                         `${p.key}=${p.value}`
                       ).join(' AND ')}
                     </Text>
@@ -510,8 +559,8 @@ function PageMapping() {
 
         return (
           <Space size="small" style={{ width: '100%' }}>
-            <Text 
-              style={{ 
+            <Text
+              style={{
                 fontSize: '12px',
                 fontFamily: 'monospace',
                 wordBreak: 'break-all',
@@ -526,18 +575,18 @@ function PageMapping() {
                 <Tag color="orange" style={{ marginLeft: 4, fontSize: '11px' }}>
                   +{urlConditions.groups.length} OR
                 </Tag>
-                <Popover 
+                <Popover
                   content={popoverContent}
                   title={null}
                   trigger="click"
                   placement="bottomLeft"
                 >
-                  <InfoCircleOutlined 
-                    style={{ 
-                      color: '#1890ff', 
+                  <InfoCircleOutlined
+                    style={{
+                      color: '#1890ff',
                       cursor: 'pointer',
                       fontSize: '14px'
-                    }} 
+                    }}
                   />
                 </Popover>
               </>
@@ -582,8 +631,24 @@ function PageMapping() {
       title: '매핑명',
       dataIndex: 'korean_name',
       key: 'korean_name',
-      width: 180,
-      render: (name) => name ? <Tag color="blue">{name}</Tag> : <Text type="secondary">-</Text>
+      width: 250,
+      render: (name, record) => (
+        <Space>
+          {name ? <Tag color="blue">{name}</Tag> : <Text type="secondary">-</Text>}
+          {record.is_product_page && record.badge_text && (
+            <Tag
+              color={record.badge_color || '#1677ff'}
+              style={{
+                marginRight: 0,
+                fontWeight: 600,
+                border: 'none'
+              }}
+            >
+              {record.badge_text}
+            </Tag>
+          )}
+        </Space>
+      )
     },
     {
       title: '액션',
@@ -610,6 +675,15 @@ function PageMapping() {
             label: record.is_mapped ? '수정' : '매핑하기',
             onClick: () => handleOpenMappingModal(record.url, record.original_url)
           },
+          // "매핑 풀기" 옵션 - 매핑 완료된 URL만 표시
+          ...(record.is_mapped ? [
+            {
+              key: 'unmap',
+              icon: <MinusCircleOutlined />,
+              label: '매핑 풀기',
+              onClick: () => handleUnmapUrl(record.mapping_id, record.url)
+            }
+          ] : []),
           {
             type: 'divider'
           },
@@ -653,8 +727,8 @@ function PageMapping() {
       width: 600,
       ellipsis: true,
       render: (url) => (
-        <Text 
-          style={{ 
+        <Text
+          style={{
             fontSize: '12px',
             fontFamily: 'monospace',
             wordBreak: 'break-all'
@@ -678,14 +752,14 @@ function PageMapping() {
       width: 150,
       render: (_, record) => (
         <Space>
-          <Button 
-            size="small" 
+          <Button
+            size="small"
             icon={<LinkOutlined />}
             onClick={() => handleOpenUrl(record.url)}
           >
             새 탭으로 열기
           </Button>
-          <Button 
+          <Button
             type="primary"
             size="small"
             onClick={() => handleRestoreUrl(record.id)}
@@ -760,10 +834,10 @@ function PageMapping() {
 
           {/* Statistics Summary - Only show when viewing all data */}
           {statistics.total > 0 && statusFilter === 'all' && (
-            <div style={{ 
-              marginBottom: 16, 
-              padding: '12px 16px', 
-              background: '#f5f5f5', 
+            <div style={{
+              marginBottom: 16,
+              padding: '12px 16px',
+              background: '#f5f5f5',
               borderRadius: 4,
               display: 'flex',
               gap: 24,
@@ -876,9 +950,9 @@ function PageMapping() {
     <div style={{ padding: '24px', minHeight: '100vh', background: '#f0f2f5' }}>
       <Card>
         {/* Header */}
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
           alignItems: 'center',
           marginBottom: 24
         }}>
@@ -889,14 +963,14 @@ function PageMapping() {
             </Text>
           </div>
           <Space>
-            <Button 
+            <Button
               type="primary"
               icon={<PlusOutlined />}
               onClick={() => setManualAddModalVisible(true)}
             >
               URL 추가
             </Button>
-            <Button 
+            <Button
               icon={<ReloadOutlined />}
               onClick={handleRefresh}
               loading={allLoading || excludedLoading}

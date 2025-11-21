@@ -31,28 +31,28 @@ function decodeUrlForDisplay(url) {
 // ============================================================================
 router.get('/all', async (req, res) => {
   try {
-    const { 
-      limit = 50, 
+    const {
+      limit = 50,
       offset = 0,
       search = '',
       status = 'all'  // 'all', 'completed', 'uncompleted'
     } = req.query;
-    
+
     // Get unique clean URLs from pageviews (don't filter here, filter later with korean_name)
     const { data: cleanUrls, total: totalClean } = await getUniqueCleanUrls(db, {
       limit: 10000, // Get all URLs first, then filter
       offset: 0,
       search: '' // Don't filter at DB level, filter after merging with mapping data
     });
-    
+
     // Get all mappings (excluding excluded URLs)
     const mappingsQuery = `
-      SELECT id, url, korean_name, source_type, url_conditions, created_at, updated_at 
+      SELECT id, url, korean_name, source_type, url_conditions, is_product_page, badge_text, badge_color, created_at, updated_at 
       FROM url_mappings 
       WHERE is_excluded = false
     `;
     const mappingsResult = await db.query(mappingsQuery);
-    
+
     // Create a map of URL -> mapping info
     const mappingsMap = new Map();
     mappingsResult.rows.forEach(row => {
@@ -61,16 +61,19 @@ router.get('/all', async (req, res) => {
         korean_name: row.korean_name,
         source_type: row.source_type || 'auto',
         url_conditions: row.url_conditions,
+        is_product_page: row.is_product_page,
+        badge_text: row.badge_text,
+        badge_color: row.badge_color,
         created_at: row.created_at,
         updated_at: row.updated_at
       });
     });
-    
+
     // Get excluded URLs to filter out
     const excludedQuery = `SELECT url FROM url_mappings WHERE is_excluded = true`;
     const excludedResult = await db.query(excludedQuery);
     const excludedUrls = new Set(excludedResult.rows.map(row => row.url));
-    
+
     // Merge URL data with mapping info, exclude excluded URLs
     let allUrls = cleanUrls
       .filter(urlData => !excludedUrls.has(urlData.url))
@@ -83,11 +86,14 @@ router.get('/all', async (req, res) => {
           mapping_id: mapping ? mapping.id : null,
           source_type: mapping ? mapping.source_type : 'auto',
           url_conditions: mapping ? mapping.url_conditions : null,
+          is_product_page: mapping ? mapping.is_product_page : false,
+          badge_text: mapping ? mapping.badge_text : null,
+          badge_color: mapping ? mapping.badge_color : null,
           latest_timestamp: urlData.latest_timestamp,
           is_mapped: !!mapping
         };
       });
-    
+
     // Apply search filter (search in URL or korean_name)
     if (search) {
       const searchLower = search.toLowerCase();
@@ -97,12 +103,12 @@ router.get('/all', async (req, res) => {
         return urlMatch || koreanNameMatch;
       });
     }
-    
+
     // Calculate statistics BEFORE filtering (for full statistics)
     const totalBeforeFilter = allUrls.length;
     const completedCount = allUrls.filter(item => item.is_mapped).length;
     const uncompletedCount = allUrls.filter(item => !item.is_mapped).length;
-    
+
     // Apply status filter (BEFORE pagination)
     if (status === 'completed') {
       allUrls = allUrls.filter(item => item.is_mapped === true);
@@ -110,7 +116,7 @@ router.get('/all', async (req, res) => {
       allUrls = allUrls.filter(item => item.is_mapped === false);
     }
     // If status === 'all', no filtering needed
-    
+
     // Sort: unmapped URLs first (is_mapped: false), then mapped URLs (is_mapped: true)
     allUrls.sort((a, b) => {
       // If both are mapped or both are unmapped, keep original order
@@ -120,13 +126,13 @@ router.get('/all', async (req, res) => {
       // Unmapped (false) comes before mapped (true)
       return a.is_mapped ? 1 : -1;
     });
-    
+
     // Apply pagination (AFTER filtering and sorting)
     const paginatedData = allUrls.slice(
-      parseInt(offset), 
+      parseInt(offset),
       parseInt(offset) + parseInt(limit)
     );
-    
+
     res.json({
       data: paginatedData,
       total: allUrls.length,
@@ -142,9 +148,9 @@ router.get('/all', async (req, res) => {
     });
   } catch (error) {
     console.error('All URLs query error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to fetch all URLs',
-      message: error.message 
+      message: error.message
     });
   }
 });
@@ -157,12 +163,12 @@ router.get('/all', async (req, res) => {
 router.get('/original-urls', async (req, res) => {
   try {
     const { cleaned_url } = req.query;
-    
+
     // Validation: Check if cleaned_url is provided
     if (!cleaned_url) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Missing required parameter',
-        message: 'cleaned_url is required' 
+        message: 'cleaned_url is required'
       });
     }
 
@@ -177,13 +183,13 @@ router.get('/original-urls', async (req, res) => {
       GROUP BY page_url
       ORDER BY visit_count DESC
     `;
-    
+
     const pageviewsResult = await db.query(pageviewsQuery);
 
     // Filter URLs that clean to the requested cleaned_url
     const matchingUrls = [];
     let totalVisits = 0;
-    
+
     for (const row of pageviewsResult.rows) {
       const cleaned = cleanUrl(row.page_url);
       if (cleaned === cleaned_url) {
@@ -199,10 +205,10 @@ router.get('/original-urls', async (req, res) => {
 
     // Sort by visit count (already sorted from query, but ensure)
     matchingUrls.sort((a, b) => b.visit_count - a.visit_count);
-    
+
     // Limit to top 100 to avoid performance issues
     const limitedUrls = matchingUrls.slice(0, 100);
-    
+
     res.json({
       cleaned_url: cleaned_url,
       original_urls: limitedUrls,
@@ -212,9 +218,9 @@ router.get('/original-urls', async (req, res) => {
     });
   } catch (error) {
     console.error('Original URLs query error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to fetch original URLs',
-      message: error.message 
+      message: error.message
     });
   }
 });
@@ -227,32 +233,32 @@ router.get('/original-urls', async (req, res) => {
 router.get('/lookup', async (req, res) => {
   try {
     const { url } = req.query;
-    
+
     // If no URL parameter, return all mappings as a simple map
     if (!url) {
       const result = await db.query(
         'SELECT url, korean_name FROM url_mappings WHERE is_excluded = false'
       );
-      
+
       const mappings = {};
       result.rows.forEach(row => {
         mappings[row.url] = row.korean_name;
       });
-      
+
       return res.json(mappings);
     }
-    
+
     // Single URL lookup (existing functionality)
     const cleanedUrl = cleanUrl(url);
-    
+
     // Lookup mapping
     const lookupQuery = `
-      SELECT id, url, korean_name, created_at, updated_at
+      SELECT id, url, korean_name, is_product_page, badge_text, badge_color, created_at, updated_at
       FROM url_mappings
       WHERE url = $1
     `;
     const lookupResult = await db.query(lookupQuery, [cleanedUrl]);
-    
+
     if (lookupResult.rows.length === 0) {
       return res.json({
         found: false,
@@ -260,16 +266,16 @@ router.get('/lookup', async (req, res) => {
         korean_name: null
       });
     }
-    
+
     res.json({
       found: true,
       data: lookupResult.rows[0]
     });
   } catch (error) {
     console.error('Lookup error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to lookup mapping',
-      message: error.message 
+      message: error.message
     });
   }
 });
@@ -281,32 +287,32 @@ router.get('/lookup', async (req, res) => {
 // ============================================================================
 router.get('/excluded', async (req, res) => {
   try {
-    const { 
-      limit = 50, 
+    const {
+      limit = 50,
       offset = 0,
       search = ''
     } = req.query;
-    
+
     let whereClause = 'WHERE is_excluded = true';
     let queryParams = [];
     let paramIndex = 1;
-    
+
     // Search filter
     if (search) {
       whereClause += ` AND url ILIKE $${paramIndex}`;
       queryParams.push(`%${search}%`);
       paramIndex++;
     }
-    
+
     // Count total
     const countQuery = `SELECT COUNT(*) as total FROM url_mappings ${whereClause}`;
     const countResult = await db.query(countQuery, queryParams);
     const total = parseInt(countResult.rows[0].total);
-    
+
     // Get paginated data
     queryParams.push(parseInt(limit));
     queryParams.push(parseInt(offset));
-    
+
     const dataQuery = `
       SELECT id, url, created_at, updated_at
       FROM url_mappings
@@ -314,15 +320,15 @@ router.get('/excluded', async (req, res) => {
       ORDER BY created_at DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `;
-    
+
     const dataResult = await db.query(dataQuery, queryParams);
-    
+
     // Decode URLs for display
     const decodedData = dataResult.rows.map(row => ({
       ...row,
       url: decodeUrlForDisplay(row.url)
     }));
-    
+
     res.json({
       data: decodedData,
       total: total,
@@ -331,9 +337,9 @@ router.get('/excluded', async (req, res) => {
     });
   } catch (error) {
     console.error('Excluded URLs query error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to fetch excluded URLs',
-      message: error.message 
+      message: error.message
     });
   }
 });
@@ -345,37 +351,37 @@ router.get('/excluded', async (req, res) => {
 router.delete('/excluded/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     // Check if excluded URL exists
     const checkQuery = 'SELECT id, is_excluded FROM url_mappings WHERE id = $1';
     const checkResult = await db.query(checkQuery, [id]);
-    
+
     if (checkResult.rows.length === 0) {
-      return res.status(404).json({ 
-        error: 'Not found', 
-        message: 'Excluded URL not found' 
+      return res.status(404).json({
+        error: 'Not found',
+        message: 'Excluded URL not found'
       });
     }
-    
+
     if (!checkResult.rows[0].is_excluded) {
-      return res.status(400).json({ 
-        error: 'Invalid operation', 
-        message: 'This URL is not excluded' 
+      return res.status(400).json({
+        error: 'Invalid operation',
+        message: 'This URL is not excluded'
       });
     }
-    
+
     // Delete the excluded URL entry
     await db.query('DELETE FROM url_mappings WHERE id = $1', [id]);
-    
-    res.json({ 
-      success: true, 
-      message: 'Excluded URL removed successfully' 
+
+    res.json({
+      success: true,
+      message: 'Excluded URL removed successfully'
     });
   } catch (error) {
     console.error('Error removing excluded URL:', error);
-    res.status(500).json({ 
-      error: 'Internal server error', 
-      message: error.message 
+    res.status(500).json({
+      error: 'Internal server error',
+      message: error.message
     });
   }
 });
@@ -387,27 +393,27 @@ router.delete('/excluded/:id', async (req, res) => {
 router.post('/exclude', async (req, res) => {
   try {
     const { url } = req.body;
-    
+
     // Validation: Check if URL is provided
     if (!url) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Missing required field',
-        message: 'url is required' 
+        message: 'url is required'
       });
     }
-    
+
     // Clean the URL
     const cleanedUrl = cleanUrl(url);
 
     // Check if URL already exists in mappings
     const existingMapping = await db.query('SELECT id, is_excluded FROM url_mappings WHERE url = $1', [cleanedUrl]);
-    
+
     if (existingMapping.rows.length > 0) {
       // URL already exists in mappings table
       if (existingMapping.rows[0].is_excluded) {
-        return res.status(409).json({ 
-          error: 'Already excluded', 
-          message: 'This URL is already excluded' 
+        return res.status(409).json({
+          error: 'Already excluded',
+          message: 'This URL is already excluded'
         });
       } else {
         // URL is mapped - update to excluded (delete korean_name)
@@ -415,31 +421,31 @@ router.post('/exclude', async (req, res) => {
           'UPDATE url_mappings SET korean_name = NULL, is_excluded = true, updated_at = NOW() WHERE id = $1 RETURNING *',
           [existingMapping.rows[0].id]
         );
-        
-        return res.json({ 
-          success: true, 
+
+        return res.json({
+          success: true,
           data: result.rows[0],
           message: 'Mapping deleted and URL excluded successfully'
         });
       }
     }
-    
+
     // URL doesn't exist in mappings - insert as excluded
     const result = await db.query(
       'INSERT INTO url_mappings (url, korean_name, is_excluded) VALUES ($1, NULL, true) RETURNING *',
       [cleanedUrl]
     );
-    
-    res.status(201).json({ 
-      success: true, 
+
+    res.status(201).json({
+      success: true,
       data: result.rows[0],
       message: 'URL excluded successfully'
     });
   } catch (error) {
     console.error('Error excluding URL:', error);
-    res.status(500).json({ 
-      error: 'Internal server error', 
-      message: error.message 
+    res.status(500).json({
+      error: 'Internal server error',
+      message: error.message
     });
   }
 });
@@ -450,23 +456,23 @@ router.post('/exclude', async (req, res) => {
 // ============================================================================
 router.get('/', async (req, res) => {
   try {
-    const { 
-      limit = 50, 
+    const {
+      limit = 50,
       offset = 0,
       search = ''
     } = req.query;
-    
+
     let whereClause = '';
     let queryParams = [];
     let paramIndex = 1;
-    
+
     // Search filter (search in both URL and Korean name)
     if (search) {
       whereClause = `WHERE url ILIKE $${paramIndex} OR korean_name ILIKE $${paramIndex}`;
       queryParams.push(`%${search}%`);
       paramIndex++;
     }
-    
+
     // Count query
     const countQuery = `
       SELECT COUNT(*) as total 
@@ -474,13 +480,16 @@ router.get('/', async (req, res) => {
       ${whereClause}
     `;
     const countResult = await db.query(countQuery, queryParams.slice(0, paramIndex - 1));
-    
+
     // Data query
     const dataQuery = `
       SELECT 
         id,
         url,
         korean_name,
+        is_product_page,
+        badge_text,
+        badge_color,
         created_at,
         updated_at
       FROM url_mappings
@@ -488,10 +497,10 @@ router.get('/', async (req, res) => {
       ORDER BY created_at DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `;
-    
+
     queryParams.push(limit, offset);
     const dataResult = await db.query(dataQuery, queryParams);
-    
+
     res.json({
       data: dataResult.rows,
       total: parseInt(countResult.rows[0].total),
@@ -500,9 +509,9 @@ router.get('/', async (req, res) => {
     });
   } catch (error) {
     console.error('Mappings query error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to fetch mappings',
-      message: error.message 
+      message: error.message
     });
   }
 });
@@ -514,121 +523,137 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const { url, korean_name, source_type = 'auto', url_conditions = null } = req.body;
-    
+
     // Validation: Check if fields are provided
     if (!url && !url_conditions) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Missing required field',
-        message: 'Either url or url_conditions is required' 
+        message: 'Either url or url_conditions is required'
       });
     }
-    
+
     if (!korean_name || korean_name.trim() === '') {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Missing required field',
-        message: 'Korean name is required and cannot be empty' 
+        message: 'Korean name is required and cannot be empty'
       });
     }
-    
+
     // Validate source_type
     if (source_type !== 'auto' && source_type !== 'manual') {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Invalid source_type',
-        message: 'source_type must be "auto" or "manual"' 
+        message: 'source_type must be "auto" or "manual"'
       });
     }
-    
+
     // Handle complex URL conditions (Phase 1: URL OR operation)
     if (url_conditions) {
       // Validate url_conditions structure
       if (!url_conditions.operator || !url_conditions.groups || !Array.isArray(url_conditions.groups)) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           error: 'Invalid url_conditions',
-          message: 'url_conditions must have operator and groups array' 
+          message: 'url_conditions must have operator and groups array'
         });
       }
-      
+
       if (url_conditions.groups.length === 0) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           error: 'Invalid url_conditions',
-          message: 'url_conditions.groups cannot be empty' 
+          message: 'url_conditions.groups cannot be empty'
         });
       }
-      
+
       // Use the first group's base_url as the primary URL for indexing
       const primaryUrl = url_conditions.groups[0].base_url;
       const cleanedUrl = cleanUrl(primaryUrl);
-      
+
       // Check if URL already exists
       const checkQuery = `SELECT id FROM url_mappings WHERE url = $1`;
       const checkResult = await db.query(checkQuery, [cleanedUrl]);
-      
+
       if (checkResult.rows.length > 0) {
-        return res.status(409).json({ 
+        return res.status(409).json({
           error: 'Duplicate URL',
-          message: 'This URL is already mapped' 
+          message: 'This URL is already mapped'
         });
       }
-      
+
       // Insert new complex mapping
       const insertQuery = `
-        INSERT INTO url_mappings (url, korean_name, source_type, url_conditions)
-        VALUES ($1, $2, $3, $4)
-        RETURNING id, url, korean_name, source_type, url_conditions, created_at, updated_at
+        INSERT INTO url_mappings (url, korean_name, source_type, url_conditions, is_product_page, badge_text, badge_color)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id, url, korean_name, source_type, url_conditions, is_product_page, badge_text, badge_color, created_at, updated_at
       `;
+
+      const { is_product_page = false, badge_text = null, badge_color = null } = req.body;
+
       const insertResult = await db.query(insertQuery, [
-        cleanedUrl, 
-        korean_name, 
+        cleanedUrl,
+        korean_name,
         source_type,
-        JSON.stringify(url_conditions)
+        JSON.stringify(url_conditions),
+        is_product_page,
+        badge_text,
+        badge_color
       ]);
-      
+
       return res.status(201).json({
         success: true,
         data: insertResult.rows[0]
       });
     }
-    
+
     // Handle simple URL mapping (backward compatibility)
     const cleanedUrl = cleanUrl(url);
-    
+
     // Check if URL already exists
     const checkQuery = `SELECT id FROM url_mappings WHERE url = $1`;
     const checkResult = await db.query(checkQuery, [cleanedUrl]);
-    
+
     if (checkResult.rows.length > 0) {
-      return res.status(409).json({ 
+      return res.status(409).json({
         error: 'Duplicate URL',
-        message: 'This URL is already mapped' 
+        message: 'This URL is already mapped'
       });
     }
-    
+
     // Insert new simple mapping
     const insertQuery = `
-      INSERT INTO url_mappings (url, korean_name, source_type, url_conditions)
-      VALUES ($1, $2, $3, NULL)
-      RETURNING id, url, korean_name, source_type, url_conditions, created_at, updated_at
+      INSERT INTO url_mappings (url, korean_name, source_type, url_conditions, is_product_page, badge_text, badge_color)
+      VALUES ($1, $2, $3, NULL, $4, $5, $6)
+      RETURNING id, url, korean_name, source_type, url_conditions, is_product_page, badge_text, badge_color, created_at, updated_at
     `;
-    const insertResult = await db.query(insertQuery, [cleanedUrl, korean_name, source_type]);
-    
+
+    const { is_product_page = false, badge_text = null, badge_color = null } = req.body;
+
+    const insertResult = await db.query(insertQuery, [
+      cleanedUrl,
+      korean_name,
+      source_type,
+      is_product_page,
+      badge_text,
+      badge_color
+    ]);
+
     res.status(201).json({
       success: true,
       data: insertResult.rows[0]
     });
   } catch (error) {
     console.error('Mapping creation error:', error);
-    
+
     // Handle unique constraint violation
     if (error.code === '23505') {
-      return res.status(409).json({ 
+      return res.status(409).json({
         error: 'Duplicate URL',
-        message: 'This URL is already mapped' 
+        message: 'This URL is already mapped'
       });
     }
-    
-    res.status(500).json({ 
+
+    res.status(500).json({
       error: 'Failed to create mapping',
-      message: error.message 
+      message: error.message
     });
   }
 });
@@ -641,44 +666,64 @@ router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { korean_name } = req.body;
-    
+
     // Validation: Check if korean_name is provided and not empty
     if (!korean_name || korean_name.trim() === '') {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Missing required field',
-        message: 'Korean name is required and cannot be empty' 
+        message: 'Korean name is required and cannot be empty'
       });
     }
-    
+
     // Check if mapping exists
     const checkQuery = `SELECT id FROM url_mappings WHERE id = $1`;
     const checkResult = await db.query(checkQuery, [id]);
-    
+
     if (checkResult.rows.length === 0) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         error: 'Not found',
-        message: 'Mapping not found' 
+        message: 'Mapping not found'
       });
     }
-    
+
     // Update mapping
     const updateQuery = `
       UPDATE url_mappings
-      SET korean_name = $1
-      WHERE id = $2
-      RETURNING id, url, korean_name, created_at, updated_at
+      SET 
+        korean_name = $1,
+        is_product_page = COALESCE($2, is_product_page),
+        badge_text = $3,
+        badge_color = $4,
+        updated_at = NOW()
+      WHERE id = $5
+      RETURNING id, url, korean_name, is_product_page, badge_text, badge_color, created_at, updated_at
     `;
-    const updateResult = await db.query(updateQuery, [korean_name, id]);
-    
+
+    // Handle optional fields (if undefined, they won't be updated due to COALESCE for boolean, but for text we might want to allow clearing)
+    // For badge_text and badge_color, if they are provided as null/empty string, we update them.
+    // If they are undefined in the request, we should probably keep existing values? 
+    // But PUT usually means "replace resource". 
+    // Let's assume the frontend sends all fields.
+
+    const { is_product_page, badge_text, badge_color } = req.body;
+
+    const updateResult = await db.query(updateQuery, [
+      korean_name,
+      is_product_page,
+      badge_text,
+      badge_color,
+      id
+    ]);
+
     res.json({
       success: true,
       data: updateResult.rows[0]
     });
   } catch (error) {
     console.error('Mapping update error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to update mapping',
-      message: error.message 
+      message: error.message
     });
   }
 });
@@ -690,22 +735,22 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     // Check if mapping exists
     const checkQuery = `SELECT id, url, korean_name FROM url_mappings WHERE id = $1`;
     const checkResult = await db.query(checkQuery, [id]);
-    
+
     if (checkResult.rows.length === 0) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         error: 'Not found',
-        message: 'Mapping not found' 
+        message: 'Mapping not found'
       });
     }
-    
+
     // Delete mapping
     const deleteQuery = `DELETE FROM url_mappings WHERE id = $1`;
     await db.query(deleteQuery, [id]);
-    
+
     res.json({
       success: true,
       message: 'Mapping deleted successfully',
@@ -713,9 +758,9 @@ router.delete('/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('Mapping deletion error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to delete mapping',
-      message: error.message 
+      message: error.message
     });
   }
 });

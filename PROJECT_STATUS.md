@@ -23,6 +23,8 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-11-20 | 배지 설정 UI 컴팩트화 | MappingModal.jsx |
+| 2025-11-20 | 매핑 풀기 기능 추가 | PageMapping.jsx |
 | 2025-11-20 | 페이지 매핑 정렬 최신순 변경 | urlCleaner.js, PageMapping.jsx |
 | 2025-11-20 | 요약 대시보드 제거 | CreativePerformance.jsx |
 | 2025-11-18 | 파일 구조 정리 | docs/, scripts/ |
