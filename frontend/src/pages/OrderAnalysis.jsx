@@ -801,9 +801,9 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
                                           <div style={{
                                             fontSize: '12px',
                                             color: '#1f2937',
-                                            lineHeight: '1.4'
+                                            lineHeight: '1.4',
+                                            fontWeight: '600'
                                           }}>
-                                            <span style={{ color: '#000', fontWeight: 'bold', fontSize: '10px' }}>유형 : </span>
                                             {urlInfo.name.replace(/_모바일$|_PC$/g, '')}
                                           </div>
 
@@ -834,46 +834,34 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
                                             const isDetailPage = pageName.includes('상세페이지');
 
                                             if (title && !isExcludedByTitle) {
-                                              // 1. Product Page with Badge
+                                              // Product Page with Badge
                                               if (urlInfo.isProductPage && urlInfo.badgeText) {
                                                 return (
-                                                  <>
-                                                    <div style={{
-                                                      fontSize: '11px',
-                                                      marginTop: '8px',
-                                                      marginBottom: '4px',
-                                                      display: 'flex',
-                                                      alignItems: 'center'
-                                                    }}>
-                                                      <span style={{ color: '#374151', fontWeight: 'bold', marginRight: '6px' }}>제품 :</span>
-                                                      <span
-                                                        style={{
-                                                          display: 'inline-block',
-                                                          padding: '2px 8px',
-                                                          borderRadius: '4px',
-                                                          fontSize: '11px',
-                                                          fontWeight: '600',
-                                                          color: '#fff',
-                                                          backgroundColor: urlInfo.badgeColor || '#1677ff',
-                                                          boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
-                                                        }}
-                                                      >
-                                                        {urlInfo.badgeText}
-                                                      </span>
-                                                    </div>
-                                                    <div style={{ fontSize: '11px', color: '#6b7280' }}>
-                                                      페이지명 : {pageName}
-                                                    </div>
-                                                  </>
+                                                  <div style={{
+                                                    fontSize: '11px',
+                                                    marginTop: '8px',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px'
+                                                  }}>
+                                                    <span style={{ color: '#6b7280', fontWeight: '500' }}>제품:</span>
+                                                    <span
+                                                      style={{
+                                                        display: 'inline-block',
+                                                        padding: '2px 8px',
+                                                        borderRadius: '4px',
+                                                        fontSize: '11px',
+                                                        fontWeight: '600',
+                                                        color: '#fff',
+                                                        backgroundColor: urlInfo.badgeColor || '#1677ff',
+                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                                                      }}
+                                                    >
+                                                      {urlInfo.badgeText}
+                                                    </span>
+                                                  </div>
                                                 );
                                               }
-
-                                              // 2. General Page
-                                              return (
-                                                <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
-                                                  페이지명 : {pageName}
-                                                </div>
-                                              );
                                             }
                                             return null;
                                           })()}

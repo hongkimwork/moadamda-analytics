@@ -23,6 +23,8 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-11-21 | 배지 데이터 조회 버그 수정 | mappings.js, OrderAnalysis.jsx |
+| 2025-11-21 | 배지 기능 서버 배포 | 전체 |
 | 2025-11-20 | 배지 설정 UI 컴팩트화 | MappingModal.jsx |
 | 2025-11-20 | 매핑 풀기 기능 추가 | PageMapping.jsx |
 | 2025-11-20 | 페이지 매핑 정렬 최신순 변경 | urlCleaner.js, PageMapping.jsx |

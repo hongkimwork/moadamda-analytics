@@ -237,12 +237,17 @@ router.get('/lookup', async (req, res) => {
     // If no URL parameter, return all mappings as a simple map
     if (!url) {
       const result = await db.query(
-        'SELECT url, korean_name FROM url_mappings WHERE is_excluded = false'
+        'SELECT url, korean_name, is_product_page, badge_text, badge_color FROM url_mappings WHERE is_excluded = false'
       );
 
       const mappings = {};
       result.rows.forEach(row => {
-        mappings[row.url] = row.korean_name;
+        mappings[row.url] = {
+          korean_name: row.korean_name,
+          is_product_page: row.is_product_page || false,
+          badge_text: row.badge_text,
+          badge_color: row.badge_color
+        };
       });
 
       return res.json(mappings);
