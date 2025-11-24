@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Card, Table, DatePicker, Select, Button, Tag, Space, Typography, Descriptions, Timeline, Spin, Alert, Statistic, Row, Col, Tooltip, Modal, message } from 'antd';
 import { ReloadOutlined, ArrowLeftOutlined, ClockCircleOutlined, ShoppingOutlined, GlobalOutlined, HistoryOutlined, InfoCircleOutlined, UpOutlined, DownOutlined } from '@ant-design/icons';
+import { TrendingUp } from 'lucide-react';
 import axios from 'axios';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ko';
@@ -706,11 +707,18 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
             maxWidth: '500px'
           }}>
             <div style={{
-              fontSize: '48px',
-              marginBottom: '16px',
-              opacity: 0.6
+              display: 'flex',
+              justifyContent: 'center',
+              marginBottom: '16px'
             }}>
-              📊
+              <TrendingUp 
+                size={48} 
+                strokeWidth={1.5}
+                style={{ 
+                  color: '#9ca3af',
+                  opacity: 0.6
+                }} 
+              />
             </div>
             <p style={{ 
               fontSize: '16px',
