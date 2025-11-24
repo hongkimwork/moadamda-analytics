@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Table, Tag, Typography, Space, Button, Alert, message, Tooltip } from 'antd';
 import { ReloadOutlined, BarChartOutlined } from '@ant-design/icons';
+import { Search, BarChart3, RefreshCw } from 'lucide-react';
 import axios from 'axios';
 import dayjs from 'dayjs';
 import SearchFilterBar from '../components/SearchFilterBar';
@@ -219,19 +220,22 @@ function CreativePerformance() {
       render: (text) => (
         <span
           style={{
-            fontSize: '12px',
-            fontWeight: 500,
+            fontSize: '13px',
+            fontWeight: 600,
             cursor: 'pointer',
             display: 'block',
             wordBreak: 'break-all',
-            lineHeight: '1.4',
+            lineHeight: '1.5',
             textAlign: 'left',
-            color: '#1890ff'
+            color: '#0958d9',
+            transition: 'color 0.2s ease'
           }}
           onDoubleClick={() => {
             navigator.clipboard.writeText(text);
             message.success('광고 소재 이름이 복사되었습니다');
           }}
+          onMouseEnter={(e) => e.target.style.color = '#1677ff'}
+          onMouseLeave={(e) => e.target.style.color = '#0958d9'}
           title="더블클릭하면 복사됩니다"
         >
           {text || '-'}
@@ -246,7 +250,7 @@ function CreativePerformance() {
       key: 'unique_visitors',
       width: 60,
       align: 'center',
-      render: (num) => <span style={{ fontWeight: 500, fontSize: '11px' }}>{formatNumber(num)}</span>,
+      render: (num) => <span style={{ fontWeight: 600, fontSize: '12px', color: '#374151' }}>{formatNumber(num)}</span>,
       sorter: true,
       showSorterTooltip: false
     },
@@ -256,7 +260,7 @@ function CreativePerformance() {
       key: 'avg_pageviews',
       width: 70,
       align: 'center',
-      render: (num) => <span style={{ fontSize: '11px' }}>{num ? num.toFixed(1) : '0.0'}</span>,
+      render: (num) => <span style={{ fontSize: '12px', color: '#4b5563', fontWeight: 500 }}>{num ? num.toFixed(1) : '0.0'}</span>,
       sorter: true,
       showSorterTooltip: false
     },
@@ -266,7 +270,7 @@ function CreativePerformance() {
       key: 'avg_duration_seconds',
       width: 75,
       align: 'center',
-      render: (seconds) => <span style={{ fontSize: '11px' }}>{formatDuration(seconds)}</span>,
+      render: (seconds) => <span style={{ fontSize: '12px', color: '#4b5563', fontWeight: 500 }}>{formatDuration(seconds)}</span>,
       sorter: true,
       showSorterTooltip: false
     },
@@ -277,15 +281,35 @@ function CreativePerformance() {
       key: 'total_revenue',
       width: 85,
       align: 'center',
-      render: (amount) => (
-        <span style={{
-          color: amount > 0 ? '#1890ff' : '#999',
-          fontWeight: amount > 0 ? 600 : 400,
-          fontSize: '10px'
-        }}>
-          {formatCurrency(amount)}
-        </span>
-      ),
+      render: (amount) => {
+        const percent = summaryStats.maxRevenue > 0 ? (amount / summaryStats.maxRevenue) * 100 : 0;
+        return (
+          <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: '10%',
+                height: '80%',
+                width: `${percent}%`,
+                background: 'linear-gradient(90deg, rgba(9, 88, 217, 0.12) 0%, rgba(22, 119, 255, 0.18) 100%)',
+                borderRadius: '4px',
+                transition: 'width 0.3s ease'
+              }}
+            />
+            <span style={{
+              color: amount > 0 ? '#0958d9' : '#9ca3af',
+              fontWeight: amount > 0 ? 600 : 400,
+              fontSize: '11px',
+              position: 'relative',
+              zIndex: 1,
+              fontFamily: 'system-ui, -apple-system, sans-serif'
+            }}>
+              {formatCurrency(amount)}
+            </span>
+          </div>
+        );
+      },
       sorter: true,
       showSorterTooltip: false
     },
@@ -320,9 +344,9 @@ function CreativePerformance() {
       align: 'center',
       render: (num) => (
         <span style={{
-          color: num > 0 ? '#52c41a' : '#999',
-          fontWeight: num > 0 ? 500 : 400,
-          fontSize: '11px'
+          color: num > 0 ? '#389e0d' : '#9ca3af',
+          fontWeight: num > 0 ? 600 : 400,
+          fontSize: '12px'
         }}>
           {formatNumber(num)}
         </span>
@@ -383,18 +407,18 @@ function CreativePerformance() {
                 top: '10%',
                 height: '80%',
                 width: `${percent}%`,
-                backgroundColor: 'rgba(255, 122, 69, 0.15)',
-                borderRadius: '2px',
+                background: 'linear-gradient(90deg, rgba(255, 85, 0, 0.12) 0%, rgba(255, 122, 69, 0.18) 100%)',
+                borderRadius: '4px',
                 transition: 'width 0.3s ease'
               }}
             />
             <span style={{
-              color: amount > 0 ? '#ff7a45' : '#999',
+              color: amount > 0 ? '#d4380d' : '#9ca3af',
               fontWeight: amount > 0 ? 600 : 400,
               fontSize: '11px',
               position: 'relative',
               zIndex: 1,
-              fontFamily: 'Monaco, monospace'
+              fontFamily: 'system-ui, -apple-system, sans-serif'
             }}>
               {formatCurrency(amount)}
             </span>
@@ -457,18 +481,18 @@ function CreativePerformance() {
                 top: '10%',
                 height: '80%',
                 width: `${percent}%`,
-                backgroundColor: 'rgba(146, 84, 222, 0.15)',
-                borderRadius: '2px',
+                background: 'linear-gradient(90deg, rgba(114, 46, 209, 0.12) 0%, rgba(146, 84, 222, 0.18) 100%)',
+                borderRadius: '4px',
                 transition: 'width 0.3s ease'
               }}
             />
             <span style={{
-              color: amount > 0 ? '#9254de' : '#999',
+              color: amount > 0 ? '#722ed1' : '#9ca3af',
               fontWeight: amount > 0 ? 600 : 400,
               fontSize: '11px',
               position: 'relative',
               zIndex: 1,
-              fontFamily: 'Monaco, monospace'
+              fontFamily: 'system-ui, -apple-system, sans-serif'
             }}>
               {formatCurrency(amount)}
             </span>
@@ -481,30 +505,75 @@ function CreativePerformance() {
   ];
 
   return (
-    <div style={{ padding: '24px', background: '#f0f2f5', minHeight: '100vh' }}>
+    <div style={{ padding: '24px', background: '#f5f7fa', minHeight: '100vh' }}>
 
       {/* 헤더 */}
-      <Card style={{ marginBottom: '16px' }}>
+      <Card 
+        style={{ 
+          marginBottom: '20px',
+          borderRadius: '12px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+          border: '1px solid #e8eaed'
+        }}
+      >
         <Space direction="vertical" size="small" style={{ width: '100%' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <Title level={2} style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <BarChartOutlined />
+              <Title 
+                level={2} 
+                style={{ 
+                  margin: 0, 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '10px',
+                  fontSize: '24px',
+                  fontWeight: 700,
+                  color: '#1a1a1a'
+                }}
+              >
+                <BarChart3 size={28} strokeWidth={2.5} style={{ color: '#1890ff' }} />
                 광고 소재 모수 분석
               </Title>
-              <div style={{ color: '#999', fontSize: '14px', marginTop: '4px' }}>
+              <div style={{ 
+                color: '#6b7280', 
+                fontSize: '14px', 
+                marginTop: '8px',
+                fontWeight: 400,
+                lineHeight: '1.5'
+              }}>
                 각 광고 소재의 방문자 수, 페이지뷰, 체류시간, 구매 전환을 분석합니다
               </div>
             </div>
             <Button
-              icon={<ReloadOutlined />}
+              icon={<RefreshCw size={16} />}
               onClick={fetchData}
               loading={loading}
+              style={{
+                height: '40px',
+                borderRadius: '8px',
+                fontWeight: 500,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
             >
               새로고침
             </Button>
           </div>
-          <Tag color="blue">총 {total.toLocaleString()}개 광고 소재</Tag>
+          <Tag 
+            color="blue" 
+            style={{
+              padding: '4px 12px',
+              borderRadius: '6px',
+              fontSize: '13px',
+              fontWeight: 500,
+              border: 'none',
+              background: '#e6f4ff',
+              color: '#0958d9'
+            }}
+          >
+            총 {total.toLocaleString()}개 광고 소재
+          </Tag>
         </Space>
       </Card>
 
@@ -526,9 +595,26 @@ function CreativePerformance() {
       />
 
       {/* 동적 UTM 필터 */}
-      <Card size="small" style={{ marginBottom: '16px' }}>
-        <div style={{ marginBottom: '8px', fontSize: '13px', color: '#666', fontWeight: 500 }}>
-          🔍 UTM 필터
+      <Card 
+        size="small" 
+        style={{ 
+          marginBottom: '20px',
+          borderRadius: '12px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+          border: '1px solid #e8eaed'
+        }}
+      >
+        <div style={{ 
+          marginBottom: '12px', 
+          fontSize: '14px', 
+          color: '#374151', 
+          fontWeight: 600,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <Search size={18} strokeWidth={2} style={{ color: '#1890ff' }} />
+          UTM 필터
         </div>
         <DynamicUtmFilterBar
           tableName="utm-sessions"
@@ -551,7 +637,13 @@ function CreativePerformance() {
       )}
 
       {/* 테이블 */}
-      <Card>
+      <Card
+        style={{
+          borderRadius: '12px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+          border: '1px solid #e8eaed'
+        }}
+      >
         <Table
           columns={columns}
           dataSource={data}
@@ -571,11 +663,22 @@ function CreativePerformance() {
             }
           }}
           size="small"
+          style={{
+            borderRadius: '8px',
+            overflow: 'hidden'
+          }}
         />
       </Card>
 
       {/* 푸터 */}
-      <div style={{ marginTop: '16px', textAlign: 'center', color: '#999' }}>
+      <div style={{ 
+        marginTop: '24px', 
+        textAlign: 'center', 
+        color: '#9ca3af',
+        fontSize: '13px',
+        fontWeight: 500,
+        paddingBottom: '16px'
+      }}>
         마지막 갱신: {dayjs().format('YYYY-MM-DD HH:mm:ss')}
       </div>
     </div>

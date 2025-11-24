@@ -23,6 +23,8 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-11-24 | 결제액 그래프 시각화 추가 | CreativePerformance.jsx |
+| 2025-11-24 | 광고 소재 UI 디자인 개선 | CreativePerformance.jsx |
 | 2025-11-24 | 빈 상태 아이콘 lucide 적용 | OrderAnalysis.jsx |
 | 2025-11-24 | 경로-구매상품 순서 변경 | OrderAnalysis.jsx |
 | 2025-11-24 | 고객 여정 모달 디자인 개선 | OrderAnalysis.jsx |
