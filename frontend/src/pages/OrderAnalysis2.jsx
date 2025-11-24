@@ -55,7 +55,7 @@ export function OrderAnalysis2Page() {
           start: startDate,
           end: endDate,
           device: deviceFilter,
-          limit: 100,
+          limit: 1000,
           offset: 0
         }
       });
@@ -592,6 +592,7 @@ export function OrderAnalysis2Page() {
           rowClassName={getRowClassName}
           pagination={{
             pageSize: 20,
+            total: totalOrders,
             showTotal: (total) => `총 ${total}건`,
             showSizeChanger: true
           }}

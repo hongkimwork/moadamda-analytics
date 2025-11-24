@@ -44,7 +44,7 @@ export function OrderListPage() {
           start: startDate,
           end: endDate,
           device: deviceFilter,
-          limit: 100,
+          limit: 1000,
           offset: 0
         }
       });
@@ -213,6 +213,7 @@ export function OrderListPage() {
           loading={loading}
           pagination={{
             pageSize: 20,
+            total: totalOrders,
             showTotal: (total) => `총 ${total}건`,
             showSizeChanger: true
           }}
