@@ -17,50 +17,6 @@ const { Title } = Typography;
 const API_URL = import.meta.env.VITE_API_URL || '';
 
 // ============================================================================
-// 제품 배지 설정
-// ============================================================================
-const BADGE_CONFIG = {
-  '건강': { color: 'rgb(196, 44, 68)', bgColor: 'rgba(196, 44, 68, 0.1)' },
-  '피부': { color: 'rgb(79, 188, 223)', bgColor: 'rgba(79, 188, 223, 0.1)' },
-  '다이어트': { color: 'rgb(206, 64, 110)', bgColor: 'rgba(206, 64, 110, 0.1)' },
-  '모로실': { color: '#f97316', bgColor: 'rgba(249, 115, 22, 0.1)' },
-  '혈당관리': { color: 'rgb(121, 168, 39)', bgColor: 'rgba(121, 168, 39, 0.1)' },
-  '스마일': { color: 'rgb(223, 178, 42)', bgColor: 'rgba(223, 178, 42, 0.1)' },
-  '숙취': { color: 'rgb(147, 51, 234)', bgColor: 'rgba(147, 51, 234, 0.1)' }
-};
-
-// 배지 우선순위 (왼쪽부터 표시)
-const BADGE_ORDER = ['건강', '피부', '다이어트', '모로실', '혈당관리', '스마일', '숙취'];
-
-// 예외 매핑 (키워드 자동 추출이 안 되는 제품)
-const SPECIAL_PRODUCT_MAPPINGS = {
-  '모로실 다이어트&혈당 관리를 모아담다': ['모로실'],
-  '모아담다 싹뺀다 SET': ['모로실', '다이어트'],
-  '종합 관리 SET': ['건강', '다이어트', '피부']
-};
-
-// 페이지명에서 제품 배지 추출
-function extractProductBadges(pageTitle) {
-  // 예외 매핑 확인
-  if (SPECIAL_PRODUCT_MAPPINGS[pageTitle]) {
-    return SPECIAL_PRODUCT_MAPPINGS[pageTitle];
-  }
-
-  // 자동 키워드 추출
-  const badges = [];
-  if (pageTitle.includes('건강')) badges.push('건강');
-  if (pageTitle.includes('피부')) badges.push('피부');
-  if (pageTitle.includes('다이어트')) badges.push('다이어트');
-  if (pageTitle.includes('모로실')) badges.push('모로실');
-  if (pageTitle.includes('혈당')) badges.push('혈당관리');
-  if (pageTitle.includes('스마일')) badges.push('스마일');
-  if (pageTitle.includes('숙취')) badges.push('숙취');
-
-  // 우선순위에 따라 정렬
-  return badges.sort((a, b) => BADGE_ORDER.indexOf(a) - BADGE_ORDER.indexOf(b));
-}
-
-// ============================================================================
 // 주문 목록 페이지
 // ============================================================================
 export function OrderListPage() {
@@ -333,6 +289,29 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
     }
   };
 
+  // 실제 구매 상품명을 기준으로 페이지 매핑 테이블에서 직접 매칭 정보 찾기
+  const findMatchingMapping = (orderProductName) => {
+    if (!orderProductName || !userMappings) {
+      return null;
+    }
+
+    // userMappings에서 korean_name에 order.product_name이 포함된 매핑 찾기
+    const matchedEntry = Object.entries(userMappings).find(([url, mapping]) => {
+      // 상품 페이지이고 뱃지가 있는 경우만
+      if (!mapping.is_product_page || !mapping.badges?.length) {
+        return false;
+      }
+      
+      const koreanName = mapping.korean_name || '';
+      
+      // 예: "건강을 모아담다 상품 페이지".includes("건강을 모아담다") → true
+      return koreanName.includes(orderProductName);
+    });
+    
+    // 매칭된 mapping 객체 반환 (badges 포함)
+    return matchedEntry ? matchedEntry[1] : null;
+  };
+
   if (loading) {
     return (
       <div style={{ padding: '24px', textAlign: 'center', minHeight: '100vh' }}>
@@ -556,24 +535,37 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
     : null;
 
   return (
-    <div style={{ background: '#fff', height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ background: '#fafbfc', height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* 헤더: 제목 + DatePicker + 미니 카드들 + URL 토글 + 닫기 */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        padding: '8px 20px',
-        borderBottom: '2px solid #e5e7eb',
+        padding: '16px 24px',
+        background: 'linear-gradient(to bottom, #ffffff 0%, #fafbfc 100%)',
+        borderBottom: '1px solid #e5e7eb',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
         gap: '20px',
         overflowX: 'auto'
       }}>
         <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-          <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
+          <h3 style={{ 
+            margin: 0, 
+            fontSize: '20px', 
+            fontWeight: '700', 
+            whiteSpace: 'nowrap',
+            color: '#1f2937',
+            letterSpacing: '-0.02em'
+          }}>
             고객 여정 분석
           </h3>
           <DatePicker
             placeholder="시작 날짜 선택"
-            style={{ width: 200 }}
+            style={{ 
+              width: 200,
+              borderRadius: '8px',
+              boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
+            }}
             onChange={(date) => setSelectedStartDate(date)}
             disabledDate={(current) => {
               if (!current) return false;
@@ -589,7 +581,7 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
           {/* 미니 카드들 */}
           <div style={{
             display: 'flex',
-            gap: '12px'
+            gap: '10px'
           }}>
             {allJourneys.map(journey => {
               const isExpanded = expandedJourneys.includes(journey.id);
@@ -598,41 +590,68 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
                   key={journey.id}
                   onClick={() => toggleJourney(journey.id)}
                   style={{
-                    padding: '8px 12px',
-                    borderRadius: '6px',
-                    border: isExpanded ? `3px solid ${journey.color}` : '2px solid #e5e7eb',
-                    background: isExpanded ? '#f9fafb' : 'white',
+                    padding: '10px 16px',
+                    borderRadius: '10px',
+                    border: isExpanded ? `2px solid ${journey.color}` : '1.5px solid #e5e7eb',
+                    background: isExpanded 
+                      ? journey.type === 'purchase'
+                        ? 'linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%)'
+                        : 'linear-gradient(135deg, #f3f4f6 0%, #f9fafb 100%)'
+                      : 'white',
                     cursor: 'pointer',
-                    transition: 'all 0.3s ease',
-                    minWidth: '100px',
+                    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                    minWidth: '110px',
                     textAlign: 'center',
-                    boxShadow: isExpanded ? '0 4px 12px rgba(0,0,0,0.1)' : '0 2px 4px rgba(0,0,0,0.05)',
-                    transform: isExpanded ? 'translateY(-2px)' : 'none',
-                    whiteSpace: 'nowrap'
+                    boxShadow: isExpanded 
+                      ? '0 8px 16px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06)' 
+                      : '0 1px 3px rgba(0, 0, 0, 0.06)',
+                    transform: isExpanded ? 'translateY(-3px) scale(1.02)' : 'none',
+                    whiteSpace: 'nowrap',
+                    position: 'relative',
+                    overflow: 'hidden'
                   }}
                   onMouseEnter={(e) => {
                     if (!isExpanded) {
-                      e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.12)';
+                      e.currentTarget.style.transform = 'translateY(-1px)';
+                      e.currentTarget.style.borderColor = journey.color;
                     }
                   }}
                   onMouseLeave={(e) => {
                     if (!isExpanded) {
-                      e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.05)';
+                      e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.06)';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.borderColor = '#e5e7eb';
                     }
                   }}
                 >
+                  {/* 활성 인디케이터 */}
+                  {isExpanded && (
+                    <div style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: '3px',
+                      background: `linear-gradient(90deg, ${journey.color}, ${journey.color}dd)`,
+                      borderRadius: '10px 10px 0 0'
+                    }} />
+                  )}
+                  
                   <div style={{
-                    fontSize: '12px',
+                    fontSize: '13px',
                     fontWeight: '600',
-                    color: '#374151',
-                    marginBottom: '4px'
+                    color: '#1f2937',
+                    marginBottom: '4px',
+                    letterSpacing: '-0.01em'
                   }}>
                     {journey.dateLabel}
                   </div>
                   <div style={{
                     fontSize: '11px',
-                    fontWeight: 'bold',
-                    color: journey.type === 'purchase' ? '#3b82f6' : '#9ca3af'
+                    fontWeight: '700',
+                    color: journey.type === 'purchase' ? '#2563eb' : '#6b7280',
+                    letterSpacing: '0.01em'
                   }}>
                     {journey.label}
                   </div>
@@ -644,9 +663,25 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
         {onClose && (
           <Button
             type="text"
-            icon={<span style={{ fontSize: '20px' }}>×</span>}
+            icon={<span style={{ fontSize: '24px', lineHeight: 1 }}>×</span>}
             onClick={onClose}
-            style={{ fontSize: '20px', padding: '4px 8px' }}
+            style={{ 
+              fontSize: '24px', 
+              padding: '8px 12px',
+              borderRadius: '8px',
+              transition: 'all 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#fee2e2';
+              e.currentTarget.style.color = '#dc2626';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.color = 'rgba(0, 0, 0, 0.45)';
+            }}
           />
         )}
       </div>
@@ -656,15 +691,42 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
         flex: 1,
         overflowX: 'auto',
         overflowY: 'auto',
-        padding: '12px 20px'
+        padding: '20px 24px',
+        background: '#fafbfc'
       }}>
         {expandedJourneys.length === 0 ? (
           <div style={{
             textAlign: 'center',
-            padding: '60px',
-            color: '#9ca3af'
+            padding: '80px 60px',
+            background: 'white',
+            borderRadius: '16px',
+            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
+            border: '1px solid #e5e7eb',
+            margin: '20px auto',
+            maxWidth: '500px'
           }}>
-            <p style={{ fontSize: '16px' }}>상단 카드를 클릭하여 고객 여정을 펼쳐보세요</p>
+            <div style={{
+              fontSize: '48px',
+              marginBottom: '16px',
+              opacity: 0.6
+            }}>
+              📊
+            </div>
+            <p style={{ 
+              fontSize: '16px',
+              fontWeight: '600',
+              color: '#374151',
+              margin: '0 0 8px 0'
+            }}>
+              고객 여정을 선택해주세요
+            </p>
+            <p style={{
+              fontSize: '14px',
+              color: '#9ca3af',
+              margin: 0
+            }}>
+              상단 카드를 클릭하여 상세한 여정을 확인할 수 있습니다
+            </p>
           </div>
         ) : (
           (() => {
@@ -685,21 +747,39 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
                     <div
                       key={journey.id}
                       style={{
-                        border: `3px solid ${journey.color}`,
-                        borderRadius: '12px',
-                        padding: '12px 16px',
+                        border: `2px solid ${journey.color}40`,
+                        borderRadius: '16px',
+                        padding: '20px 24px',
                         background: 'white',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                        flex: '0 0 auto'
+                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04)',
+                        flex: '0 0 auto',
+                        position: 'relative',
+                        overflow: 'hidden'
                       }}
                     >
+                      {/* 상단 컬러 인디케이터 */}
+                      <div style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        height: '4px',
+                        background: `linear-gradient(90deg, ${journey.color}, ${journey.color}cc)`
+                      }} />
+                      
                       {/* 여정 헤더 */}
                       <div style={{
-                        marginBottom: '16px',
-                        paddingBottom: '12px',
-                        borderBottom: `2px solid ${journey.color}`
+                        marginBottom: '20px',
+                        paddingBottom: '16px',
+                        borderBottom: `1px solid ${journey.color}20`
                       }}>
-                        <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 'bold', color: journey.color }}>
+                        <h3 style={{ 
+                          margin: 0, 
+                          fontSize: '15px', 
+                          fontWeight: '700', 
+                          color: journey.color,
+                          letterSpacing: '-0.01em'
+                        }}>
                           {journey.label}
                         </h3>
                       </div>
@@ -716,13 +796,22 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
                                   const isFirst = globalIdx === 0;
                                   const isLast = globalIdx === journey.pages.length - 1;
 
-                                  // 체류시간 배지 스타일
+                                  // 체류시간 배지 스타일 (심플한 색상)
                                   const durationSeconds = page.time_spent_seconds || 0;
                                   const badgeStyle = durationSeconds >= 30
-                                    ? { background: '#dbeafe', color: '#1e40af' }
+                                    ? { 
+                                        background: '#dbeafe', 
+                                        color: '#1e40af'
+                                      }
                                     : durationSeconds >= 10
-                                      ? { background: '#fef3c7', color: '#92400e' }
-                                      : { background: '#fecaca', color: '#dc2626' };
+                                      ? { 
+                                          background: '#fef3c7', 
+                                          color: '#92400e'
+                                        }
+                                      : { 
+                                          background: '#fecaca', 
+                                          color: '#dc2626'
+                                        };
 
                                   // 이탈 여부 판단
                                   const isExit = isLast && journey.type !== 'purchase';
@@ -737,35 +826,57 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
                                         ? `${durationSeconds}초 체류`
                                         : '1초미만 체류';
 
-                                  // 카드 스타일
+                                  // 카드 스타일 (더욱 세련된 디자인)
                                   const cardStyle = {
-                                    border: isFirst ? '2px solid #22c55e' : isExit ? '2px solid #dc2626' : isLast ? '2px solid #3b82f6' : '1px solid #e5e7eb',
-                                    borderLeft: isFirst ? '4px solid #22c55e' : isExit ? '4px solid #dc2626' : isLast ? '4px solid #3b82f6' : '1px solid #e5e7eb',
-                                    borderRadius: '6px',
-                                    padding: '8px',
-                                    background: isFirst ? '#f0fdf4' : isExit ? '#fef2f2' : isLast ? '#eff6ff' : 'white',
-                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                                    transition: 'all 0.2s',
+                                    border: isExit 
+                                      ? '1px solid rgba(248, 113, 113, 0.25)' 
+                                      : isPurchaseComplete
+                                        ? '1px solid rgba(59, 130, 246, 0.25)'
+                                        : '1px solid rgba(229, 231, 235, 0.8)',
+                                    borderLeft: isExit 
+                                      ? '4px solid #ef4444' 
+                                      : isPurchaseComplete
+                                        ? '4px solid #3b82f6'
+                                        : '3px solid rgba(209, 213, 219, 0.6)',
+                                    borderRadius: '12px',
+                                    padding: '14px 16px',
+                                    background: isExit 
+                                      ? 'linear-gradient(135deg, #fef2f2 0%, #fff 100%)' 
+                                      : isPurchaseComplete
+                                        ? 'linear-gradient(135deg, #eff6ff 0%, #fff 100%)'
+                                        : 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)',
+                                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.03)',
+                                    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
                                     cursor: 'default',
-                                    marginBottom: '10px',
+                                    marginBottom: '14px',
                                     position: 'relative'
                                   };
 
                                   return (
                                     <Timeline.Item
                                       key={globalIdx}
-                                      color={isFirst ? 'green' : isExit ? 'red' : isLast ? 'blue' : 'gray'}
+                                      color={isExit ? 'red' : 'gray'}
                                       style={{ paddingBottom: '0px' }}
                                     >
                                       <div
                                         style={cardStyle}
                                         onMouseEnter={(e) => {
-                                          e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
-                                          e.currentTarget.style.transform = 'translateY(-2px)';
+                                          e.currentTarget.style.boxShadow = '0 8px 16px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05)';
+                                          e.currentTarget.style.transform = 'translateY(-2px) translateX(2px)';
+                                          e.currentTarget.style.borderColor = isExit 
+                                            ? 'rgba(248, 113, 113, 0.4)' 
+                                            : isPurchaseComplete
+                                              ? 'rgba(59, 130, 246, 0.4)'
+                                              : 'rgba(209, 213, 219, 1)';
                                         }}
                                         onMouseLeave={(e) => {
-                                          e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)';
-                                          e.currentTarget.style.transform = 'translateY(0)';
+                                          e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.03)';
+                                          e.currentTarget.style.transform = 'translateY(0) translateX(0)';
+                                          e.currentTarget.style.borderColor = isExit 
+                                            ? 'rgba(248, 113, 113, 0.25)' 
+                                            : isPurchaseComplete
+                                              ? 'rgba(59, 130, 246, 0.25)'
+                                              : 'rgba(229, 231, 235, 0.8)';
                                         }}
                                       >
                                         {/* 체류시간 배지 - 우측 상단 고정 */}
@@ -777,153 +888,186 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
                                             fontSize: '10px',
                                             fontWeight: '500',
                                             position: 'absolute',
-                                            top: '8px',
-                                            right: '8px'
+                                            top: '10px',
+                                            right: '10px',
+                                            letterSpacing: '0.01em'
                                           }}>
                                             {durationText}
                                           </span>
                                         )}
 
                                         {/* 콘텐츠 wrapper */}
-                                        <div style={{ paddingBottom: '12px' }}>
+                                        <div style={{ paddingBottom: '14px' }}>
                                           {/* 첫 줄: 단계 */}
-                                          <div style={{ marginBottom: '6px' }}>
+                                          <div style={{ marginBottom: '8px' }}>
                                             <span style={{
                                               fontSize: '13px',
-                                              fontWeight: 'bold',
-                                              color: isFirst ? '#166534' : isExit ? '#991b1b' : isLast ? '#1e40af' : '#374151'
+                                              fontWeight: '700',
+                                              color: isExit 
+                                                ? '#dc2626' 
+                                                : isPurchaseComplete
+                                                  ? '#2563eb'
+                                                  : '#374151',
+                                              letterSpacing: '-0.01em'
                                             }}>
                                               {journey.type === 'purchase' ? (isLast ? `${globalIdx + 1}단계: 구매 완료` : `${globalIdx + 1}단계`) : (isLast ? '이탈' : `${globalIdx + 1}단계`)}
                                             </span>
                                           </div>
 
-                                          {/* 페이지명 (한글 이름) */}
-                                          <div style={{
-                                            fontSize: '12px',
-                                            color: '#1f2937',
-                                            lineHeight: '1.4',
-                                            fontWeight: '600'
-                                          }}>
-                                            {urlInfo.name}
-                                          </div>
+                                          {/* 구매 완료 단계 - 제품 뱃지 먼저 표시 */}
+                                          {journey.type === 'purchase' && isLast && (() => {
+                                            const orderProductName = order.product_name;
+                                            if (!orderProductName || orderProductName === '상품명 없음') {
+                                              return null;
+                                            }
+                                            const matchedMapping = findMatchingMapping(orderProductName);
+                                            
+                                            // 제품 뱃지가 있으면 표시
+                                            if (matchedMapping?.badges && matchedMapping.badges.length > 0) {
+                                              return (
+                                                <div style={{
+                                                  fontSize: '10px',
+                                                  marginBottom: '6px',
+                                                  display: 'flex',
+                                                  alignItems: 'center',
+                                                  gap: '4px',
+                                                  flexWrap: 'wrap'
+                                                }}>
+                                                  <span style={{ 
+                                                    color: '#6b7280', 
+                                                    fontWeight: '500',
+                                                    fontSize: '10px'
+                                                  }}>
+                                                    제품:
+                                                  </span>
+                                                  {matchedMapping.badges.map((badge, idx) => (
+                                                    <span
+                                                      key={idx}
+                                                      style={{
+                                                        display: 'inline-block',
+                                                        padding: '1px 6px',
+                                                        borderRadius: '3px',
+                                                        fontSize: '10px',
+                                                        fontWeight: '600',
+                                                        color: '#fff',
+                                                        backgroundColor: badge.color,
+                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                                                      }}
+                                                    >
+                                                      {badge.text}
+                                                    </span>
+                                                  ))}
+                                                </div>
+                                              );
+                                            }
+                                            return null;
+                                          })()}
 
-                                          {/* 상품명 (상품 상세 페이지만) */}
+                                          {/* 상품 페이지 뱃지 표시 (페이지 매핑 기반) */}
                                           {(() => {
-                                            const title = page.page_title || '';
-                                            const pageName = urlInfo.name || '';
+                                            // 페이지 매핑에서 is_product_page로 설정된 경우에만 표시
+                                            if (urlInfo.isProductPage) {
+                                              // 다중 배지 지원: badges 배열 우선, 없으면 단일 badge 폴백
+                                              const badgesToDisplay = urlInfo.badges && urlInfo.badges.length > 0
+                                                ? urlInfo.badges
+                                                : (urlInfo.badgeText ? [{ text: urlInfo.badgeText, color: urlInfo.badgeColor || '#1677ff' }] : []);
 
-                                            // 제외할 패턴들 (title 기준)
-                                            const excludedTitlePatterns = [
-                                              '전체상품',
-                                              '이벤트 |',
-                                              '모아담다 온라인 공식몰',
-                                              '카테고리',
-                                              '마이페이지',
-                                              '장바구니',
-                                              '주문',
-                                              '결제',
-                                              '로그인',
-                                              '회원'
-                                            ];
-
-                                            const isExcludedByTitle = excludedTitlePatterns.some(pattern =>
-                                              title.includes(pattern)
-                                            );
-
-                                            // 상세페이지 판단 (매핑 이름 기준)
-                                            const isDetailPage = pageName.includes('상세페이지');
-
-                                            if (title && !isExcludedByTitle) {
-                                              // Product Page with Badge
-                                              if (urlInfo.isProductPage) {
-                                                // 다중 배지 지원: badges 배열 우선, 없으면 단일 badge 폴백
-                                                const badgesToDisplay = urlInfo.badges && urlInfo.badges.length > 0
-                                                  ? urlInfo.badges
-                                                  : (urlInfo.badgeText ? [{ text: urlInfo.badgeText, color: urlInfo.badgeColor || '#1677ff' }] : []);
-
-                                                if (badgesToDisplay.length > 0) {
-                                                  return (
-                                                    <div style={{
-                                                      fontSize: '11px',
-                                                      marginTop: '8px',
-                                                      display: 'flex',
-                                                      alignItems: 'center',
-                                                      gap: '6px',
-                                                      flexWrap: 'wrap'
+                                              if (badgesToDisplay.length > 0) {
+                                                return (
+                                                  <div style={{
+                                                    fontSize: '10px',
+                                                    marginBottom: '6px',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px',
+                                                    flexWrap: 'wrap'
+                                                  }}>
+                                                    <span style={{ 
+                                                      color: '#6b7280', 
+                                                      fontWeight: '500',
+                                                      fontSize: '10px'
                                                     }}>
-                                                      <span style={{ color: '#6b7280', fontWeight: '500' }}>제품:</span>
-                                                      {badgesToDisplay.map((badge, idx) => (
-                                                        <span
-                                                          key={idx}
-                                                          style={{
-                                                            display: 'inline-block',
-                                                            padding: '2px 8px',
-                                                            borderRadius: '4px',
-                                                            fontSize: '11px',
-                                                            fontWeight: '600',
-                                                            color: '#fff',
-                                                            backgroundColor: badge.color,
-                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
-                                                          }}
-                                                        >
-                                                          {badge.text}
-                                                        </span>
-                                                      ))}
-                                                    </div>
-                                                  );
-                                                }
+                                                      제품:
+                                                    </span>
+                                                    {badgesToDisplay.map((badge, idx) => (
+                                                      <span
+                                                        key={idx}
+                                                        style={{
+                                                          display: 'inline-block',
+                                                          padding: '1px 6px',
+                                                          borderRadius: '3px',
+                                                          fontSize: '10px',
+                                                          fontWeight: '600',
+                                                          color: '#fff',
+                                                          backgroundColor: badge.color,
+                                                          boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                                                        }}
+                                                      >
+                                                        {badge.text}
+                                                      </span>
+                                                    ))}
+                                                  </div>
+                                                );
                                               }
                                             }
                                             return null;
                                           })()}
 
-                                          {/* 구매 완료 단계에 구매한 상품명 표시 */}
-                                          {journey.type === 'purchase' && isLast && (() => {
-                                            // 여정에서 상품 상세 페이지 찾기
-                                            const productPage = journey.pages.find(p => {
-                                              const title = p.page_title || '';
-                                              const url = p.clean_url || p.page_url || '';
-                                              const urlInfo = urlToKorean(url, userMappings);
-                                              const pageName = urlInfo.name || '';
+                                          {/* 페이지명 (한글 이름) */}
+                                          <div style={{
+                                            fontSize: '12px',
+                                            color: '#111827',
+                                            lineHeight: '1.5',
+                                            fontWeight: '600',
+                                            letterSpacing: '-0.01em',
+                                            marginBottom: isPurchaseComplete ? '8px' : '0'
+                                          }}>
+                                            <span style={{ 
+                                              color: '#6b7280', 
+                                              fontWeight: '500', 
+                                              marginRight: '6px',
+                                              fontSize: '11px'
+                                            }}>
+                                              경로:
+                                            </span>
+                                            <span style={{ color: '#1f2937' }}>
+                                              {urlInfo.name}
+                                            </span>
+                                          </div>
 
-                                              const excludedTitlePatterns = [
-                                                '전체상품',
-                                                '이벤트 |',
-                                                '모아담다 온라인 공식몰',
-                                                '카테고리',
-                                                '마이페이지',
-                                                '장바구니',
-                                                '주문',
-                                                '결제',
-                                                '로그인',
-                                                '회원'
-                                              ];
-
-                                              const isExcludedByTitle = excludedTitlePatterns.some(pattern =>
-                                                title.includes(pattern)
-                                              );
-
-                                              const isDetailPage = pageName.includes('상세페이지');
-
-                                              return title && !isExcludedByTitle && isDetailPage;
-                                            });
-
-                                            if (productPage) {
-                                              const title = productPage.page_title || '';
-
-                                              return (
-                                                <div style={{
-                                                  fontSize: '10px',
-                                                  marginTop: '3px'
-                                                }}>
-                                                  <span style={{ color: '#000', fontWeight: 'bold' }}>구매한 상품 : </span>
-                                                  <span style={{ color: '#000', fontWeight: '600', fontSize: '11px' }}>
-                                                    {title}
-                                                  </span>
-                                                </div>
-                                              );
+                                          {/* 구매 완료 단계 - 구매한 상품명 맨 마지막에 표시 */}
+                                          {isPurchaseComplete && (() => {
+                                            const orderProductName = order.product_name;
+                                            if (!orderProductName || orderProductName === '상품명 없음') {
+                                              return null;
                                             }
-                                            return null;
+
+                                            return (
+                                              <div style={{
+                                                fontSize: '11px',
+                                                marginBottom: '0',
+                                                padding: '6px 10px',
+                                                background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
+                                                borderRadius: '6px',
+                                                border: '1px solid #bae6fd'
+                                              }}>
+                                                <span style={{ 
+                                                  color: '#0c4a6e', 
+                                                  fontWeight: '600',
+                                                  fontSize: '11px'
+                                                }}>
+                                                  구매한 상품: 
+                                                </span>
+                                                <span style={{ 
+                                                  color: '#0c4a6e', 
+                                                  fontWeight: '700', 
+                                                  fontSize: '11px',
+                                                  marginLeft: '4px'
+                                                }}>
+                                                  {orderProductName}
+                                                </span>
+                                              </div>
+                                            );
                                           })()}
                                         </div>
 
@@ -931,23 +1075,28 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
                                         <GlobalOutlined
                                           style={{
                                             position: 'absolute',
-                                            right: '8px',
-                                            bottom: '8px',
-                                            fontSize: '14px',
-                                            color: '#6b7280',
+                                            right: '10px',
+                                            bottom: '10px',
+                                            fontSize: '16px',
+                                            color: '#9ca3af',
                                             cursor: 'pointer',
-                                            transition: 'all 0.3s ease',
-                                            opacity: 0.6
+                                            transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                                            opacity: 0.5,
+                                            padding: '4px',
+                                            borderRadius: '50%',
+                                            background: 'transparent'
                                           }}
                                           onMouseEnter={(e) => {
-                                            e.currentTarget.style.transform = 'translateY(-4px)';
+                                            e.currentTarget.style.transform = 'translateY(-2px) scale(1.1)';
                                             e.currentTarget.style.color = '#3b82f6';
                                             e.currentTarget.style.opacity = '1';
+                                            e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)';
                                           }}
                                           onMouseLeave={(e) => {
-                                            e.currentTarget.style.transform = 'translateY(0)';
-                                            e.currentTarget.style.color = '#6b7280';
-                                            e.currentTarget.style.opacity = '0.6';
+                                            e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                                            e.currentTarget.style.color = '#9ca3af';
+                                            e.currentTarget.style.opacity = '0.5';
+                                            e.currentTarget.style.background = 'transparent';
                                           }}
                                           onClick={(e) => {
                                             e.stopPropagation();

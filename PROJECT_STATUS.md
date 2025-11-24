@@ -23,6 +23,17 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-11-24 | 경로-구매상품 순서 변경 | OrderAnalysis.jsx |
+| 2025-11-24 | 고객 여정 모달 디자인 개선 | OrderAnalysis.jsx |
+| 2025-11-24 | 구매완료 정보 순서조정 | OrderAnalysis.jsx |
+| 2025-11-24 | 구매 완료 뱃지-상품명 순서 변경 | OrderAnalysis.jsx |
+| 2025-11-24 | 구매 완료 뱃지 위치 통일 | OrderAnalysis.jsx |
+| 2025-11-24 | 제품 뱃지 위치 변경 | OrderAnalysis.jsx |
+| 2025-11-24 | 라벨 표시 개선 | OrderAnalysis.jsx |
+| 2025-11-24 | 단계 색상 통일 | OrderAnalysis.jsx |
+| 2025-11-24 | 페이지 매핑 직접 연동 | OrderAnalysis.jsx |
+| 2025-11-24 | 구매 상품 표시 정확도 개선 | OrderAnalysis.jsx |
+| 2025-11-24 | 하드코딩 로직 제거 | OrderAnalysis.jsx |
 | 2025-11-21 | 배지 UI/UX 개선 | MappingModal.jsx, colorHistory.js |
 | 2025-11-21 | 제품 뱃지 컬럼 분리 | PageMapping.jsx |
 | 2025-11-21 | 배지 미리보기 기능 복원 | MappingModal.jsx |
