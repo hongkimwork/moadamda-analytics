@@ -94,12 +94,29 @@ router.get('/creative-performance', async (req, res) => {
       if (Array.isArray(filters) && filters.length > 0) {
         const filterClauses = filters.map(filter => {
           const key = filter.key; // 예: 'utm_source'
+          const operator = filter.operator || 'equals';
           const value = filter.value;
+          
+          // 키 이름 검증 (SQL Injection 방지)
+          if (!/^utm_[a-z_]+$/.test(key)) {
+            return null;
+          }
+          
+          // IN 연산자 처리 (배열 값)
+          if (operator === 'in' && Array.isArray(value) && value.length > 0) {
+            const placeholders = value.map((v, i) => {
+              queryParams.push(v);
+              return `$${paramIndex++}`;
+            });
+            return `us.utm_params->>'${key}' IN (${placeholders.join(', ')})`;
+          }
+          
+          // 기본 equals 연산자
           queryParams.push(value);
           const clause = `us.utm_params->>'${key}' = $${paramIndex}`;
           paramIndex++;
           return clause;
-        });
+        }).filter(Boolean);
         
         if (filterClauses.length > 0) {
           utmFilterConditions = 'AND ' + filterClauses.join(' AND ');
@@ -168,20 +185,40 @@ router.get('/creative-performance', async (req, res) => {
     ]);
 
     // 9. 응답 데이터 가공 (URL 디코딩 포함)
-    // URL 디코딩 함수 (안전하게 처리)
+    // URL 디코딩 함수 (불완전한 UTF-8 바이트 시퀀스 처리 및 정리)
     const safeDecodeURIComponent = (str) => {
       if (!str || str === '-') return str;
-      try {
-        // %XX 형식이 포함되어 있으면 디코딩 시도
-        if (str.includes('%')) {
-          return decodeURIComponent(str);
-        }
-        return str;
-      } catch (e) {
-        // 디코딩 실패 시 원본 반환
-        console.warn('Failed to decode:', str, e.message);
-        return str;
+      
+      let result = str;
+      let prevResult;
+      
+      // 반복 디코딩 (이중 인코딩 처리)
+      while (result !== prevResult) {
+        prevResult = result;
+        
+        // 유효한 %XX 패턴 시퀀스를 찾아서 디코딩
+        result = result.replace(/(%[0-9A-Fa-f]{2})+/g, (match) => {
+          // 디코딩 시도, 실패 시 뒤에서부터 %XX 제거하며 재시도
+          let toTry = match;
+          while (toTry.length >= 3) {
+            try {
+              const decoded = decodeURIComponent(toTry);
+              // 성공: 디코딩된 문자열만 반환 (불완전한 나머지는 버림)
+              return decoded;
+            } catch (e) {
+              // 뒤에서 %XX 하나 제거 (3글자)
+              toTry = toTry.slice(0, -3);
+            }
+          }
+          // 모두 실패하면 빈 문자열 반환 (불완전한 인코딩 제거)
+          return '';
+        });
       }
+      
+      // 최종 정리: 끝에 남은 불완전한 % 패턴 제거 (%만 있거나 %X 형태)
+      result = result.replace(/%[0-9A-Fa-f]?$/g, '');
+      
+      return result;
     };
 
     const data = dataResult.rows.map(row => ({

@@ -12,8 +12,9 @@ const API_URL = import.meta.env.VITE_API_URL || '';
  * @param {string} tableName - 테이블 이름 (visitors, sessions, utm_sessions, conversions)
  * @param {function} onFilterChange - 필터 변경 콜백 (activeFilters 배열 전달)
  * @param {boolean} loading - 로딩 상태
+ * @param {Object} excludeValues - 특정 키에서 제외할 값 목록 { utm_source: ['viral'] }
  */
-function DynamicUtmFilterBar({ tableName, onFilterChange, loading = false }) {
+function DynamicUtmFilterBar({ tableName, onFilterChange, loading = false, excludeValues = {} }) {
   // 사용 가능한 UTM 키 목록
   const [availableUtmKeys, setAvailableUtmKeys] = useState([]);
   
@@ -73,7 +74,15 @@ function DynamicUtmFilterBar({ tableName, onFilterChange, loading = false }) {
         }
       });
       
-      return response.data.values || [];
+      let values = response.data.values || [];
+      
+      // excludeValues에 해당 키가 있으면 제외 처리
+      if (excludeValues[utmKey] && Array.isArray(excludeValues[utmKey])) {
+        const excludeList = excludeValues[utmKey].map(v => v.toLowerCase());
+        values = values.filter(v => !excludeList.includes(v.value?.toLowerCase()));
+      }
+      
+      return values;
     } catch (error) {
       // 에러 발생 시 조용히 실패 처리 (알람 표시 X)
       console.error(`[DynamicUtmFilterBar] UTM 값 조회 실패 (${utmKey}):`, error);

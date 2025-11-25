@@ -13,12 +13,17 @@ description: 작업 완료 시 PROJECT_STATUS.md에 한 줄 로그만 추가
 | YYYY-MM-DD | 작업 내용 (15자 이내) | 수정 파일명 |
 ```
 
+## ⚠️ 로그 관리 (중요)
+
+- 작업 로그는 **최신 15개만 유지**
+- 새 로그 추가 시, **16번째 이후 로그는 삭제**
+- 오래된 로그는 Git history에 보관됨
+
 ## ✅ 예시
 
 ```markdown
 | 2025-11-13 | 배지 색상 변경 | OrderAnalysis.jsx |
 | 2025-11-13 | API 응답 속도 개선 | stats.js |
-| 2025-11-13 | Rules 파일 정리 | .cursor/rules/ |
 ```
 
 ## ❌ 하지 말 것
@@ -26,11 +31,8 @@ description: 작업 완료 시 PROJECT_STATUS.md에 한 줄 로그만 추가
 - Phase/체크박스 업데이트 금지
 - 상세 설명 작성 금지
 - 파일명은 핵심 파일 1개만
-
-## 📄 파일 위치
-
-`C:\analysis\moadamda-analytics\PROJECT_STATUS.md`
+- 15개 초과 로그 유지 금지
 
 ---
 
-**규칙 버전**: v2 (2025-11-13)
+**규칙 버전**: v3 (2025-11-25)

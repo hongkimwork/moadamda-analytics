@@ -7,23 +7,32 @@ description: 서버 배포 매뉴얼
 ## 서버
 - SSH: root@49.50.139.223
 - 경로: /root/moadamda-analytics
+- 인증: ~/.ssh/id_rsa (자동)
 
 ## 배포 명령
 ```bash
-# 서버 접속
+# 프론트엔드 배포
 ssh root@49.50.139.223 '
   cd /root/moadamda-analytics &&
-  git checkout {브랜치명} &&
-  git pull origin {브랜치명} &&
-  docker-compose -f docker-compose.prod.yml up -d --build backend &&
+  git pull origin main &&
   cd frontend && npm run build
+'
+
+# 백엔드 재시작 (필요 시)
+ssh root@49.50.139.223 '
+  cd /root/moadamda-analytics &&
+  docker-compose -f docker-compose.prod.yml restart backend
 '
 ```
 
 ## 주의
-- 소요 시간: 1-2분
-- 백엔드/프론트엔드 모두 재빌드
+- 소요 시간: 약 10초 (프론트엔드 빌드)
+- PEM 키 불필요 (SSH 키 자동 인증)
+
+## 배포 확인
+- Frontend: https://marketingzon.com
+- Backend: https://moadamda-analytics.co.kr
 
 ---
 
-**v3.0** (2025-11-18)
+**v3.1** (2025-11-24)

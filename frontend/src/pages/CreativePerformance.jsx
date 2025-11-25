@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Table, Tag, Typography, Space, Button, Alert, message, Tooltip } from 'antd';
+import { Card, Table, Tag, Typography, Space, Button, Alert, message, Tooltip, Divider } from 'antd';
 import { ReloadOutlined, BarChartOutlined } from '@ant-design/icons';
-import { Search, BarChart3, RefreshCw } from 'lucide-react';
+import { Search, BarChart3, RefreshCw, Layers } from 'lucide-react';
 import axios from 'axios';
 import dayjs from 'dayjs';
 import SearchFilterBar from '../components/SearchFilterBar';
 import DynamicUtmFilterBar from '../components/DynamicUtmFilterBar';
+import UtmSourceQuickFilter from '../components/UtmSourceQuickFilter';
 
 const { Title } = Typography;
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -71,6 +72,9 @@ function CreativePerformance() {
 
   // 동적 UTM 필터 state
   const [activeUtmFilters, setActiveUtmFilters] = useState([]);
+  
+  // UTM Source 퀵 필터 state
+  const [quickFilterSources, setQuickFilterSources] = useState([]);
 
   // 요약 통계 계산 (현재 페이지 기준)
   const summaryStats = React.useMemo(() => {
@@ -102,9 +106,20 @@ function CreativePerformance() {
         sort_order: sortOrder
       };
 
-      // 동적 UTM 필터 추가
-      if (activeUtmFilters.length > 0) {
-        params.utm_filters = JSON.stringify(activeUtmFilters);
+      // 동적 UTM 필터 + 퀵 필터 병합
+      const combinedFilters = [...activeUtmFilters];
+      
+      // 퀵 필터가 있으면 utm_source IN 조건 추가
+      if (quickFilterSources.length > 0) {
+        combinedFilters.push({
+          key: 'utm_source',
+          operator: 'in',
+          value: quickFilterSources
+        });
+      }
+      
+      if (combinedFilters.length > 0) {
+        params.utm_filters = JSON.stringify(combinedFilters);
       }
 
       const response = await axios.get(`${API_URL}/api/creative-performance`, { params });
@@ -128,7 +143,7 @@ function CreativePerformance() {
   // 초기 로드 및 의존성 변경 시 재조회
   useEffect(() => {
     fetchData();
-  }, [currentPage, pageSize, filters, searchTerm, sortField, sortOrder, activeUtmFilters]);
+  }, [currentPage, pageSize, filters, searchTerm, sortField, sortOrder, activeUtmFilters, quickFilterSources]);
 
   // 검색 핸들러
   const handleSearch = (term) => {
@@ -594,7 +609,7 @@ function CreativePerformance() {
         loading={loading}
       />
 
-      {/* 동적 UTM 필터 */}
+      {/* UTM 필터 영역 (퀵 필터 + 동적 필터) */}
       <Card 
         size="small" 
         style={{ 
@@ -605,22 +620,55 @@ function CreativePerformance() {
         }}
       >
         <div style={{ 
-          marginBottom: '12px', 
-          fontSize: '14px', 
-          color: '#374151', 
-          fontWeight: 600,
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px'
+          display: 'flex', 
+          gap: '24px',
+          flexWrap: 'wrap'
         }}>
-          <Search size={18} strokeWidth={2} style={{ color: '#1890ff' }} />
-          UTM 필터
+          {/* 좌측: UTM Source 퀵 필터 */}
+          <div style={{ flex: '1 1 45%', minWidth: '300px' }}>
+            <div style={{ 
+              marginBottom: '12px', 
+              fontSize: '14px', 
+              color: '#374151', 
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <Layers size={18} strokeWidth={2} style={{ color: '#1890ff' }} />
+              광고 플랫폼
+            </div>
+            <UtmSourceQuickFilter
+              onFilterChange={setQuickFilterSources}
+              loading={loading}
+            />
+          </div>
+
+          {/* 구분선 */}
+          <Divider type="vertical" style={{ height: 'auto', margin: '0' }} />
+
+          {/* 우측: 동적 UTM 필터 */}
+          <div style={{ flex: '1 1 45%', minWidth: '300px' }}>
+            <div style={{ 
+              marginBottom: '12px', 
+              fontSize: '14px', 
+              color: '#374151', 
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <Search size={18} strokeWidth={2} style={{ color: '#1890ff' }} />
+              UTM 필터
+            </div>
+            <DynamicUtmFilterBar
+              tableName="utm-sessions"
+              onFilterChange={setActiveUtmFilters}
+              loading={loading}
+              excludeValues={{ utm_source: ['viral'] }}
+            />
+          </div>
         </div>
-        <DynamicUtmFilterBar
-          tableName="utm-sessions"
-          onFilterChange={setActiveUtmFilters}
-          loading={loading}
-        />
       </Card>
 
       {/* 에러 표시 */}
