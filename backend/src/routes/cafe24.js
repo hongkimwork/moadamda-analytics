@@ -225,39 +225,32 @@ router.post('/cafe24/sync', async (req, res) => {
     
     for (const order of missingOrders) {
       try {
-        // 결제 금액 계산
-        const paymentAmount = parseFloat(order.actual_order_amount?.payment_amount || 0);
+        // 결제 금액 계산 (정수로 변환)
+        const totalAmount = Math.round(parseFloat(order.actual_order_amount?.total_order_amount || order.order_amount || 0));
+        const finalPayment = Math.round(parseFloat(order.actual_order_amount?.payment_amount || 0));
+        const discountAmount = Math.round(parseFloat(order.actual_order_amount?.total_discount_amount || 0));
+        const mileageUsed = Math.round(parseFloat(order.actual_order_amount?.mileage_spent_amount || 0));
+        const shippingFee = Math.round(parseFloat(order.actual_order_amount?.shipping_fee || 0));
         
-        // 상품 정보 추출 (items가 embed된 경우)
-        let productName = '';
-        let productId = '';
-        
-        if (order.items && order.items.length > 0) {
-          productName = order.items[0].product_name || '';
-          productId = order.items[0].product_no?.toString() || '';
-        }
-        
-        // conversions 테이블에 INSERT
+        // conversions 테이블에 INSERT (실제 존재하는 컬럼만 사용)
         await db.query(
           `INSERT INTO conversions (
-            visitor_id, session_id, order_id, total_amount, final_payment,
-            product_count, product_name, product_id, timestamp, 
-            source_type
+            order_id, total_amount, final_payment, product_count, timestamp,
+            discount_amount, mileage_used, shipping_fee, order_status, synced_at
           ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, NOW()
           )
           ON CONFLICT (order_id) DO NOTHING`,
           [
-            `cafe24_${order.member_id || 'guest'}`, // visitor_id (Cafe24 API에서 가져온 것 표시)
-            `cafe24_sync_${order.order_id}`, // session_id
             order.order_id,
-            paymentAmount,
-            paymentAmount,
+            totalAmount,
+            finalPayment,
             order.items?.length || 1,
-            productName,
-            productId,
             new Date(order.order_date),
-            'cafe24_api' // 출처 표시
+            discountAmount,
+            mileageUsed,
+            shippingFee,
+            'confirmed' // 결제 완료된 주문만 가져오므로
           ]
         );
         
