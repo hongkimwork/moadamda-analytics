@@ -11,22 +11,25 @@ description: 서버 배포 매뉴얼
 
 ## 배포 명령
 ```bash
-# 프론트엔드 배포
+# 프론트엔드만 배포
 ssh root@49.50.139.223 '
   cd /root/moadamda-analytics &&
   git pull origin main &&
   cd frontend && npm run build
 '
 
-# 백엔드 재시작 (필요 시)
+# 백엔드 배포 (코드 변경 시 반드시 --build 사용!)
 ssh root@49.50.139.223 '
   cd /root/moadamda-analytics &&
-  docker-compose -f docker-compose.prod.yml restart backend
+  git pull origin main &&
+  docker-compose -f docker-compose.prod.yml up -d --build backend
 '
 ```
 
-## 주의
-- 소요 시간: 약 10초 (프론트엔드 빌드)
+## ⚠️ 중요
+- **백엔드 코드 변경 시**: 반드시 `--build` 옵션 사용
+- `restart`만 하면 기존 이미지가 사용되어 새 코드가 반영되지 않음
+- 소요 시간: 프론트엔드 ~10초, 백엔드 ~15초
 - PEM 키 불필요 (SSH 키 자동 인증)
 
 ## 배포 확인
