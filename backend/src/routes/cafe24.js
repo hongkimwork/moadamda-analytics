@@ -193,7 +193,7 @@ router.post('/cafe24/sync', async (req, res) => {
     // 기존 conversions에서 해당 기간의 order_id 조회
     const existingResult = await db.query(
       `SELECT order_id FROM conversions 
-       WHERE timestamp >= $1 AND timestamp < $2 + INTERVAL '1 day'
+       WHERE timestamp >= $1::date AND timestamp < $2::date + INTERVAL '1 day'
        AND order_id IS NOT NULL`,
       [start_date, end_date]
     );
