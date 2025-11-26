@@ -9,6 +9,8 @@ const statsRoutes = require('./routes/stats');
 const tablesRoutes = require('./routes/tables');
 const mappingsRoutes = require('./routes/mappings');
 const creativePerformanceRoutes = require('./routes/creative-performance');
+const cafe24Routes = require('./routes/cafe24');
+const cafe24Client = require('./utils/cafe24');
 
 const app = express();
 const PORT = process.env.PORT || 3003;
@@ -35,6 +37,7 @@ app.use('/api/stats', statsRoutes);
 app.use('/api/tables', tablesRoutes);
 app.use('/api/mappings', mappingsRoutes);
 app.use('/api', creativePerformanceRoutes);
+app.use('/api', cafe24Routes);
 
 // Error handling
 app.use((err, req, res, next) => {
@@ -56,6 +59,13 @@ app.listen(PORT, '0.0.0.0', () => {
       console.error('Database connection failed:', err);
     } else {
       console.log('Database connected successfully');
+      
+      // Start Cafe24 token refresh background task
+      if (process.env.CAFE24_AUTH_KEY) {
+        cafe24Client.startTokenRefreshTask();
+      } else {
+        console.log('Cafe24 integration disabled (CAFE24_AUTH_KEY not set)');
+      }
     }
   });
 });
