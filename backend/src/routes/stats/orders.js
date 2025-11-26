@@ -159,8 +159,8 @@ router.get('/orders', async (req, res) => {
       device_type: row.device_type || null,
       utm_source: row.utm_source || null,
       utm_campaign: row.utm_campaign || null,
-      // Cafe24 API sync 주문 여부 표시
-      is_cafe24_only: !row.visitor_id
+      // Cafe24 API sync 주문 여부 표시 (visitor_id 없거나 빈 문자열)
+      is_cafe24_only: !row.visitor_id || row.visitor_id === ''
     }));
     
     // 상품명이 없는 주문들을 Cafe24 API에서 보강
@@ -241,8 +241,8 @@ router.get('/order-detail/:orderId', async (req, res) => {
 
     const order = orderResult.rows[0];
     
-    // Cafe24 API sync 주문 (visitor_id 없음) 처리
-    if (!order.visitor_id) {
+    // Cafe24 API sync 주문 (visitor_id 없거나 빈 문자열) 처리
+    if (!order.visitor_id || order.visitor_id === '') {
       // Cafe24 API에서 주문 상세 정보 가져오기
       let cafe24Order = null;
       if (process.env.CAFE24_AUTH_KEY) {
