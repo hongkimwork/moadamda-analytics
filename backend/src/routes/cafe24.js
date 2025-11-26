@@ -258,7 +258,7 @@ router.post('/cafe24/sync', async (req, res) => {
           }
         }
         
-        // conversions 테이블에 INSERT (visitor_id, product_name, paid 포함)
+        // conversions 테이블에 UPSERT (Cafe24 API 값으로 크로스체크하여 업데이트)
         await db.query(
           `INSERT INTO conversions (
             visitor_id, session_id, order_id, total_amount, final_payment, 
@@ -267,7 +267,14 @@ router.post('/cafe24/sync', async (req, res) => {
           ) VALUES (
             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), $12, $13
           )
-          ON CONFLICT (order_id) DO NOTHING`,
+          ON CONFLICT (order_id) DO UPDATE SET
+            paid = EXCLUDED.paid,
+            final_payment = EXCLUDED.final_payment,
+            total_amount = EXCLUDED.total_amount,
+            discount_amount = EXCLUDED.discount_amount,
+            mileage_used = EXCLUDED.mileage_used,
+            shipping_fee = EXCLUDED.shipping_fee,
+            synced_at = NOW()`,
           [
             visitorId,
             sessionId,
