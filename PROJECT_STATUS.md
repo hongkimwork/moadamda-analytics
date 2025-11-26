@@ -1,12 +1,12 @@
 # 🎯 Moadamda Analytics - 프로젝트 현황
 
-**마지막 업데이트**: 2025-11-25
+**마지막 업데이트**: 2025-11-26
 
 ---
 
 ## 📍 현재 상태
 
-- **시스템 버전**: v047
+- **시스템 버전**: v048
 - **Tracker 버전**: tracker-v044.js
 - **프론트**: https://marketingzon.com
 - **백엔드**: https://moadamda-analytics.co.kr
@@ -17,6 +17,7 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-11-26 | Cafe24 API 연동 구현 | cafe24.js |
 | 2025-11-25 | 필터에서 viral 제외 처리 | DynamicUtmFilterBar.jsx |
 | 2025-11-25 | 퀵필터 바이럴 제거/추가버튼 수정 | UtmSourceQuickFilter.jsx |
 | 2025-11-25 | UTM Source 퀵 필터 추가 | UtmSourceQuickFilter.jsx |
@@ -31,13 +32,6 @@
 | 2025-11-24 | 경로-구매상품 순서 변경 | OrderAnalysis.jsx |
 | 2025-11-24 | 고객 여정 모달 디자인 개선 | OrderAnalysis.jsx |
 | 2025-11-24 | 구매완료 정보 순서조정 | OrderAnalysis.jsx |
-| 2025-11-24 | 구매 완료 뱃지-상품명 순서 변경 | OrderAnalysis.jsx |
-
----
-
-## ⚠️ 알려진 이슈
-
-- **외부 결제 추적 불가**: 카카오페이, 네이버페이 주문이 추적 안 됨 (외부 페이지에서 purchase 이벤트 미발생)
 
 ---
 
