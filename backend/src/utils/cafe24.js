@@ -349,12 +349,19 @@ async function syncOrders() {
     
     const existingOrderIds = new Set(existingResult.rows.map(r => r.order_id));
     
-    // 누락된 주문 찾기 (paid='T'인 주문만, final_payment > 0인 주문만)
+    // 누락된 주문 찾기
+    // - paid='T' && final_payment > 0: 저장 (정상 결제)
+    // - paid='T' && final_payment = 0: 제외 (선불금/외부결제, 추적 불가)
+    // - paid='F': 저장 (무통장 대기, 나중에 입금 확인 시 업데이트)
     const missingOrders = cafe24Orders.filter(order => {
       if (existingOrderIds.has(order.order_id)) return false;
-      if (order.paid !== 'T') return false;
+      
+      // paid='F' (무통장 대기)는 저장 (나중에 업데이트)
+      if (order.paid === 'F') return true;
+      
+      // paid='T'인 경우: final_payment > 0인 것만 저장
       const finalPayment = Math.round(parseFloat(order.actual_order_amount?.payment_amount || 0));
-      return finalPayment > 0; // 실결제금액 0원 제외
+      return finalPayment > 0;
     });
     
     console.log(`[Cafe24 Auto Sync] Found ${missingOrders.length} missing orders`);
