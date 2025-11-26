@@ -236,9 +236,11 @@ router.post('/cafe24/sync', async (req, res) => {
         // visitor_id 매칭 시도
         let visitorId = null;
         let sessionId = null;
+        let productName = null;
         
         if (order.items && order.items.length > 0) {
           const productNo = order.items[0].product_no;
+          productName = order.items[0].product_name || null;
           const match = await cafe24.findMatchingVisitor(order.order_date, productNo);
           if (match) {
             visitorId = match.visitor_id;
@@ -247,14 +249,14 @@ router.post('/cafe24/sync', async (req, res) => {
           }
         }
         
-        // conversions 테이블에 INSERT (visitor_id 매칭 포함)
+        // conversions 테이블에 INSERT (visitor_id, product_name 포함)
         await db.query(
           `INSERT INTO conversions (
             visitor_id, session_id, order_id, total_amount, final_payment, 
             product_count, timestamp, discount_amount, mileage_used, 
-            shipping_fee, order_status, synced_at
+            shipping_fee, order_status, synced_at, product_name
           ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW()
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), $12
           )
           ON CONFLICT (order_id) DO NOTHING`,
           [
@@ -268,7 +270,8 @@ router.post('/cafe24/sync', async (req, res) => {
             discountAmount,
             mileageUsed,
             shippingFee,
-            'confirmed'
+            'confirmed',
+            productName
           ]
         );
         
@@ -315,6 +318,30 @@ router.post('/cafe24/backfill', async (req, res) => {
     
   } catch (error) {
     console.error('[Cafe24 Backfill] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * 상품명 일괄 업데이트
+ * product_name이 NULL인 주문들에 Cafe24 API에서 상품명 조회하여 UPDATE
+ */
+router.post('/cafe24/backfill-products', async (req, res) => {
+  try {
+    console.log('[Cafe24 Product Backfill] Starting product name backfill via API...');
+    
+    const result = await cafe24.backfillProductNames();
+    
+    res.json({
+      success: true,
+      total_orders: result.total,
+      updated: result.updated,
+      errors: result.errors || 0,
+      error: result.error || null
+    });
+    
+  } catch (error) {
+    console.error('[Cafe24 Product Backfill] Error:', error);
     res.status(500).json({ error: error.message });
   }
 });

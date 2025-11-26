@@ -372,9 +372,11 @@ async function syncOrders() {
         // visitor_id 매칭 시도
         let visitorId = null;
         let sessionId = null;
+        let productName = null;
         
         if (order.items && order.items.length > 0) {
           const productNo = order.items[0].product_no;
+          productName = order.items[0].product_name || null;
           const match = await findMatchingVisitor(order.order_date, productNo);
           if (match) {
             visitorId = match.visitor_id;
@@ -383,14 +385,14 @@ async function syncOrders() {
           }
         }
         
-        // conversions 테이블에 INSERT
+        // conversions 테이블에 INSERT (product_name 포함)
         await db.query(
           `INSERT INTO conversions (
             visitor_id, session_id, order_id, total_amount, final_payment, 
             product_count, timestamp, discount_amount, mileage_used, 
-            shipping_fee, order_status, synced_at
+            shipping_fee, order_status, synced_at, product_name
           ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW()
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), $12
           )
           ON CONFLICT (order_id) DO NOTHING`,
           [
@@ -404,7 +406,8 @@ async function syncOrders() {
             discountAmount,
             mileageUsed,
             shippingFee,
-            'confirmed'
+            'confirmed',
+            productName
           ]
         );
         
@@ -505,6 +508,83 @@ async function backfillVisitorIds() {
 }
 
 /**
+ * 기존 주문들의 상품명 일괄 업데이트
+ * product_name이 NULL인 주문들 대상으로 Cafe24 API에서 상품명 조회하여 UPDATE
+ */
+async function backfillProductNames() {
+  try {
+    console.log('[Cafe24 Product Backfill] Starting product_name backfill...');
+    
+    // product_name이 NULL인 주문들 조회
+    const ordersResult = await db.query(
+      `SELECT order_id 
+       FROM conversions 
+       WHERE product_name IS NULL
+       ORDER BY timestamp DESC`
+    );
+    
+    if (ordersResult.rows.length === 0) {
+      console.log('[Cafe24 Product Backfill] No orders need product name update');
+      return { total: 0, updated: 0 };
+    }
+    
+    console.log(`[Cafe24 Product Backfill] Found ${ordersResult.rows.length} orders to update`);
+    
+    let updatedCount = 0;
+    let errorCount = 0;
+    
+    // 배치 처리 (Rate limit 고려)
+    for (let i = 0; i < ordersResult.rows.length; i++) {
+      const order = ordersResult.rows[i];
+      
+      try {
+        // Cafe24 API에서 주문 상세 조회
+        const orderDetail = await getOrderDetail(order.order_id);
+        
+        if (orderDetail.order && orderDetail.order.items && orderDetail.order.items.length > 0) {
+          const productName = orderDetail.order.items[0].product_name;
+          
+          if (productName) {
+            await db.query(
+              `UPDATE conversions SET product_name = $1 WHERE order_id = $2`,
+              [productName, order.order_id]
+            );
+            updatedCount++;
+            
+            // 진행 상황 로그 (100개마다)
+            if (updatedCount % 100 === 0) {
+              console.log(`[Cafe24 Product Backfill] Progress: ${updatedCount}/${ordersResult.rows.length}`);
+            }
+          }
+        }
+        
+        // Rate limit 방지 (200ms 대기)
+        await sleep(200);
+        
+      } catch (orderError) {
+        errorCount++;
+        // 에러는 조용히 처리 (로그만 남김)
+        if (errorCount <= 5) {
+          console.error(`[Cafe24 Product Backfill] Error ${order.order_id}:`, orderError.message);
+        }
+      }
+    }
+    
+    console.log(`[Cafe24 Product Backfill] Completed: ${updatedCount} updated, ${errorCount} errors out of ${ordersResult.rows.length}`);
+    
+    return {
+      total: ordersResult.rows.length,
+      updated: updatedCount,
+      errors: errorCount
+    };
+    
+  } catch (error) {
+    console.error('[Cafe24 Product Backfill] Error:', error.message);
+    return { total: 0, updated: 0, error: error.message };
+  }
+}
+
+/**
  * 자동 동기화 스케줄러 시작
  * 1시간마다 오늘 주문 동기화 실행
  */
@@ -544,6 +624,7 @@ module.exports = {
   findMatchingVisitor,
   syncOrders,
   backfillVisitorIds,
+  backfillProductNames,
   startTokenRefreshTask,
   startAutoSyncTask,
   CAFE24_MALL_ID,

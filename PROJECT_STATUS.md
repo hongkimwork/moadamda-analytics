@@ -17,6 +17,7 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-11-26 | visitor_id 백필 API 추가 | cafe24.js |
 | 2025-11-26 | 자동 동기화 및 visitor 매칭 | cafe24.js |
 | 2025-11-26 | 외부결제 주문 상품명 보강 | stats.js |
 | 2025-11-26 | Cafe24 API 연동 구현 | cafe24.js |
@@ -31,9 +32,6 @@
 | 2025-11-24 | 결제액 그래프 시각화 추가 | CreativePerformance.jsx |
 | 2025-11-24 | 광고 소재 UI 디자인 개선 | CreativePerformance.jsx |
 | 2025-11-24 | 빈 상태 아이콘 lucide 적용 | OrderAnalysis.jsx |
-| 2025-11-24 | 경로-구매상품 순서 변경 | OrderAnalysis.jsx |
-| 2025-11-24 | 고객 여정 모달 디자인 개선 | OrderAnalysis.jsx |
-| 2025-11-24 | 구매완료 정보 순서조정 | OrderAnalysis.jsx |
 
 ---
 
