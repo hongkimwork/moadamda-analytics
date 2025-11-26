@@ -63,6 +63,7 @@ app.listen(PORT, '0.0.0.0', () => {
       // Start Cafe24 token refresh background task
       if (process.env.CAFE24_AUTH_KEY) {
         cafe24Client.startTokenRefreshTask();
+        cafe24Client.startAutoSyncTask();
       } else {
         console.log('Cafe24 integration disabled (CAFE24_AUTH_KEY not set)');
       }

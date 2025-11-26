@@ -222,6 +222,7 @@ router.post('/cafe24/sync', async (req, res) => {
     
     // 누락된 주문 저장
     let insertedCount = 0;
+    let matchedCount = 0;
     
     for (const order of missingOrders) {
       try {
@@ -232,16 +233,33 @@ router.post('/cafe24/sync', async (req, res) => {
         const mileageUsed = Math.round(parseFloat(order.actual_order_amount?.mileage_spent_amount || 0));
         const shippingFee = Math.round(parseFloat(order.actual_order_amount?.shipping_fee || 0));
         
-        // conversions 테이블에 INSERT (실제 존재하는 컬럼만 사용)
+        // visitor_id 매칭 시도
+        let visitorId = null;
+        let sessionId = null;
+        
+        if (order.items && order.items.length > 0) {
+          const productNo = order.items[0].product_no;
+          const match = await cafe24.findMatchingVisitor(order.order_date, productNo);
+          if (match) {
+            visitorId = match.visitor_id;
+            sessionId = match.session_id;
+            matchedCount++;
+          }
+        }
+        
+        // conversions 테이블에 INSERT (visitor_id 매칭 포함)
         await db.query(
           `INSERT INTO conversions (
-            order_id, total_amount, final_payment, product_count, timestamp,
-            discount_amount, mileage_used, shipping_fee, order_status, synced_at
+            visitor_id, session_id, order_id, total_amount, final_payment, 
+            product_count, timestamp, discount_amount, mileage_used, 
+            shipping_fee, order_status, synced_at
           ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, NOW()
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW()
           )
           ON CONFLICT (order_id) DO NOTHING`,
           [
+            visitorId,
+            sessionId,
             order.order_id,
             totalAmount,
             finalPayment,
@@ -250,7 +268,7 @@ router.post('/cafe24/sync', async (req, res) => {
             discountAmount,
             mileageUsed,
             shippingFee,
-            'confirmed' // 결제 완료된 주문만 가져오므로
+            'confirmed'
           ]
         );
         
@@ -260,14 +278,15 @@ router.post('/cafe24/sync', async (req, res) => {
       }
     }
     
-    console.log(`[Cafe24 Sync] Successfully synced ${insertedCount} orders`);
+    console.log(`[Cafe24 Sync] Successfully synced ${insertedCount} orders, matched ${matchedCount} visitors`);
     
     res.json({
       success: true,
       total_cafe24_orders: cafe24Orders.length,
       existing_orders: existingOrderIds.size,
       missing_orders: missingOrders.length,
-      inserted_orders: insertedCount
+      inserted_orders: insertedCount,
+      matched_visitors: matchedCount
     });
     
   } catch (error) {

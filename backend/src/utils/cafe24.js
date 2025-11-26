@@ -219,6 +219,53 @@ async function getMemberInfo(memberId) {
 }
 
 /**
+ * 시간 + 상품 기반 visitor_id 매칭
+ * 주문 시간 ±30분 내 동일 상품 add_to_cart 이벤트 검색
+ * @param {Date} orderDate - 주문 시간
+ * @param {number} productNo - 상품 번호
+ * @returns {Object|null} { visitor_id, session_id } 또는 null
+ */
+async function findMatchingVisitor(orderDate, productNo) {
+  try {
+    // 주문 시간 ±30분 범위 계산
+    const orderTime = new Date(orderDate);
+    const startTime = new Date(orderTime.getTime() - 30 * 60 * 1000);
+    const endTime = new Date(orderTime.getTime() + 30 * 60 * 1000);
+    
+    // 동일 상품을 add_to_cart한 visitor 검색
+    const result = await db.query(
+      `SELECT 
+        e.visitor_id,
+        e.session_id,
+        e.timestamp,
+        ABS(EXTRACT(EPOCH FROM (e.timestamp - $1::timestamp))) as time_diff_seconds
+      FROM events e
+      WHERE e.event_type = 'add_to_cart'
+        AND e.product_id = $2
+        AND e.timestamp BETWEEN $3 AND $4
+      ORDER BY time_diff_seconds ASC
+      LIMIT 1`,
+      [orderTime, String(productNo), startTime, endTime]
+    );
+    
+    if (result.rows.length === 0) {
+      return null;
+    }
+    
+    const match = result.rows[0];
+    console.log(`[Cafe24] Visitor matched: ${match.visitor_id} (time diff: ${Math.round(match.time_diff_seconds)}s)`);
+    
+    return {
+      visitor_id: match.visitor_id,
+      session_id: match.session_id
+    };
+  } catch (error) {
+    console.error('[Cafe24] findMatchingVisitor error:', error.message);
+    return null;
+  }
+}
+
+/**
  * 현재 토큰 정보 조회 (디버깅용)
  */
 async function getTokenInfo() {
@@ -271,6 +318,133 @@ function startTokenRefreshTask() {
   }, REFRESH_INTERVAL);
 }
 
+/**
+ * 주문 자동 동기화 실행
+ * 오늘 날짜 기준으로 누락된 주문 동기화 + visitor_id 매칭
+ */
+async function syncOrders() {
+  try {
+    const today = new Date();
+    const startDate = today.toISOString().split('T')[0];
+    const endDate = startDate;
+    
+    console.log(`[Cafe24 Auto Sync] Starting sync for ${startDate}`);
+    
+    // Cafe24에서 주문 가져오기
+    const cafe24Orders = await getAllOrders(startDate, endDate);
+    console.log(`[Cafe24 Auto Sync] Fetched ${cafe24Orders.length} orders from Cafe24`);
+    
+    if (cafe24Orders.length === 0) {
+      console.log('[Cafe24 Auto Sync] No orders to sync');
+      return { synced: 0, matched: 0 };
+    }
+    
+    // 기존 conversions에서 해당 기간의 order_id 조회
+    const existingResult = await db.query(
+      `SELECT order_id FROM conversions 
+       WHERE timestamp >= $1::date AND timestamp < $1::date + INTERVAL '1 day'
+       AND order_id IS NOT NULL`,
+      [startDate]
+    );
+    
+    const existingOrderIds = new Set(existingResult.rows.map(r => r.order_id));
+    
+    // 누락된 주문 찾기 (결제 완료된 주문만)
+    const missingOrders = cafe24Orders.filter(order => 
+      !existingOrderIds.has(order.order_id) && 
+      order.paid === 'T'
+    );
+    
+    console.log(`[Cafe24 Auto Sync] Found ${missingOrders.length} missing orders`);
+    
+    let syncedCount = 0;
+    let matchedCount = 0;
+    
+    for (const order of missingOrders) {
+      try {
+        // 결제 금액 계산
+        const totalAmount = Math.round(parseFloat(order.actual_order_amount?.total_order_amount || order.order_amount || 0));
+        const finalPayment = Math.round(parseFloat(order.actual_order_amount?.payment_amount || 0));
+        const discountAmount = Math.round(parseFloat(order.actual_order_amount?.total_discount_amount || 0));
+        const mileageUsed = Math.round(parseFloat(order.actual_order_amount?.mileage_spent_amount || 0));
+        const shippingFee = Math.round(parseFloat(order.actual_order_amount?.shipping_fee || 0));
+        
+        // visitor_id 매칭 시도
+        let visitorId = null;
+        let sessionId = null;
+        
+        if (order.items && order.items.length > 0) {
+          const productNo = order.items[0].product_no;
+          const match = await findMatchingVisitor(order.order_date, productNo);
+          if (match) {
+            visitorId = match.visitor_id;
+            sessionId = match.session_id;
+            matchedCount++;
+          }
+        }
+        
+        // conversions 테이블에 INSERT
+        await db.query(
+          `INSERT INTO conversions (
+            visitor_id, session_id, order_id, total_amount, final_payment, 
+            product_count, timestamp, discount_amount, mileage_used, 
+            shipping_fee, order_status, synced_at
+          ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW()
+          )
+          ON CONFLICT (order_id) DO NOTHING`,
+          [
+            visitorId,
+            sessionId,
+            order.order_id,
+            totalAmount,
+            finalPayment,
+            order.items?.length || 1,
+            new Date(order.order_date),
+            discountAmount,
+            mileageUsed,
+            shippingFee,
+            'confirmed'
+          ]
+        );
+        
+        syncedCount++;
+      } catch (insertError) {
+        console.error(`[Cafe24 Auto Sync] Failed to insert order ${order.order_id}:`, insertError.message);
+      }
+    }
+    
+    console.log(`[Cafe24 Auto Sync] Synced ${syncedCount} orders, matched ${matchedCount} visitors`);
+    return { synced: syncedCount, matched: matchedCount };
+    
+  } catch (error) {
+    console.error('[Cafe24 Auto Sync] Error:', error.message);
+    return { synced: 0, matched: 0, error: error.message };
+  }
+}
+
+/**
+ * 자동 동기화 스케줄러 시작
+ * 1시간마다 오늘 주문 동기화 실행
+ */
+function startAutoSyncTask() {
+  console.log('[Cafe24] Starting auto sync background task');
+  
+  // 서버 시작 5분 후 첫 동기화 (서버 안정화 대기)
+  setTimeout(async () => {
+    console.log('[Cafe24] Running initial auto sync...');
+    await syncOrders();
+  }, 5 * 60 * 1000);
+  
+  // 1시간마다 동기화
+  const SYNC_INTERVAL = 60 * 60 * 1000; // 1시간
+  
+  setInterval(async () => {
+    console.log('[Cafe24] Running scheduled auto sync...');
+    await syncOrders();
+  }, SYNC_INTERVAL);
+}
+
 // 유틸리티 함수
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -286,7 +460,10 @@ module.exports = {
   getBuyerInfo,
   getMemberInfo,
   getTokenInfo,
+  findMatchingVisitor,
+  syncOrders,
   startTokenRefreshTask,
+  startAutoSyncTask,
   CAFE24_MALL_ID,
   CAFE24_API_VERSION
 };
