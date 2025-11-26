@@ -331,19 +331,63 @@ WHERE time_spent_seconds > 0
 
 항상 어떤 어트리뷰션 모델을 사용하는지 명시하세요.
 
+## Cafe24 API 연동
+
+### 주문 데이터 수집 아키텍처
+
+주문 데이터는 두 가지 소스에서 수집됩니다:
+
+1. **Tracker (tracker-v044.js)**: 자사몰에서 실행되어 visitor_id와 함께 구매 이벤트 수집
+2. **Cafe24 API Sync**: Tracker가 놓친 주문을 보충 (1시간마다 토큰 자동 갱신)
+
+```
+주문 수집 흐름:
+┌─────────────────┐     ┌─────────────────┐
+│   Tracker       │ OR  │  Cafe24 API     │
+│ (visitor_id ✅) │     │  (visitor_id ❌) │
+└────────┬────────┘     └────────┬────────┘
+         │                       │
+         └───────────┬───────────┘
+                     ▼
+              conversions 테이블
+```
+
+### API 엔드포인트
+
+- `GET /api/cafe24/orders?start_date=&end_date=` - 주문 목록 조회
+- `GET /api/cafe24/token-info` - 토큰 상태 확인
+- `POST /api/cafe24/sync` - 수동 주문 동기화
+
+### 고객 여정 분석 제한
+
+**Cafe24 API Sync로 가져온 주문**: visitor_id가 없어서 고객 여정 분석 불가
+- `synced_at` 컬럼이 있으면 Cafe24 API Sync로 가져온 주문
+- 상품명, 결제 정보는 Cafe24 API에서 조회 가능
+
+**Tracker로 수집된 주문**: 전체 고객 여정 분석 가능
+- visitor_id로 pageviews, events 테이블 조회
+
+### 환경 변수 (backend/.env)
+
+```env
+CAFE24_AUTH_KEY=ZVl6QTBSUUdlMFJiR2dPQ3l3WEh0STpnejh4ZklpMEE2UkdQZUhSa0c0UHFE
+CAFE24_MALL_ID=moadamda
+CAFE24_API_VERSION=2025-09-01
+```
+
 ## 알려진 이슈
 
-### 외부 결제 추적 미지원
+### Tracker 구매 이벤트 누락
 
-**문제**: 외부 결제 게이트웨이(카카오페이, 네이버페이)를 통한 주문이 conversions 테이블에 추적되지 않음.
+**문제**: 일부 주문에서 Tracker의 trackPurchase()가 실행되지 않아 visitor_id가 없음
 
-**원인**: 외부 결제 페이지에서 구매 이벤트 추적 스크립트가 실행되지 않음.
+**가능한 원인**:
+- 결제 완료 페이지 로드 전 사용자가 창 닫음
+- EC_FRONT_EXTERNAL_SCRIPT_VARIABLE_DATA 객체 로드 지연 (30초 타임아웃)
+- JavaScript 에러로 스크립트 실행 실패
+- 광고 차단기 등 브라우저 확장 프로그램
 
-**영향**: 외부 결제 수단을 사용한 주문의 광고 효과 측정 불가. 일반 결제 구매만 추적됨.
-
-**상태**: 현재 일반 결제만 추적 중. 알려진 제한사항임.
-
-**해결 방법**: 없음. 일반 결제 전환율에 분석을 집중하세요.
+**해결 방법**: Cafe24 API Sync로 누락된 주문 보충 (현재 구현됨)
 
 ## 프로젝트 문서
 
