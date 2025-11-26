@@ -17,6 +17,7 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-11-26 | 0원 주문 제외 필터 구현 | orders.js |
 | 2025-11-26 | 상품명 DB 저장 및 마이그레이션 | stats.js |
 | 2025-11-26 | visitor_id 백필 API 추가 | cafe24.js |
 | 2025-11-26 | 자동 동기화 및 visitor 매칭 | cafe24.js |
@@ -31,7 +32,6 @@
 | 2025-11-24 | Pagination 개수 오류 수정 | OrderAnalysis.jsx |
 | 2025-11-24 | 결제액 그래프 시각화 추가 | CreativePerformance.jsx |
 | 2025-11-24 | 광고 소재 UI 디자인 개선 | CreativePerformance.jsx |
-| 2025-11-24 | 빈 상태 아이콘 lucide 적용 | OrderAnalysis.jsx |
 
 ---
 
