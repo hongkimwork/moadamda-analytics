@@ -178,12 +178,6 @@ router.get('/creative-performance', async (req, res) => {
         ${utmFilterConditions}
     `;
 
-    // DEBUG: 쿼리 파라미터 로깅
-    console.log('[DEBUG] utm_filters:', utm_filters);
-    console.log('[DEBUG] queryParams:', queryParams);
-    console.log('[DEBUG] utmFilterConditions:', utmFilterConditions);
-    console.log('[DEBUG] dataQuery:', dataQuery);
-
     // 8. 쿼리 실행 (전체 데이터 조회 - 정렬/페이지네이션은 나중에 처리)
     const [dataResult, countResult] = await Promise.all([
       db.query(dataQuery, queryParams),

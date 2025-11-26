@@ -296,6 +296,30 @@ router.post('/cafe24/sync', async (req, res) => {
 });
 
 /**
+ * 기존 synced 주문의 visitor_id 일괄 매칭
+ * synced_at이 있고 visitor_id가 NULL인 주문들 대상
+ */
+router.post('/cafe24/backfill', async (req, res) => {
+  try {
+    console.log('[Cafe24 Backfill] Starting backfill via API...');
+    
+    const result = await cafe24.backfillVisitorIds();
+    
+    res.json({
+      success: true,
+      total_orders: result.total,
+      matched: result.matched,
+      updated: result.updated,
+      error: result.error || null
+    });
+    
+  } catch (error) {
+    console.error('[Cafe24 Backfill] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * 토큰 수동 갱신
  */
 router.post('/cafe24/refresh-token', async (req, res) => {

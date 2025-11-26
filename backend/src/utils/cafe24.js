@@ -424,6 +424,87 @@ async function syncOrders() {
 }
 
 /**
+ * 기존 synced 주문들의 visitor_id 일괄 매칭
+ * synced_at이 있고 visitor_id가 NULL인 주문들 대상
+ */
+async function backfillVisitorIds() {
+  try {
+    console.log('[Cafe24 Backfill] Starting visitor_id backfill...');
+    
+    // synced_at이 있고 visitor_id가 NULL인 주문들 조회
+    const ordersResult = await db.query(
+      `SELECT order_id, timestamp 
+       FROM conversions 
+       WHERE synced_at IS NOT NULL 
+         AND (visitor_id IS NULL OR visitor_id = '')
+       ORDER BY timestamp DESC`
+    );
+    
+    if (ordersResult.rows.length === 0) {
+      console.log('[Cafe24 Backfill] No orders need backfill');
+      return { total: 0, matched: 0, updated: 0 };
+    }
+    
+    console.log(`[Cafe24 Backfill] Found ${ordersResult.rows.length} orders to backfill`);
+    
+    let matchedCount = 0;
+    let updatedCount = 0;
+    
+    for (const order of ordersResult.rows) {
+      try {
+        // Cafe24 API에서 주문 상세 조회하여 상품 정보 가져오기
+        const orderDetail = await getOrderDetail(order.order_id);
+        
+        if (!orderDetail.order || !orderDetail.order.items || orderDetail.order.items.length === 0) {
+          continue;
+        }
+        
+        const productNo = orderDetail.order.items[0].product_no;
+        const orderDate = orderDetail.order.order_date;
+        
+        // visitor_id 매칭 시도
+        const match = await findMatchingVisitor(orderDate, productNo);
+        
+        if (match) {
+          matchedCount++;
+          
+          // UPDATE 쿼리
+          const updateResult = await db.query(
+            `UPDATE conversions 
+             SET visitor_id = $1, session_id = $2
+             WHERE order_id = $3 AND (visitor_id IS NULL OR visitor_id = '')`,
+            [match.visitor_id, match.session_id, order.order_id]
+          );
+          
+          if (updateResult.rowCount > 0) {
+            updatedCount++;
+            console.log(`[Cafe24 Backfill] Updated ${order.order_id} -> ${match.visitor_id.substring(0, 8)}...`);
+          }
+        }
+        
+        // Rate limit 방지
+        await sleep(300);
+        
+      } catch (orderError) {
+        console.error(`[Cafe24 Backfill] Error processing ${order.order_id}:`, orderError.message);
+      }
+    }
+    
+    console.log(`[Cafe24 Backfill] Completed: ${matchedCount} matched, ${updatedCount} updated out of ${ordersResult.rows.length}`);
+    
+    return {
+      total: ordersResult.rows.length,
+      matched: matchedCount,
+      updated: updatedCount
+    };
+    
+  } catch (error) {
+    console.error('[Cafe24 Backfill] Error:', error.message);
+    return { total: 0, matched: 0, updated: 0, error: error.message };
+  }
+}
+
+/**
  * 자동 동기화 스케줄러 시작
  * 1시간마다 오늘 주문 동기화 실행
  */
@@ -462,6 +543,7 @@ module.exports = {
   getTokenInfo,
   findMatchingVisitor,
   syncOrders,
+  backfillVisitorIds,
   startTokenRefreshTask,
   startAutoSyncTask,
   CAFE24_MALL_ID,

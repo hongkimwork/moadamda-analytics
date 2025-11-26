@@ -182,7 +182,7 @@ function CreativePerformance() {
   // 테이블 컬럼 정의
   const columns = [
     {
-      title: 'UTM Source',
+      title: <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>UTM<br />Source</div>,
       dataIndex: 'utm_source',
       key: 'utm_source',
       width: 100,
@@ -197,7 +197,7 @@ function CreativePerformance() {
       showSorterTooltip: false
     },
     {
-      title: 'UTM Campaign',
+      title: <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>UTM<br />Campaign</div>,
       dataIndex: 'utm_campaign',
       key: 'utm_campaign',
       width: 120,
@@ -212,7 +212,7 @@ function CreativePerformance() {
       showSorterTooltip: false
     },
     {
-      title: 'UTM Medium',
+      title: <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>UTM<br />Medium</div>,
       dataIndex: 'utm_medium',
       key: 'utm_medium',
       width: 100,
