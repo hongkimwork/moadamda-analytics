@@ -1207,15 +1207,18 @@ router.get('/orders', async (req, res) => {
            ORDER BY us.entry_timestamp DESC LIMIT 1),
           v.utm_campaign
         ) as utm_campaign,
-        -- Get first product name from events table
-        (
-          SELECT e.product_name 
-          FROM events e 
-          WHERE e.visitor_id = c.visitor_id 
-            AND e.event_type = 'purchase' 
-            AND e.timestamp <= c.timestamp 
-          ORDER BY e.timestamp DESC 
-          LIMIT 1
+        -- 상품명: conversions.product_name 우선, 없으면 events에서 조회
+        COALESCE(
+          c.product_name,
+          (
+            SELECT e.product_name 
+            FROM events e 
+            WHERE e.visitor_id = c.visitor_id 
+              AND e.event_type = 'purchase' 
+              AND e.timestamp <= c.timestamp 
+            ORDER BY e.timestamp DESC 
+            LIMIT 1
+          )
         ) as product_name
       FROM conversions c
       LEFT JOIN sessions s ON c.session_id = s.session_id
@@ -1257,49 +1260,12 @@ router.get('/orders', async (req, res) => {
       is_cafe24_only: !row.visitor_id || row.visitor_id === ''
     }));
     
-    // 상품명이 없는 주문들을 Cafe24 API에서 보강
-    if (process.env.CAFE24_AUTH_KEY) {
-      const ordersNeedingEnrichment = orders.filter(o => !o.product_name);
-      if (ordersNeedingEnrichment.length > 0) {
-        try {
-          const cafe24 = require('../utils/cafe24');
-          const enrichPromises = ordersNeedingEnrichment.slice(0, 10).map(async (order) => {
-            try {
-              const detail = await cafe24.getOrderDetail(order.order_id);
-              if (detail.order?.items?.[0]) {
-                return {
-                  order_id: order.order_id,
-                  product_name: detail.order.items[0].product_name,
-                  items_count: detail.order.items.length
-                };
-              }
-            } catch (e) { /* ignore */ }
-            return null;
-          });
-          
-          const enrichments = await Promise.all(enrichPromises);
-          const enrichmentMap = new Map();
-          enrichments.filter(e => e).forEach(e => enrichmentMap.set(e.order_id, e));
-          
-          orders = orders.map(order => {
-            const enrichment = enrichmentMap.get(order.order_id);
-            if (enrichment) {
-              return { ...order, product_name: enrichment.product_name };
-            }
-            return order;
-          });
-        } catch (e) {
-          console.error('[Orders] Cafe24 enrichment error:', e.message);
-        }
-      }
-    }
-    
-    // 최종 매핑
+    // 최종 매핑 (상품명/IP/디바이스 기본값 설정)
     orders = orders.map(order => ({
       ...order,
       product_name: order.product_name || '상품명 없음',
-      ip_address: order.ip_address || (order.is_cafe24_only ? '외부결제' : 'unknown'),
-      device_type: order.device_type || (order.is_cafe24_only ? '외부결제' : 'unknown')
+      ip_address: order.ip_address || (order.is_cafe24_only ? 'API 동기화' : 'unknown'),
+      device_type: order.device_type || (order.is_cafe24_only ? 'API 동기화' : 'unknown')
     }));
 
     res.json({
@@ -1395,12 +1361,12 @@ router.get('/order-detail/:orderId', async (req, res) => {
           total_amount: parseInt(order.total_amount) || 0,
           product_count: parseInt(order.product_count) || 1,
           product_name: cafe24Order?.items?.[0]?.product_name || '상품명 없음',
-          device_type: '외부결제',
+          device_type: 'API 동기화',
           browser: '-',
           os: '-',
-          ip_address: '외부결제',
+          ip_address: 'API 동기화',
           billing_name: cafe24Order?.billing_name || '-',
-          payment_method: cafe24Order?.payment_method_name || '외부결제',
+          payment_method: cafe24Order?.payment_method_name || 'API 동기화',
           order_items: cafe24Order?.items?.map(item => ({
             product_name: item.product_name,
             product_price: item.product_price,
