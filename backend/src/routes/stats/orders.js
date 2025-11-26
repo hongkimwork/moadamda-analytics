@@ -241,14 +241,8 @@ router.get('/order-detail/:orderId', async (req, res) => {
 
     const order = orderResult.rows[0];
     
-    // 디버깅 로그
-    console.log('[Order Detail] order_id:', orderId, 'visitor_id:', order.visitor_id, 'type:', typeof order.visitor_id);
-    
     // Cafe24 API sync 주문 (visitor_id 없거나 빈 문자열) 처리
-    const isExternalPayment = !order.visitor_id || order.visitor_id === '' || order.visitor_id === null;
-    console.log('[Order Detail] isExternalPayment:', isExternalPayment);
-    
-    if (isExternalPayment) {
+    if (!order.visitor_id || order.visitor_id === '') {
       // Cafe24 API에서 주문 상세 정보 가져오기
       let cafe24Order = null;
       if (process.env.CAFE24_AUTH_KEY) {
