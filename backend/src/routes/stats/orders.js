@@ -73,6 +73,8 @@ router.get('/orders', async (req, res) => {
       LEFT JOIN sessions s ON c.session_id = s.session_id
       LEFT JOIN visitors v ON c.visitor_id = v.visitor_id
       WHERE c.timestamp BETWEEN $1 AND $2
+        AND c.paid = 'T'
+        AND c.final_payment > 0
         ${deviceFilter}
       ORDER BY c.timestamp DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
@@ -86,6 +88,8 @@ router.get('/orders', async (req, res) => {
       FROM conversions c
       LEFT JOIN visitors v ON c.visitor_id = v.visitor_id
       WHERE c.timestamp BETWEEN $1 AND $2
+        AND c.paid = 'T'
+        AND c.final_payment > 0
         ${deviceFilter}
     `;
 

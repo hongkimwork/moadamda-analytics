@@ -201,11 +201,13 @@ router.post('/cafe24/sync', async (req, res) => {
     const existingOrderIds = new Set(existingResult.rows.map(r => r.order_id));
     console.log(`[Cafe24 Sync] Found ${existingOrderIds.size} existing orders in conversions`);
     
-    // 누락된 주문 찾기
-    const missingOrders = cafe24Orders.filter(order => 
-      !existingOrderIds.has(order.order_id) && 
-      order.paid === 'T' // 결제 완료된 주문만
-    );
+    // 누락된 주문 찾기 (paid='T'이고 final_payment > 0인 주문만)
+    const missingOrders = cafe24Orders.filter(order => {
+      if (existingOrderIds.has(order.order_id)) return false;
+      if (order.paid !== 'T') return false;
+      const finalPayment = Math.round(parseFloat(order.actual_order_amount?.payment_amount || 0));
+      return finalPayment > 0; // 실결제금액 0원 제외
+    });
     
     console.log(`[Cafe24 Sync] Found ${missingOrders.length} missing orders to sync`);
     
@@ -249,14 +251,14 @@ router.post('/cafe24/sync', async (req, res) => {
           }
         }
         
-        // conversions 테이블에 INSERT (visitor_id, product_name 포함)
+        // conversions 테이블에 INSERT (visitor_id, product_name, paid 포함)
         await db.query(
           `INSERT INTO conversions (
             visitor_id, session_id, order_id, total_amount, final_payment, 
             product_count, timestamp, discount_amount, mileage_used, 
-            shipping_fee, order_status, synced_at, product_name
+            shipping_fee, order_status, synced_at, product_name, paid
           ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), $12
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), $12, $13
           )
           ON CONFLICT (order_id) DO NOTHING`,
           [
@@ -271,7 +273,8 @@ router.post('/cafe24/sync', async (req, res) => {
             mileageUsed,
             shippingFee,
             'confirmed',
-            productName
+            productName,
+            order.paid || 'T'
           ]
         );
         
@@ -370,6 +373,30 @@ router.post('/cafe24/refresh-token', async (req, res) => {
     
   } catch (error) {
     console.error('[Cafe24 Refresh Token] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * 입금 대기 주문 상태 업데이트
+ * paid='F'인 주문들을 Cafe24 API로 확인하여 입금 완료된 주문 업데이트
+ */
+router.post('/cafe24/update-pending', async (req, res) => {
+  try {
+    console.log('[Cafe24 Update Pending] Starting pending payments update via API...');
+    
+    const result = await cafe24.updatePendingPayments();
+    
+    res.json({
+      success: true,
+      total_pending: result.total,
+      updated: result.updated,
+      errors: result.errors || 0,
+      error: result.error || null
+    });
+    
+  } catch (error) {
+    console.error('[Cafe24 Update Pending] Error:', error);
     res.status(500).json({ error: error.message });
   }
 });

@@ -349,11 +349,13 @@ async function syncOrders() {
     
     const existingOrderIds = new Set(existingResult.rows.map(r => r.order_id));
     
-    // 누락된 주문 찾기 (결제 완료된 주문만)
-    const missingOrders = cafe24Orders.filter(order => 
-      !existingOrderIds.has(order.order_id) && 
-      order.paid === 'T'
-    );
+    // 누락된 주문 찾기 (paid='T'인 주문만, final_payment > 0인 주문만)
+    const missingOrders = cafe24Orders.filter(order => {
+      if (existingOrderIds.has(order.order_id)) return false;
+      if (order.paid !== 'T') return false;
+      const finalPayment = Math.round(parseFloat(order.actual_order_amount?.payment_amount || 0));
+      return finalPayment > 0; // 실결제금액 0원 제외
+    });
     
     console.log(`[Cafe24 Auto Sync] Found ${missingOrders.length} missing orders`);
     
@@ -385,14 +387,14 @@ async function syncOrders() {
           }
         }
         
-        // conversions 테이블에 INSERT (product_name 포함)
+        // conversions 테이블에 INSERT (product_name, paid 포함)
         await db.query(
           `INSERT INTO conversions (
             visitor_id, session_id, order_id, total_amount, final_payment, 
             product_count, timestamp, discount_amount, mileage_used, 
-            shipping_fee, order_status, synced_at, product_name
+            shipping_fee, order_status, synced_at, product_name, paid
           ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), $12
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), $12, $13
           )
           ON CONFLICT (order_id) DO NOTHING`,
           [
@@ -407,7 +409,8 @@ async function syncOrders() {
             mileageUsed,
             shippingFee,
             'confirmed',
-            productName
+            productName,
+            order.paid || 'T'
           ]
         );
         
@@ -585,6 +588,85 @@ async function backfillProductNames() {
 }
 
 /**
+ * 입금 대기(paid='F') 주문들의 결제 상태 업데이트
+ * Cafe24 API로 각 주문의 paid 상태를 확인하여 입금 완료된 주문 업데이트
+ */
+async function updatePendingPayments() {
+  try {
+    console.log('[Cafe24 Pending] Starting pending payments update...');
+    
+    // DB에서 paid='F'인 주문들 조회
+    const pendingResult = await db.query(
+      `SELECT order_id, timestamp 
+       FROM conversions 
+       WHERE paid = 'F'
+       ORDER BY timestamp DESC`
+    );
+    
+    if (pendingResult.rows.length === 0) {
+      console.log('[Cafe24 Pending] No pending orders found');
+      return { total: 0, updated: 0 };
+    }
+    
+    console.log(`[Cafe24 Pending] Found ${pendingResult.rows.length} pending orders`);
+    
+    let updatedCount = 0;
+    let errorCount = 0;
+    
+    for (const order of pendingResult.rows) {
+      try {
+        // Cafe24 API에서 주문 상태 조회
+        const orderDetail = await getOrderDetail(order.order_id);
+        
+        if (!orderDetail.order) {
+          continue;
+        }
+        
+        const cafe24Order = orderDetail.order;
+        
+        // 입금 완료된 경우 (paid='T')
+        if (cafe24Order.paid === 'T') {
+          const finalPayment = Math.round(parseFloat(cafe24Order.actual_order_amount?.payment_amount || 0));
+          const totalAmount = Math.round(parseFloat(cafe24Order.actual_order_amount?.total_order_amount || cafe24Order.order_amount || 0));
+          
+          // DB 업데이트
+          await db.query(
+            `UPDATE conversions 
+             SET paid = 'T', 
+                 final_payment = $1,
+                 total_amount = $2
+             WHERE order_id = $3`,
+            [finalPayment, totalAmount, order.order_id]
+          );
+          
+          updatedCount++;
+          console.log(`[Cafe24 Pending] Updated ${order.order_id}: paid=T, final_payment=${finalPayment}`);
+        }
+        
+        // Rate limit 방지
+        await sleep(300);
+        
+      } catch (orderError) {
+        errorCount++;
+        console.error(`[Cafe24 Pending] Error processing ${order.order_id}:`, orderError.message);
+      }
+    }
+    
+    console.log(`[Cafe24 Pending] Completed: ${updatedCount} updated, ${errorCount} errors out of ${pendingResult.rows.length}`);
+    
+    return {
+      total: pendingResult.rows.length,
+      updated: updatedCount,
+      errors: errorCount
+    };
+    
+  } catch (error) {
+    console.error('[Cafe24 Pending] Error:', error.message);
+    return { total: 0, updated: 0, error: error.message };
+  }
+}
+
+/**
  * 자동 동기화 스케줄러 시작
  * 1시간마다 오늘 주문 동기화 실행
  */
@@ -625,6 +707,7 @@ module.exports = {
   syncOrders,
   backfillVisitorIds,
   backfillProductNames,
+  updatePendingPayments,
   startTokenRefreshTask,
   startAutoSyncTask,
   CAFE24_MALL_ID,

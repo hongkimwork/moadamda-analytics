@@ -71,6 +71,8 @@ async function calculateCreativeAttribution(creatives, startDate, endDate) {
     FROM conversions
     WHERE visitor_id = ANY($1)
       AND order_id IS NOT NULL
+      AND paid = 'T'
+      AND final_payment > 0
     ORDER BY visitor_id, timestamp
   `;
 

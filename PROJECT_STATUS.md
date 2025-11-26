@@ -17,9 +17,9 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-11-26 | 상품명 DB 저장 및 마이그레이션 | stats.js |
 | 2025-11-26 | visitor_id 백필 API 추가 | cafe24.js |
 | 2025-11-26 | 자동 동기화 및 visitor 매칭 | cafe24.js |
-| 2025-11-26 | 외부결제 주문 상품명 보강 | stats.js |
 | 2025-11-26 | Cafe24 API 연동 구현 | cafe24.js |
 | 2025-11-25 | 필터에서 viral 제외 처리 | DynamicUtmFilterBar.jsx |
 | 2025-11-25 | 퀵필터 바이럴 제거/추가버튼 수정 | UtmSourceQuickFilter.jsx |
