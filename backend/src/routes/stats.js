@@ -1240,6 +1240,68 @@ router.get('/orders', async (req, res) => {
     const countParams = device !== 'all' ? [startDate, endDate, device] : [startDate, endDate];
     const countResult = await db.query(countQuery, countParams);
 
+    // 기본 주문 데이터 매핑
+    let orders = ordersResult.rows.map(row => ({
+      order_id: row.order_id,
+      timestamp: row.timestamp,
+      final_payment: parseInt(row.final_payment) || 0,
+      total_amount: parseInt(row.total_amount) || 0,
+      product_count: parseInt(row.product_count) || 1,
+      product_name: row.product_name || null,
+      visitor_id: row.visitor_id,
+      session_id: row.session_id,
+      ip_address: row.ip_address || null,
+      device_type: row.device_type || null,
+      utm_source: row.utm_source || null,
+      utm_campaign: row.utm_campaign || null,
+      is_cafe24_only: !row.visitor_id || row.visitor_id === ''
+    }));
+    
+    // 상품명이 없는 주문들을 Cafe24 API에서 보강
+    if (process.env.CAFE24_AUTH_KEY) {
+      const ordersNeedingEnrichment = orders.filter(o => !o.product_name);
+      if (ordersNeedingEnrichment.length > 0) {
+        try {
+          const cafe24 = require('../utils/cafe24');
+          const enrichPromises = ordersNeedingEnrichment.slice(0, 10).map(async (order) => {
+            try {
+              const detail = await cafe24.getOrderDetail(order.order_id);
+              if (detail.order?.items?.[0]) {
+                return {
+                  order_id: order.order_id,
+                  product_name: detail.order.items[0].product_name,
+                  items_count: detail.order.items.length
+                };
+              }
+            } catch (e) { /* ignore */ }
+            return null;
+          });
+          
+          const enrichments = await Promise.all(enrichPromises);
+          const enrichmentMap = new Map();
+          enrichments.filter(e => e).forEach(e => enrichmentMap.set(e.order_id, e));
+          
+          orders = orders.map(order => {
+            const enrichment = enrichmentMap.get(order.order_id);
+            if (enrichment) {
+              return { ...order, product_name: enrichment.product_name };
+            }
+            return order;
+          });
+        } catch (e) {
+          console.error('[Orders] Cafe24 enrichment error:', e.message);
+        }
+      }
+    }
+    
+    // 최종 매핑
+    orders = orders.map(order => ({
+      ...order,
+      product_name: order.product_name || '상품명 없음',
+      ip_address: order.ip_address || (order.is_cafe24_only ? '외부결제' : 'unknown'),
+      device_type: order.device_type || (order.is_cafe24_only ? '외부결제' : 'unknown')
+    }));
+
     res.json({
       period: {
         start: start,
@@ -1247,20 +1309,7 @@ router.get('/orders', async (req, res) => {
       },
       device_filter: device,
       total_orders: parseInt(countResult.rows[0].total),
-      orders: ordersResult.rows.map(row => ({
-        order_id: row.order_id,
-        timestamp: row.timestamp,
-        final_payment: parseInt(row.final_payment) || 0,
-        total_amount: parseInt(row.total_amount) || 0,
-        product_count: parseInt(row.product_count) || 1,
-        product_name: row.product_name || '상품명 없음',
-        visitor_id: row.visitor_id,
-        session_id: row.session_id,
-        ip_address: row.ip_address || 'unknown',
-        device_type: row.device_type || 'unknown',
-        utm_source: row.utm_source || null,
-        utm_campaign: row.utm_campaign || null
-      })),
+      orders: orders,
       pagination: {
         limit: parseInt(limit),
         offset: parseInt(offset),
@@ -1319,6 +1368,55 @@ router.get('/order-detail/:orderId', async (req, res) => {
     }
 
     const order = orderResult.rows[0];
+    
+    // Cafe24 API sync 주문 (visitor_id 없거나 빈 문자열) 처리
+    const isExternalPayment = !order.visitor_id || order.visitor_id === '';
+    
+    if (isExternalPayment) {
+      // Cafe24 API에서 주문 상세 정보 가져오기
+      let cafe24Order = null;
+      if (process.env.CAFE24_AUTH_KEY) {
+        try {
+          const cafe24 = require('./cafe24');
+          const cafe24Client = require('../utils/cafe24');
+          const detail = await cafe24Client.getOrderDetail(orderId);
+          cafe24Order = detail.order;
+        } catch (e) {
+          console.error('[Order Detail] Cafe24 API error:', e.message);
+        }
+      }
+      
+      // 외부 결제 주문 응답 (고객 여정 데이터 없음)
+      return res.json({
+        order: {
+          order_id: order.order_id,
+          timestamp: order.timestamp,
+          final_payment: parseInt(order.final_payment) || 0,
+          total_amount: parseInt(order.total_amount) || 0,
+          product_count: parseInt(order.product_count) || 1,
+          product_name: cafe24Order?.items?.[0]?.product_name || '상품명 없음',
+          device_type: '외부결제',
+          browser: '-',
+          os: '-',
+          ip_address: '외부결제',
+          billing_name: cafe24Order?.billing_name || '-',
+          payment_method: cafe24Order?.payment_method_name || '외부결제',
+          order_items: cafe24Order?.items?.map(item => ({
+            product_name: item.product_name,
+            product_price: item.product_price,
+            quantity: item.quantity,
+            option_value: item.option_value
+          })) || []
+        },
+        is_external_payment: true,
+        message: '외부 결제(네이버페이, 카카오페이 등)로 결제된 주문입니다. 고객 여정 데이터가 없습니다.',
+        purchase_journey: [],
+        full_journey: [],
+        utm_sessions: [],
+        pageview_count: 0,
+        total_events: 0
+      });
+    }
 
     // 2-1. 구매 직전 경로 (마지막 UTM 접촉 이후 ~ 구매까지)
     // 광고 효과 측정에 사용되는 핵심 경로
