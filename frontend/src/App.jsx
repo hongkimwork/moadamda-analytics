@@ -25,7 +25,6 @@ const OrderListPage = lazy(() =>
 const OrderDetailPage = lazy(() => 
   import('./pages/OrderAnalysis').then(module => ({ default: module.OrderDetailPage }))
 );
-const OrderAnalysis2Page = lazy(() => import('./pages/OrderAnalysis2'));
 const DataTables = lazy(() => import('./pages/DataTables'));
 const PageMapping = lazy(() => import('./pages/PageMapping'));
 const CreativePerformance = lazy(() => import('./pages/CreativePerformance'));
@@ -46,7 +45,6 @@ function AppLayout() {
     const path = location.pathname;
     if (path === '/creative-performance') return ['creative-performance'];
     if (path === '/page-mapping') return ['page-mapping'];
-    if (path === '/orders2') return ['orders2'];
     if (path.startsWith('/order/')) return ['orders'];
     if (path === '/' || path.startsWith('/order')) return ['orders'];
     if (path.startsWith('/data/')) return [path];
@@ -65,12 +63,6 @@ function AppLayout() {
           icon: <ShoppingOutlined />,
           label: '주문 분석',
           onClick: () => navigate('/')
-        },
-        {
-          key: 'orders2',
-          icon: <ShoppingOutlined />,
-          label: '주문 분석2 (개선)',
-          onClick: () => navigate('/orders2')
         },
         {
           key: 'creative-performance',
@@ -199,9 +191,6 @@ function AppLayout() {
               {/* 주문 분석 */}
               <Route path="/" element={<OrderListPage />} />
               <Route path="/order/:orderId" element={<OrderDetailPage />} />
-              
-              {/* 주문 분석2 (개선 버전) */}
-              <Route path="/orders2" element={<OrderAnalysis2Page />} />
               
               {/* 광고 소재 모수 분석 */}
               <Route path="/creative-performance" element={<CreativePerformance />} />
