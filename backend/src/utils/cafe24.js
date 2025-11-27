@@ -401,6 +401,11 @@ async function syncOrders() {
         // 실제 구매 상품 수 계산 (각 항목의 quantity 합산)
         const productCount = order.items?.reduce((sum, item) => sum + (parseInt(item.quantity) || 1), 0) || 1;
         
+        // 디버그: 상품 수가 2개 이상인 주문 로깅
+        if (productCount >= 2 || (order.items && order.items.length >= 2)) {
+          console.log(`[Cafe24 Sync] Order ${order.order_id}: items=${order.items?.length}, productCount=${productCount}, items_detail=${JSON.stringify(order.items?.map(i => ({ name: i.product_name, qty: i.quantity })))}`);
+        }
+        
         // conversions 테이블에 UPSERT
         // - 새 주문: 전체 데이터 저장
         // - 기존 주문: visitor_id 유지, 결제 정보는 Cafe24 값으로 업데이트
