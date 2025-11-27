@@ -1183,10 +1183,11 @@ router.get('/orders', async (req, res) => {
     queryParams.push(parseInt(limit), parseInt(offset));
 
     // Main query: Get orders with all necessary info
+    // timestamp를 KST(+9시간)로 변환하여 반환 (서버 타임존 무관하게 일관된 시간 표시)
     const ordersQuery = `
       SELECT 
         c.order_id,
-        c.timestamp,
+        TO_CHAR(c.timestamp + INTERVAL '9 hours', 'YYYY-MM-DD HH24:MI:SS') as timestamp,
         c.final_payment,
         c.total_amount,
         c.product_count,

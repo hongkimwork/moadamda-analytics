@@ -32,10 +32,11 @@ router.get('/orders', async (req, res) => {
     queryParams.push(parseInt(limit), parseInt(offset));
 
     // Main query: Get orders with all necessary info
+    // timestamp를 KST(+9시간)로 변환하여 반환 (서버 타임존 무관하게 일관된 시간 표시)
     const ordersQuery = `
       SELECT 
         c.order_id,
-        c.timestamp,
+        TO_CHAR(c.timestamp + INTERVAL '9 hours', 'YYYY-MM-DD HH24:MI:SS') as timestamp,
         c.final_payment,
         c.total_amount,
         c.product_count,
@@ -149,10 +150,11 @@ router.get('/order-detail/:orderId', async (req, res) => {
     const { orderId } = req.params;
 
     // 1. 주문 기본 정보
+    // timestamp를 KST(+9시간)로 변환
     const orderQuery = `
       SELECT
         c.order_id,
-        c.timestamp,
+        TO_CHAR(c.timestamp + INTERVAL '9 hours', 'YYYY-MM-DD HH24:MI:SS') as timestamp,
         c.final_payment,
         c.total_amount,
         c.product_count,
@@ -166,7 +168,7 @@ router.get('/order-detail/:orderId', async (req, res) => {
         v.utm_source,
         v.utm_medium,
         v.utm_campaign,
-        v.first_visit,
+        TO_CHAR(v.first_visit + INTERVAL '9 hours', 'YYYY-MM-DD HH24:MI:SS') as first_visit,
         (
           SELECT e.product_name
           FROM events e
@@ -260,7 +262,7 @@ router.get('/order-detail/:orderId', async (req, res) => {
       SELECT
         page_url,
         page_title,
-        timestamp,
+        TO_CHAR(timestamp + INTERVAL '9 hours', 'YYYY-MM-DD HH24:MI:SS') as timestamp,
         CASE
           WHEN next_timestamp IS NOT NULL THEN
             LEAST(
@@ -286,7 +288,7 @@ router.get('/order-detail/:orderId', async (req, res) => {
           p.page_url,
           p.page_title,
           p.timestamp,
-          DATE(p.timestamp) as visit_date,
+          DATE(p.timestamp + INTERVAL '9 hours') as visit_date,
           LEAD(p.timestamp) OVER (PARTITION BY DATE(p.timestamp) ORDER BY p.timestamp) as next_timestamp
         FROM pageviews p
         CROSS JOIN last_utm_contact
@@ -295,10 +297,10 @@ router.get('/order-detail/:orderId', async (req, res) => {
           AND DATE(p.timestamp) < DATE($2)
       )
       SELECT
-        visit_date,
+        TO_CHAR(visit_date, 'YYYY-MM-DD') as visit_date,
         page_url,
         page_title,
-        timestamp,
+        TO_CHAR(timestamp + INTERVAL '9 hours', 'YYYY-MM-DD HH24:MI:SS') as timestamp,
         CASE
           WHEN next_timestamp IS NOT NULL THEN
             LEAST(
@@ -382,7 +384,7 @@ router.get('/order-detail/:orderId', async (req, res) => {
         utm_medium,
         utm_campaign,
         utm_content,
-        entry_timestamp,
+        TO_CHAR(entry_timestamp + INTERVAL '9 hours', 'YYYY-MM-DD HH24:MI:SS') as entry_timestamp,
         total_duration_seconds as duration_seconds
       FROM merged_sessions
       ORDER BY entry_timestamp ASC
@@ -395,7 +397,7 @@ router.get('/order-detail/:orderId', async (req, res) => {
       const sameIpQuery = `
         SELECT
           s.session_id,
-          s.start_time,
+          TO_CHAR(s.start_time + INTERVAL '9 hours', 'YYYY-MM-DD HH24:MI:SS') as start_time,
           s.entry_url,
           s.pageview_count,
           v.visitor_id,
@@ -424,7 +426,7 @@ router.get('/order-detail/:orderId', async (req, res) => {
     const pastPurchasesQuery = `
       SELECT
         c.order_id,
-        c.timestamp,
+        TO_CHAR(c.timestamp + INTERVAL '9 hours', 'YYYY-MM-DD HH24:MI:SS') as timestamp,
         c.final_payment,
         c.product_count,
         (
@@ -447,7 +449,7 @@ router.get('/order-detail/:orderId', async (req, res) => {
     // 과거 방문을 날짜별로 그룹화
     const previousVisitsByDate = {};
     previousVisitsResult.rows.forEach(row => {
-      const date = row.visit_date.toISOString().split('T')[0]; // YYYY-MM-DD
+      const date = row.visit_date; // 이미 YYYY-MM-DD 문자열 (KST 기준)
       if (!previousVisitsByDate[date]) {
         previousVisitsByDate[date] = [];
       }
