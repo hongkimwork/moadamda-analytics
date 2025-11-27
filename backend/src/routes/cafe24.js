@@ -263,6 +263,9 @@ router.post('/cafe24/sync', async (req, res) => {
           sessionId = existingOrder.session_id;
         }
         
+        // 실제 구매 상품 수 계산 (각 항목의 quantity 합산)
+        const productCount = order.items?.reduce((sum, item) => sum + (parseInt(item.quantity) || 1), 0) || 1;
+        
         // conversions 테이블에 UPSERT
         await db.query(
           `INSERT INTO conversions (
@@ -276,6 +279,7 @@ router.post('/cafe24/sync', async (req, res) => {
             paid = EXCLUDED.paid,
             final_payment = EXCLUDED.final_payment,
             total_amount = EXCLUDED.total_amount,
+            product_count = EXCLUDED.product_count,
             discount_amount = EXCLUDED.discount_amount,
             mileage_used = EXCLUDED.mileage_used,
             shipping_fee = EXCLUDED.shipping_fee,
@@ -287,7 +291,7 @@ router.post('/cafe24/sync', async (req, res) => {
             order.order_id,
             totalAmount,
             finalPayment,
-            order.items?.length || 1,
+            productCount,
             new Date(order.order_date),
             discountAmount,
             mileageUsed,
