@@ -1163,15 +1163,12 @@ router.get('/orders', async (req, res) => {
       return res.status(400).json({ error: 'start and end dates are required (YYYY-MM-DD)' });
     }
 
-    // Parse dates
-    const startDate = new Date(start);
-    startDate.setHours(0, 0, 0, 0);
-    const endDate = new Date(end);
-    endDate.setHours(23, 59, 59, 999);
+    // 날짜 문자열을 그대로 전달 (SQL에서 KST→UTC 변환 처리)
+    // KST 기준 날짜를 UTC 범위로 변환하여 검색
 
     // Build device filter
     let deviceFilter = '';
-    let queryParams = [startDate, endDate];
+    let queryParams = [start, end];
     let paramIndex = 3;
 
     if (device !== 'all') {
@@ -1224,7 +1221,8 @@ router.get('/orders', async (req, res) => {
       FROM conversions c
       LEFT JOIN sessions s ON c.session_id = s.session_id
       LEFT JOIN visitors v ON c.visitor_id = v.visitor_id
-      WHERE c.timestamp BETWEEN $1 AND $2
+      WHERE c.timestamp >= ($1::date - INTERVAL '9 hours')
+        AND c.timestamp < ($2::date + INTERVAL '1 day' - INTERVAL '9 hours')
         AND c.paid = 'T'
         AND c.final_payment > 0
         ${deviceFilter}
@@ -1239,13 +1237,14 @@ router.get('/orders', async (req, res) => {
       SELECT COUNT(*) as total
       FROM conversions c
       LEFT JOIN visitors v ON c.visitor_id = v.visitor_id
-      WHERE c.timestamp BETWEEN $1 AND $2
+      WHERE c.timestamp >= ($1::date - INTERVAL '9 hours')
+        AND c.timestamp < ($2::date + INTERVAL '1 day' - INTERVAL '9 hours')
         AND c.paid = 'T'
         AND c.final_payment > 0
         ${deviceFilter}
     `;
 
-    const countParams = device !== 'all' ? [startDate, endDate, device] : [startDate, endDate];
+    const countParams = device !== 'all' ? [start, end, device] : [start, end];
     const countResult = await db.query(countQuery, countParams);
 
     // 기본 주문 데이터 매핑
