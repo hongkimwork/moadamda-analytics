@@ -167,8 +167,9 @@ router.get('/cafe24/token-info', async (req, res) => {
 });
 
 /**
- * 수동 주문 동기화
- * 기존 conversions 테이블에 누락된 주문만 추가
+ * 수동 주문 동기화 (모든 주문 업데이트)
+ * - 새 주문: visitor_id 매칭 시도 후 저장
+ * - 기존 주문: visitor_id 유지, paid/final_payment는 Cafe24 값으로 업데이트
  */
 router.post('/cafe24/sync', async (req, res) => {
   try {
@@ -190,75 +191,79 @@ router.post('/cafe24/sync', async (req, res) => {
     const cafe24Orders = await cafe24.getAllOrders(start_date, end_date);
     console.log(`[Cafe24 Sync] Fetched ${cafe24Orders.length} orders from Cafe24`);
     
-    // 기존 conversions에서 해당 기간의 order_id 조회
+    // 기존 conversions에서 해당 기간의 order_id와 visitor_id 조회
     const existingResult = await db.query(
-      `SELECT order_id FROM conversions 
+      `SELECT order_id, visitor_id, session_id FROM conversions 
        WHERE timestamp >= $1::date AND timestamp < $2::date + INTERVAL '1 day'
        AND order_id IS NOT NULL`,
       [start_date, end_date]
     );
     
-    const existingOrderIds = new Set(existingResult.rows.map(r => r.order_id));
-    console.log(`[Cafe24 Sync] Found ${existingOrderIds.size} existing orders in conversions`);
+    // 기존 주문의 visitor_id 매핑 (visitor_id가 있는 경우 보존용)
+    const existingOrderMap = new Map();
+    for (const row of existingResult.rows) {
+      existingOrderMap.set(row.order_id, {
+        visitor_id: row.visitor_id,
+        session_id: row.session_id
+      });
+    }
     
-    // 누락된 주문 찾기
-    // - paid='T' && final_payment > 0: 저장 (정상 결제)
-    // - paid='T' && final_payment = 0: 제외 (선불금/외부결제, 추적 불가)
-    // - paid='F': 저장 (무통장 대기, 나중에 입금 확인 시 업데이트)
-    const missingOrders = cafe24Orders.filter(order => {
-      if (existingOrderIds.has(order.order_id)) return false;
-      
-      // paid='F' (무통장 대기)는 저장 (나중에 업데이트)
-      if (order.paid === 'F') return true;
-      
-      // paid='T'인 경우: final_payment > 0인 것만 저장
-      const finalPayment = Math.round(parseFloat(order.actual_order_amount?.payment_amount || 0));
-      return finalPayment > 0;
-    });
-    
-    console.log(`[Cafe24 Sync] Found ${missingOrders.length} missing orders to sync`);
+    console.log(`[Cafe24 Sync] Found ${existingOrderMap.size} existing orders in conversions`);
     
     if (dry_run) {
+      const newOrders = cafe24Orders.filter(o => !existingOrderMap.has(o.order_id));
       return res.json({
         success: true,
         dry_run: true,
         total_cafe24_orders: cafe24Orders.length,
-        existing_orders: existingOrderIds.size,
-        missing_orders: missingOrders.length,
-        missing_order_ids: missingOrders.map(o => o.order_id)
+        existing_orders: existingOrderMap.size,
+        new_orders: newOrders.length,
+        orders_to_update: existingOrderMap.size,
+        new_order_ids: newOrders.map(o => o.order_id)
       });
     }
     
-    // 누락된 주문 저장
+    // 모든 주문 처리
     let insertedCount = 0;
+    let updatedCount = 0;
     let matchedCount = 0;
     
-    for (const order of missingOrders) {
+    for (const order of cafe24Orders) {
       try {
-        // 결제 금액 계산 (정수로 변환)
+        // 결제 금액 계산 (Cafe24 API 값 사용)
         const totalAmount = Math.round(parseFloat(order.actual_order_amount?.total_order_amount || order.order_amount || 0));
         const finalPayment = Math.round(parseFloat(order.actual_order_amount?.payment_amount || 0));
         const discountAmount = Math.round(parseFloat(order.actual_order_amount?.total_discount_amount || 0));
         const mileageUsed = Math.round(parseFloat(order.actual_order_amount?.mileage_spent_amount || 0));
         const shippingFee = Math.round(parseFloat(order.actual_order_amount?.shipping_fee || 0));
+        const productName = order.items?.[0]?.product_name || null;
+        const paid = order.paid || 'T';
         
-        // visitor_id 매칭 시도
+        // 기존 주문 여부 확인
+        const existingOrder = existingOrderMap.get(order.order_id);
+        const isNewOrder = !existingOrder;
+        
         let visitorId = null;
         let sessionId = null;
-        let productName = null;
         
-        if (order.items && order.items.length > 0) {
-          const productNo = order.items[0].product_no;
-          productName = order.items[0].product_name || null;
-          const match = await cafe24.findMatchingVisitor(order.order_date, productNo);
-          if (match) {
-            visitorId = match.visitor_id;
-            sessionId = match.session_id;
-            matchedCount++;
+        if (isNewOrder) {
+          // 새 주문: visitor_id 매칭 시도
+          if (order.items && order.items.length > 0) {
+            const productNo = order.items[0].product_no;
+            const match = await cafe24.findMatchingVisitor(order.order_date, productNo);
+            if (match) {
+              visitorId = match.visitor_id;
+              sessionId = match.session_id;
+              matchedCount++;
+            }
           }
+        } else {
+          // 기존 주문: visitor_id 유지
+          visitorId = existingOrder.visitor_id;
+          sessionId = existingOrder.session_id;
         }
         
-        // conversions 테이블에 UPSERT (Cafe24 API 값으로 크로스체크하여 업데이트)
+        // conversions 테이블에 UPSERT
         await db.query(
           `INSERT INTO conversions (
             visitor_id, session_id, order_id, total_amount, final_payment, 
@@ -274,6 +279,7 @@ router.post('/cafe24/sync', async (req, res) => {
             discount_amount = EXCLUDED.discount_amount,
             mileage_used = EXCLUDED.mileage_used,
             shipping_fee = EXCLUDED.shipping_fee,
+            product_name = COALESCE(EXCLUDED.product_name, conversions.product_name),
             synced_at = NOW()`,
           [
             visitorId,
@@ -288,24 +294,29 @@ router.post('/cafe24/sync', async (req, res) => {
             shippingFee,
             'confirmed',
             productName,
-            order.paid || 'T'
+            paid
           ]
         );
         
-        insertedCount++;
+        if (isNewOrder) {
+          insertedCount++;
+        } else {
+          updatedCount++;
+        }
+        
       } catch (insertError) {
-        console.error(`[Cafe24 Sync] Failed to insert order ${order.order_id}:`, insertError.message);
+        console.error(`[Cafe24 Sync] Failed to process order ${order.order_id}:`, insertError.message);
       }
     }
     
-    console.log(`[Cafe24 Sync] Successfully synced ${insertedCount} orders, matched ${matchedCount} visitors`);
+    console.log(`[Cafe24 Sync] Completed: ${insertedCount} new, ${updatedCount} updated, ${matchedCount} matched`);
     
     res.json({
       success: true,
       total_cafe24_orders: cafe24Orders.length,
-      existing_orders: existingOrderIds.size,
-      missing_orders: missingOrders.length,
+      existing_orders: existingOrderMap.size,
       inserted_orders: insertedCount,
+      updated_orders: updatedCount,
       matched_visitors: matchedCount
     });
     

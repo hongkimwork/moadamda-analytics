@@ -1356,7 +1356,7 @@ router.get('/order-detail/:orderId', async (req, res) => {
         }
       }
       
-      // 외부 결제 주문 응답 (고객 여정 데이터 없음)
+      // visitor_id가 없는 주문 응답 (고객 여정 데이터 없음)
       return res.json({
         order: {
           order_id: order.order_id,
@@ -1365,12 +1365,12 @@ router.get('/order-detail/:orderId', async (req, res) => {
           total_amount: parseInt(order.total_amount) || 0,
           product_count: parseInt(order.product_count) || 1,
           product_name: cafe24Order?.items?.[0]?.product_name || '상품명 없음',
-          device_type: 'API 동기화',
+          device_type: '-',
           browser: '-',
           os: '-',
-          ip_address: 'API 동기화',
+          ip_address: '-',
           billing_name: cafe24Order?.billing_name || '-',
-          payment_method: cafe24Order?.payment_method_name || 'API 동기화',
+          payment_method: cafe24Order?.payment_method_name || '-',
           order_items: cafe24Order?.items?.map(item => ({
             product_name: item.product_name,
             product_price: item.product_price,
@@ -1378,8 +1378,8 @@ router.get('/order-detail/:orderId', async (req, res) => {
             option_value: item.option_value
           })) || []
         },
-        is_external_payment: true,
-        message: '외부 결제(네이버페이, 카카오페이 등)로 결제된 주문입니다. 고객 여정 데이터가 없습니다.',
+        is_external_payment: false,
+        message: '고객 여정 데이터가 없는 주문입니다.',
         purchase_journey: [],
         full_journey: [],
         utm_sessions: [],

@@ -320,7 +320,9 @@ function startTokenRefreshTask() {
 
 /**
  * 주문 자동 동기화 실행
- * 오늘 날짜 기준으로 누락된 주문 동기화 + visitor_id 매칭
+ * 오늘 날짜 기준으로 모든 주문을 Cafe24 API 값으로 업데이트
+ * - 새 주문: visitor_id 매칭 시도 후 저장
+ * - 기존 주문: visitor_id 유지, paid/final_payment는 Cafe24 값으로 업데이트
  */
 async function syncOrders() {
   try {
@@ -336,65 +338,69 @@ async function syncOrders() {
     
     if (cafe24Orders.length === 0) {
       console.log('[Cafe24 Auto Sync] No orders to sync');
-      return { synced: 0, matched: 0 };
+      return { synced: 0, matched: 0, updated: 0 };
     }
     
-    // 기존 conversions에서 해당 기간의 order_id 조회
+    // 기존 conversions에서 해당 기간의 order_id와 visitor_id 조회
     const existingResult = await db.query(
-      `SELECT order_id FROM conversions 
+      `SELECT order_id, visitor_id, session_id FROM conversions 
        WHERE timestamp >= $1::date AND timestamp < $1::date + INTERVAL '1 day'
        AND order_id IS NOT NULL`,
       [startDate]
     );
     
-    const existingOrderIds = new Set(existingResult.rows.map(r => r.order_id));
-    
-    // 누락된 주문 찾기
-    // - paid='T' && final_payment > 0: 저장 (정상 결제)
-    // - paid='T' && final_payment = 0: 제외 (선불금/외부결제, 추적 불가)
-    // - paid='F': 저장 (무통장 대기, 나중에 입금 확인 시 업데이트)
-    const missingOrders = cafe24Orders.filter(order => {
-      if (existingOrderIds.has(order.order_id)) return false;
-      
-      // paid='F' (무통장 대기)는 저장 (나중에 업데이트)
-      if (order.paid === 'F') return true;
-      
-      // paid='T'인 경우: final_payment > 0인 것만 저장
-      const finalPayment = Math.round(parseFloat(order.actual_order_amount?.payment_amount || 0));
-      return finalPayment > 0;
-    });
-    
-    console.log(`[Cafe24 Auto Sync] Found ${missingOrders.length} missing orders`);
+    // 기존 주문의 visitor_id 매핑 (visitor_id가 있는 경우 보존용)
+    const existingOrderMap = new Map();
+    for (const row of existingResult.rows) {
+      existingOrderMap.set(row.order_id, {
+        visitor_id: row.visitor_id,
+        session_id: row.session_id
+      });
+    }
     
     let syncedCount = 0;
     let matchedCount = 0;
+    let updatedCount = 0;
     
-    for (const order of missingOrders) {
+    // 모든 Cafe24 주문에 대해 UPSERT 실행
+    for (const order of cafe24Orders) {
       try {
-        // 결제 금액 계산
+        // 결제 금액 계산 (Cafe24 API 값 사용)
         const totalAmount = Math.round(parseFloat(order.actual_order_amount?.total_order_amount || order.order_amount || 0));
         const finalPayment = Math.round(parseFloat(order.actual_order_amount?.payment_amount || 0));
         const discountAmount = Math.round(parseFloat(order.actual_order_amount?.total_discount_amount || 0));
         const mileageUsed = Math.round(parseFloat(order.actual_order_amount?.mileage_spent_amount || 0));
         const shippingFee = Math.round(parseFloat(order.actual_order_amount?.shipping_fee || 0));
+        const productName = order.items?.[0]?.product_name || null;
+        const paid = order.paid || 'T';
         
-        // visitor_id 매칭 시도
+        // 기존 주문 여부 확인
+        const existingOrder = existingOrderMap.get(order.order_id);
+        const isNewOrder = !existingOrder;
+        
         let visitorId = null;
         let sessionId = null;
-        let productName = null;
         
-        if (order.items && order.items.length > 0) {
-          const productNo = order.items[0].product_no;
-          productName = order.items[0].product_name || null;
-          const match = await findMatchingVisitor(order.order_date, productNo);
-          if (match) {
-            visitorId = match.visitor_id;
-            sessionId = match.session_id;
-            matchedCount++;
+        if (isNewOrder) {
+          // 새 주문: visitor_id 매칭 시도
+          if (order.items && order.items.length > 0) {
+            const productNo = order.items[0].product_no;
+            const match = await findMatchingVisitor(order.order_date, productNo);
+            if (match) {
+              visitorId = match.visitor_id;
+              sessionId = match.session_id;
+              matchedCount++;
+            }
           }
+        } else {
+          // 기존 주문: visitor_id 유지
+          visitorId = existingOrder.visitor_id;
+          sessionId = existingOrder.session_id;
         }
         
-        // conversions 테이블에 UPSERT (Cafe24 API 값으로 크로스체크하여 업데이트)
+        // conversions 테이블에 UPSERT
+        // - 새 주문: 전체 데이터 저장
+        // - 기존 주문: visitor_id 유지, 결제 정보는 Cafe24 값으로 업데이트
         await db.query(
           `INSERT INTO conversions (
             visitor_id, session_id, order_id, total_amount, final_payment, 
@@ -410,6 +416,7 @@ async function syncOrders() {
             discount_amount = EXCLUDED.discount_amount,
             mileage_used = EXCLUDED.mileage_used,
             shipping_fee = EXCLUDED.shipping_fee,
+            product_name = COALESCE(EXCLUDED.product_name, conversions.product_name),
             synced_at = NOW()`,
           [
             visitorId,
@@ -424,22 +431,27 @@ async function syncOrders() {
             shippingFee,
             'confirmed',
             productName,
-            order.paid || 'T'
+            paid
           ]
         );
         
-        syncedCount++;
+        if (isNewOrder) {
+          syncedCount++;
+        } else {
+          updatedCount++;
+        }
+        
       } catch (insertError) {
-        console.error(`[Cafe24 Auto Sync] Failed to insert order ${order.order_id}:`, insertError.message);
+        console.error(`[Cafe24 Auto Sync] Failed to process order ${order.order_id}:`, insertError.message);
       }
     }
     
-    console.log(`[Cafe24 Auto Sync] Synced ${syncedCount} orders, matched ${matchedCount} visitors`);
-    return { synced: syncedCount, matched: matchedCount };
+    console.log(`[Cafe24 Auto Sync] Completed: ${syncedCount} new, ${updatedCount} updated, ${matchedCount} matched`);
+    return { synced: syncedCount, matched: matchedCount, updated: updatedCount };
     
   } catch (error) {
     console.error('[Cafe24 Auto Sync] Error:', error.message);
-    return { synced: 0, matched: 0, error: error.message };
+    return { synced: 0, matched: 0, updated: 0, error: error.message };
   }
 }
 

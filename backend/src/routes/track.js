@@ -2,6 +2,12 @@ const express = require('express');
 const router = express.Router();
 const db = require('../utils/database');
 
+// Cafe24 API client (for real-time order verification)
+let cafe24 = null;
+if (process.env.CAFE24_AUTH_KEY) {
+  cafe24 = require('../utils/cafe24');
+}
+
 // Helper: Extract client IP address (supports proxies like Cloudflare)
 function getClientIp(req) {
   // Try x-forwarded-for (Cloudflare, Nginx, etc.)
@@ -230,31 +236,89 @@ async function handleEcommerceEvent(event, clientIp) {
 
     const utm = visitorUtm.rows[0] || {};
 
-    // Insert into conversions table with payment details and UTM data
+    // === REAL-TIME CAFE24 API VERIFICATION ===
+    // Fetch accurate payment info from Cafe24 API instead of using tracker's potentially inaccurate values
+    let actualPaid = 'F';  // Default to unpaid
+    let actualFinalPayment = 0;
+    let actualTotalAmount = total_amount || 0;
+    let actualDiscountAmount = discount_amount || 0;
+    let actualMileageUsed = mileage_used || 0;
+    let actualShippingFee = shipping_fee || 0;
+    let actualProductCount = quantity || 1;
+    let actualProductName = product_name || null;
+
+    if (cafe24) {
+      try {
+        // Query Cafe24 API for accurate order information
+        const cafe24OrderResponse = await cafe24.getOrderDetail(order_id);
+        
+        if (cafe24OrderResponse && cafe24OrderResponse.order) {
+          const cafe24Order = cafe24OrderResponse.order;
+          
+          // Use Cafe24's accurate values
+          actualPaid = cafe24Order.paid || 'F';
+          actualFinalPayment = Math.round(parseFloat(cafe24Order.actual_order_amount?.payment_amount || 0));
+          actualTotalAmount = Math.round(parseFloat(cafe24Order.actual_order_amount?.total_order_amount || cafe24Order.order_amount || 0));
+          actualDiscountAmount = Math.round(parseFloat(cafe24Order.actual_order_amount?.total_discount_amount || 0));
+          actualMileageUsed = Math.round(parseFloat(cafe24Order.actual_order_amount?.mileage_spent_amount || 0));
+          actualShippingFee = Math.round(parseFloat(cafe24Order.actual_order_amount?.shipping_fee || 0));
+          actualProductCount = cafe24Order.items?.length || 1;
+          actualProductName = cafe24Order.items?.[0]?.product_name || product_name || null;
+          
+          console.log(`[Track] Cafe24 API verified order ${order_id}: paid=${actualPaid}, final_payment=${actualFinalPayment}`);
+        }
+      } catch (cafe24Error) {
+        // Cafe24 API error - fall back to tracker values but mark as unverified
+        console.warn(`[Track] Cafe24 API error for order ${order_id}:`, cafe24Error.message);
+        // Use tracker values as fallback
+        actualFinalPayment = final_payment || 0;
+        actualTotalAmount = total_amount || 0;
+        actualDiscountAmount = discount_amount || 0;
+        actualMileageUsed = mileage_used || 0;
+        actualShippingFee = shipping_fee || 0;
+      }
+    } else {
+      // No Cafe24 API configured (local development) - use tracker values
+      actualFinalPayment = final_payment || 0;
+      actualTotalAmount = total_amount || 0;
+      actualDiscountAmount = discount_amount || 0;
+      actualMileageUsed = mileage_used || 0;
+      actualShippingFee = shipping_fee || 0;
+    }
+
+    // Insert into conversions table with Cafe24-verified payment details
     await db.query(`
       INSERT INTO conversions (
         session_id, visitor_id, order_id, total_amount, 
         product_count, timestamp, discount_amount, 
         mileage_used, shipping_fee, final_payment,
-        utm_source, utm_campaign
+        utm_source, utm_campaign, paid, product_name, synced_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
       ON CONFLICT (order_id) DO UPDATE SET
+        visitor_id = COALESCE(conversions.visitor_id, EXCLUDED.visitor_id),
+        session_id = COALESCE(conversions.session_id, EXCLUDED.session_id),
+        total_amount = EXCLUDED.total_amount,
         discount_amount = EXCLUDED.discount_amount,
         mileage_used = EXCLUDED.mileage_used,
         shipping_fee = EXCLUDED.shipping_fee,
         final_payment = EXCLUDED.final_payment,
-        utm_source = EXCLUDED.utm_source,
-        utm_campaign = EXCLUDED.utm_campaign
+        paid = EXCLUDED.paid,
+        product_name = COALESCE(EXCLUDED.product_name, conversions.product_name),
+        utm_source = COALESCE(EXCLUDED.utm_source, conversions.utm_source),
+        utm_campaign = COALESCE(EXCLUDED.utm_campaign, conversions.utm_campaign),
+        synced_at = NOW()
     `, [
-      session_id, visitor_id, order_id, total_amount,
-      quantity || 1, eventTime,
-      discount_amount || 0,
-      mileage_used || 0,
-      shipping_fee || 0,
-      final_payment || 0,
+      session_id, visitor_id, order_id, actualTotalAmount,
+      actualProductCount, eventTime,
+      actualDiscountAmount,
+      actualMileageUsed,
+      actualShippingFee,
+      actualFinalPayment,
       utm.utm_source || null,
-      utm.utm_campaign || null
+      utm.utm_campaign || null,
+      actualPaid,
+      actualProductName
     ]);
 
     // Mark session as converted and update duration_seconds
