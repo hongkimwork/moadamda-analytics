@@ -17,6 +17,8 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-11-27 | 미니카드 전체표시+RangePicker | OrderAnalysis.jsx |
+| 2025-11-27 | 여정 카드 열 단계 6→4 변경 | OrderAnalysis.jsx |
 | 2025-11-27 | Cafe24 실시간 주문 동기화 | track.js, cafe24.js |
 | 2025-11-27 | 주문시간 KST 일관성 수정 | stats.js |
 | 2025-11-26 | 0원 주문 제외 필터 구현 | orders.js |
@@ -30,8 +32,6 @@
 | 2025-11-25 | 불완전 UTF-8 바이트 정리 | creative-performance.js |
 | 2025-11-25 | 불완전한 URL 패턴 선택적 디코딩 | creative-performance.js |
 | 2025-11-25 | 이중 URL 인코딩 반복 디코딩 | creative-performance.js |
-| 2025-11-25 | URL 디코딩 경고 로그 제거 | creative-performance.js |
-| 2025-11-24 | Pagination 개수 오류 수정 | OrderAnalysis.jsx |
 
 ---
 

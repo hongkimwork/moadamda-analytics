@@ -260,7 +260,7 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
   const [data, setData] = useState(null);
   const [showPreviousVisits, setShowPreviousVisits] = useState(false);
   const [expandedJourneys, setExpandedJourneys] = useState(['purchase']); // 펼침/축소 상태
-  const [selectedStartDate, setSelectedStartDate] = useState(null); // DatePicker 선택 날짜
+  const [selectedDateRange, setSelectedDateRange] = useState(null); // RangePicker 선택 날짜 [시작, 종료]
 
   useEffect(() => {
     fetchOrderDetail();
@@ -406,7 +406,7 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
   // 구매일 계산 (order.timestamp 사용)
   const purchaseDate = dayjs(order.timestamp).format('YYYY-MM-DD');
 
-  // 이전 방문 필터링 로직 (기본 7일 or 사용자 선택 날짜)
+  // 이전 방문 필터링 로직 (기본: 전체, RangePicker 선택 시: 해당 기간만)
   let filteredPreviousVisits = [];
   if (previous_visits && previous_visits.length > 0) {
     const purchaseDateObj = dayjs(order.timestamp);
@@ -419,14 +419,16 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
         return false;
       }
 
-      if (!selectedStartDate) {
-        // 기본: 구매일 기준 최근 7일
-        const sevenDaysAgo = purchaseDateObj.subtract(7, 'day');
-        return visitDate.isAfter(sevenDaysAgo, 'day');
-      } else {
-        // 사용자 선택: 선택한 날짜 이후
-        return visitDate.isAfter(selectedStartDate, 'day') || visitDate.isSame(selectedStartDate, 'day');
+      if (selectedDateRange && selectedDateRange[0] && selectedDateRange[1]) {
+        // RangePicker 선택 시: 해당 기간 내 방문만 필터링
+        const startDate = selectedDateRange[0];
+        const endDate = selectedDateRange[1];
+        return (visitDate.isAfter(startDate, 'day') || visitDate.isSame(startDate, 'day')) &&
+               (visitDate.isBefore(endDate, 'day') || visitDate.isSame(endDate, 'day'));
       }
+      
+      // 기본: 모든 방문 포함 (이후 최근 8개로 제한)
+      return true;
     });
   }
 
@@ -476,18 +478,18 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
   ];
 
   // 시간순 정렬 후 방문 순서 부여
-  const allJourneys = journeys
-    .sort((a, b) => new Date(a.date) - new Date(b.date))
-    .map((journey, idx) => ({
-      ...journey,
-      visitNumber: idx + 1,
-      label: journey.type === 'purchase'
-        ? `${idx + 1}차 방문 (구매)`
-        : `${idx + 1}차 방문 (이탈)`
-    }));
+  const sortedJourneys = journeys.sort((a, b) => new Date(a.date) - new Date(b.date));
+  
+  const allJourneys = sortedJourneys.map((journey, idx) => ({
+    ...journey,
+    visitNumber: idx + 1,
+    label: journey.type === 'purchase'
+      ? `${idx + 1}차 방문 (구매)`
+      : `${idx + 1}차 방문 (이탈)`
+  }));
 
   // 타임라인 다단 배치 계산 함수
-  const MAX_ITEMS_PER_COLUMN = 6;
+  const MAX_ITEMS_PER_COLUMN = 4;
   const getColumns = (pages) => {
     const columnCount = Math.ceil(pages.length / MAX_ITEMS_PER_COLUMN);
     const columns = [];
@@ -561,30 +563,62 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
           }}>
             고객 여정 분석
           </h3>
-          <DatePicker
-            placeholder="시작 날짜 선택"
+          <RangePicker
+            placeholder={['시작 날짜', '종료 날짜']}
             style={{ 
-              width: 200,
+              width: 280,
               borderRadius: '8px',
               boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
             }}
-            onChange={(date) => setSelectedStartDate(date)}
+            onChange={(dates) => setSelectedDateRange(dates)}
             disabledDate={(current) => {
               if (!current) return false;
               const purchaseDateObj = dayjs(order.timestamp);
               // 구매일 이후는 선택 불가
               return current.isAfter(purchaseDateObj, 'day');
             }}
-            value={selectedStartDate}
+            value={selectedDateRange}
             allowClear
             format="YYYY-MM-DD"
           />
 
-          {/* 미니 카드들 */}
+          {/* 미니 카드들 - 페이드 효과 wrapper */}
           <div style={{
-            display: 'flex',
-            gap: '10px'
+            position: 'relative',
+            flex: 1,
+            minWidth: 0,
+            overflow: 'hidden'
           }}>
+            {/* 좌측 페이드 */}
+            <div style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: '24px',
+              background: 'linear-gradient(to right, rgba(255,255,255,1), rgba(255,255,255,0))',
+              zIndex: 1,
+              pointerEvents: 'none'
+            }} />
+            {/* 우측 페이드 */}
+            <div style={{
+              position: 'absolute',
+              right: 0,
+              top: 0,
+              bottom: 0,
+              width: '24px',
+              background: 'linear-gradient(to left, rgba(255,255,255,1), rgba(255,255,255,0))',
+              zIndex: 1,
+              pointerEvents: 'none'
+            }} />
+            <div style={{
+              display: 'flex',
+              gap: '10px',
+              overflowX: 'auto',
+              padding: '4px 28px',
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none'
+            }}>
             {allJourneys.map(journey => {
               const isExpanded = expandedJourneys.includes(journey.id);
               return (
@@ -660,6 +694,7 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
                 </div>
               );
             })}
+            </div>
           </div>
         </div>
         {onClose && (
