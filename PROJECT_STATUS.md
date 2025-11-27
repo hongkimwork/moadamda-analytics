@@ -17,6 +17,7 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-11-27 | Cafe24 동기화 중복코드 통합 | cafe24.js |
 | 2025-11-27 | 상품수 계산 로직 수정 (quantity 합산) | cafe24.js |
 | 2025-11-27 | 주문목록 상품수/재구매 컬럼 추가 | OrderAnalysis.jsx |
 | 2025-11-27 | 주문 분석2 페이지 제거 | App.jsx |
@@ -31,7 +32,6 @@
 | 2025-11-26 | Cafe24 API 연동 구현 | cafe24.js |
 | 2025-11-25 | 필터에서 viral 제외 처리 | DynamicUtmFilterBar.jsx |
 | 2025-11-25 | 퀵필터 바이럴 제거/추가버튼 수정 | UtmSourceQuickFilter.jsx |
-| 2025-11-25 | UTM Source 퀵 필터 추가 | UtmSourceQuickFilter.jsx |
 
 ---
 

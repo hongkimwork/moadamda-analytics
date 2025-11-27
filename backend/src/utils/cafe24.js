@@ -319,34 +319,37 @@ function startTokenRefreshTask() {
 }
 
 /**
- * 주문 자동 동기화 실행
- * 오늘 날짜 기준으로 모든 주문을 Cafe24 API 값으로 업데이트
- * - 새 주문: visitor_id 매칭 시도 후 저장
- * - 기존 주문: visitor_id 유지, paid/final_payment는 Cafe24 값으로 업데이트
+ * 주문 동기화 핵심 로직 (공통 함수)
+ * 자동 스케줄러와 수동 API 모두 이 함수를 사용
+ * 
+ * @param {string} startDate - 시작일 (YYYY-MM-DD)
+ * @param {string} endDate - 종료일 (YYYY-MM-DD)
+ * @param {Object} options - 옵션
+ * @param {boolean} options.dryRun - true면 실제 저장 안하고 결과만 반환
+ * @returns {Object} 동기화 결과
  */
-async function syncOrders() {
+async function syncOrdersForRange(startDate, endDate, options = {}) {
+  const { dryRun = false } = options;
+  const logPrefix = '[Cafe24 Sync]';
+  
   try {
-    const today = new Date();
-    const startDate = today.toISOString().split('T')[0];
-    const endDate = startDate;
-    
-    console.log(`[Cafe24 Auto Sync] Starting sync for ${startDate}`);
+    console.log(`${logPrefix} Starting sync from ${startDate} to ${endDate}${dryRun ? ' (DRY RUN)' : ''}`);
     
     // Cafe24에서 주문 가져오기
     const cafe24Orders = await getAllOrders(startDate, endDate);
-    console.log(`[Cafe24 Auto Sync] Fetched ${cafe24Orders.length} orders from Cafe24`);
+    console.log(`${logPrefix} Fetched ${cafe24Orders.length} orders from Cafe24`);
     
     if (cafe24Orders.length === 0) {
-      console.log('[Cafe24 Auto Sync] No orders to sync');
-      return { synced: 0, matched: 0, updated: 0 };
+      console.log(`${logPrefix} No orders to sync`);
+      return { synced: 0, matched: 0, updated: 0, total: 0 };
     }
     
     // 기존 conversions에서 해당 기간의 order_id와 visitor_id 조회
     const existingResult = await db.query(
       `SELECT order_id, visitor_id, session_id FROM conversions 
-       WHERE timestamp >= $1::date AND timestamp < $1::date + INTERVAL '1 day'
+       WHERE timestamp >= $1::date AND timestamp < $2::date + INTERVAL '1 day'
        AND order_id IS NOT NULL`,
-      [startDate]
+      [startDate, endDate]
     );
     
     // 기존 주문의 visitor_id 매핑 (visitor_id가 있는 경우 보존용)
@@ -356,6 +359,21 @@ async function syncOrders() {
         visitor_id: row.visitor_id,
         session_id: row.session_id
       });
+    }
+    
+    console.log(`${logPrefix} Found ${existingOrderMap.size} existing orders in conversions`);
+    
+    // dry_run 모드: 실제 저장 없이 결과만 반환
+    if (dryRun) {
+      const newOrders = cafe24Orders.filter(o => !existingOrderMap.has(o.order_id));
+      return {
+        dryRun: true,
+        total: cafe24Orders.length,
+        existing: existingOrderMap.size,
+        newOrders: newOrders.length,
+        toUpdate: existingOrderMap.size,
+        newOrderIds: newOrders.map(o => o.order_id)
+      };
     }
     
     let syncedCount = 0;
@@ -403,7 +421,7 @@ async function syncOrders() {
         
         // 디버그: 상품 수가 2개 이상인 주문 로깅
         if (productCount >= 2 || (order.items && order.items.length >= 2)) {
-          console.log(`[Cafe24 Sync] Order ${order.order_id}: items=${order.items?.length}, productCount=${productCount}, items_detail=${JSON.stringify(order.items?.map(i => ({ name: i.product_name, qty: i.quantity })))}`);
+          console.log(`${logPrefix} Order ${order.order_id}: items=${order.items?.length}, productCount=${productCount}, items_detail=${JSON.stringify(order.items?.map(i => ({ name: i.product_name, qty: i.quantity })))}`);
         }
         
         // conversions 테이블에 UPSERT
@@ -451,17 +469,35 @@ async function syncOrders() {
         }
         
       } catch (insertError) {
-        console.error(`[Cafe24 Auto Sync] Failed to process order ${order.order_id}:`, insertError.message);
+        console.error(`${logPrefix} Failed to process order ${order.order_id}:`, insertError.message);
       }
     }
     
-    console.log(`[Cafe24 Auto Sync] Completed: ${syncedCount} new, ${updatedCount} updated, ${matchedCount} matched`);
-    return { synced: syncedCount, matched: matchedCount, updated: updatedCount };
+    console.log(`${logPrefix} Completed: ${syncedCount} new, ${updatedCount} updated, ${matchedCount} matched`);
+    return { 
+      synced: syncedCount, 
+      matched: matchedCount, 
+      updated: updatedCount,
+      total: cafe24Orders.length,
+      existing: existingOrderMap.size
+    };
     
   } catch (error) {
-    console.error('[Cafe24 Auto Sync] Error:', error.message);
+    console.error(`${logPrefix} Error:`, error.message);
     return { synced: 0, matched: 0, updated: 0, error: error.message };
   }
+}
+
+/**
+ * 주문 자동 동기화 실행 (스케줄러용)
+ * 오늘 날짜 기준으로 syncOrdersForRange() 호출
+ */
+async function syncOrders() {
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+  
+  console.log(`[Cafe24 Auto Sync] Running for ${todayStr}`);
+  return await syncOrdersForRange(todayStr, todayStr);
 }
 
 /**
@@ -740,6 +776,7 @@ module.exports = {
   getTokenInfo,
   findMatchingVisitor,
   syncOrders,
+  syncOrdersForRange,
   backfillVisitorIds,
   backfillProductNames,
   updatePendingPayments,
