@@ -116,10 +116,20 @@ export function OrderListPage() {
       ellipsis: true
     },
     {
+      title: '상품수',
+      dataIndex: 'product_count',
+      key: 'product_count',
+      width: 80,
+      align: 'center',
+      render: (count) => (
+        <span style={{ fontWeight: 500 }}>{count || 1}개</span>
+      )
+    },
+    {
       title: '디바이스',
       dataIndex: 'device_type',
       key: 'device_type',
-      width: 100,
+      width: 90,
       render: (device) => (
         <Tag color={device === 'mobile' ? 'blue' : 'green'}>
           {device === 'mobile' ? 'Mobile' : 'PC'}
@@ -127,21 +137,25 @@ export function OrderListPage() {
       )
     },
     {
-      title: 'IP',
-      dataIndex: 'ip_address',
-      key: 'ip_address',
-      width: 150,
-      render: (ip) => (
-        <span style={{ fontFamily: 'monospace', fontSize: '11px' }}>
-          {ip || 'unknown'}
-        </span>
-      )
+      title: '재구매',
+      dataIndex: 'is_repurchase',
+      key: 'is_repurchase',
+      width: 80,
+      align: 'center',
+      render: (isRepurchase) => {
+        if (isRepurchase === null || isRepurchase === undefined) {
+          return <Tag color="default">-</Tag>;
+        }
+        return isRepurchase 
+          ? <Tag color="purple">재구매</Tag>
+          : <Tag color="cyan">신규</Tag>;
+      }
     },
     {
       title: 'UTM Source',
       dataIndex: 'utm_source',
       key: 'utm_source',
-      width: 120,
+      width: 110,
       render: (source) => source ? <Tag>{source}</Tag> : '-'
     },
     {
@@ -217,7 +231,7 @@ export function OrderListPage() {
             showTotal: (total) => `총 ${total}건`,
             showSizeChanger: true
           }}
-          scroll={{ x: 1400 }}
+          scroll={{ x: 1300 }}
         />
       </Card>
 

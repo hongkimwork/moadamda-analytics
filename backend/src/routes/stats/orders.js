@@ -42,7 +42,6 @@ router.get('/orders', async (req, res) => {
         c.product_count,
         c.visitor_id,
         c.session_id,
-        s.ip_address,
         v.device_type,
         -- UTM 데이터: utm_sessions 우선, 없으면 visitors 테이블 사용
         COALESCE(
@@ -69,7 +68,19 @@ router.get('/orders', async (req, res) => {
             ORDER BY e.timestamp DESC 
             LIMIT 1
           )
-        ) as product_name
+        ) as product_name,
+        -- 재구매 여부: 동일 visitor_id로 이전 구매가 있는지 확인
+        CASE 
+          WHEN c.visitor_id IS NULL OR c.visitor_id = '' THEN NULL
+          WHEN EXISTS (
+            SELECT 1 FROM conversions c2 
+            WHERE c2.visitor_id = c.visitor_id 
+              AND c2.timestamp < c.timestamp
+              AND c2.paid = 'T'
+              AND c2.final_payment > 0
+          ) THEN true
+          ELSE false
+        END as is_repurchase
       FROM conversions c
       LEFT JOIN sessions s ON c.session_id = s.session_id
       LEFT JOIN visitors v ON c.visitor_id = v.visitor_id
@@ -107,19 +118,19 @@ router.get('/orders', async (req, res) => {
       product_name: row.product_name || null,
       visitor_id: row.visitor_id,
       session_id: row.session_id,
-      ip_address: row.ip_address || null,
       device_type: row.device_type || null,
       utm_source: row.utm_source || null,
       utm_campaign: row.utm_campaign || null,
+      // 재구매 여부 (null: 알 수 없음, true: 재구매, false: 신규)
+      is_repurchase: row.is_repurchase,
       // Cafe24 API sync 주문 여부 표시 (visitor_id 없거나 빈 문자열)
       is_cafe24_only: !row.visitor_id || row.visitor_id === ''
     }));
     
-    // 최종 매핑 (상품명/IP/디바이스 기본값 설정)
+    // 최종 매핑 (상품명/디바이스 기본값 설정)
     orders = orders.map(order => ({
       ...order,
       product_name: order.product_name || '상품명 없음',
-      ip_address: order.ip_address || (order.is_cafe24_only ? 'API 동기화' : 'unknown'),
       device_type: order.device_type || (order.is_cafe24_only ? 'API 동기화' : 'unknown')
     }));
 

@@ -17,6 +17,8 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-11-27 | 상품수 계산 로직 수정 (quantity 합산) | cafe24.js |
+| 2025-11-27 | 주문목록 상품수/재구매 컬럼 추가 | OrderAnalysis.jsx |
 | 2025-11-27 | 주문 분석2 페이지 제거 | App.jsx |
 | 2025-11-27 | 미니카드 전체표시+RangePicker | OrderAnalysis.jsx |
 | 2025-11-27 | 여정 카드 열 단계 6→4 변경 | OrderAnalysis.jsx |
@@ -30,8 +32,6 @@
 | 2025-11-25 | 필터에서 viral 제외 처리 | DynamicUtmFilterBar.jsx |
 | 2025-11-25 | 퀵필터 바이럴 제거/추가버튼 수정 | UtmSourceQuickFilter.jsx |
 | 2025-11-25 | UTM Source 퀵 필터 추가 | UtmSourceQuickFilter.jsx |
-| 2025-11-25 | 불완전 UTF-8 바이트 정리 | creative-performance.js |
-| 2025-11-25 | 불완전한 URL 패턴 선택적 디코딩 | creative-performance.js |
 
 ---
 

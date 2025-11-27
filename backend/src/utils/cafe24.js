@@ -398,6 +398,9 @@ async function syncOrders() {
           sessionId = existingOrder.session_id;
         }
         
+        // 실제 구매 상품 수 계산 (각 항목의 quantity 합산)
+        const productCount = order.items?.reduce((sum, item) => sum + (parseInt(item.quantity) || 1), 0) || 1;
+        
         // conversions 테이블에 UPSERT
         // - 새 주문: 전체 데이터 저장
         // - 기존 주문: visitor_id 유지, 결제 정보는 Cafe24 값으로 업데이트
@@ -413,6 +416,7 @@ async function syncOrders() {
             paid = EXCLUDED.paid,
             final_payment = EXCLUDED.final_payment,
             total_amount = EXCLUDED.total_amount,
+            product_count = EXCLUDED.product_count,
             discount_amount = EXCLUDED.discount_amount,
             mileage_used = EXCLUDED.mileage_used,
             shipping_fee = EXCLUDED.shipping_fee,
@@ -424,7 +428,7 @@ async function syncOrders() {
             order.order_id,
             totalAmount,
             finalPayment,
-            order.items?.length || 1,
+            productCount,
             new Date(order.order_date),
             discountAmount,
             mileageUsed,
