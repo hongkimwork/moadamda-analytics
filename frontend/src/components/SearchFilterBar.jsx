@@ -222,8 +222,7 @@ function SearchFilterBar({
   const deviceOptions = [
     { label: '전체', value: 'all' },
     { label: '📱 Mobile', value: 'mobile' },
-    { label: '💻 PC', value: 'pc' },
-    { label: '📟 Tablet', value: 'tablet' }
+    { label: '💻 PC', value: 'pc' }
   ];
 
   // 브라우저 옵션
@@ -340,32 +339,41 @@ function SearchFilterBar({
               >
                 최근 30일
               </Button>
+              
+              {/* 기기 필터 - 날짜 버튼 우측에 배치 */}
+              {showDeviceFilter && (
+                <Select
+                  value={filters.device}
+                  onChange={handleDeviceChange}
+                  options={deviceOptions}
+                  style={{ width: 110 }}
+                  disabled={loading}
+                  size="middle"
+                  placeholder="기기"
+                />
+              )}
+              
+              {/* 초기화 버튼 - 두 번째 줄 필터가 없을 때 첫 번째 줄에 표시 */}
+              {!(showBrowserFilter || showOsFilter || showEventTypeFilter || showBouncedFilter || showConvertedFilter) && (searchTerm || activeFilterCount > 0) && (
+                <Button
+                  icon={<CloseCircleOutlined />}
+                  onClick={handleReset}
+                  disabled={loading}
+                  size="middle"
+                  danger
+                >
+                  초기화
+                </Button>
+              )}
             </>
           )}
         </Space>
 
-        {/* 필터 영역 */}
-        {(showDeviceFilter || showBrowserFilter || showOsFilter || showEventTypeFilter || showBouncedFilter || showConvertedFilter) && (
+        {/* 필터 영역 (기기 필터 제외한 나머지) */}
+        {(showBrowserFilter || showOsFilter || showEventTypeFilter || showBouncedFilter || showConvertedFilter) && (
           <Space direction="vertical" size="small" style={{ width: '100%' }}>
             <Space wrap style={{ width: '100%', alignItems: 'center' }} size="small">
               <FilterOutlined style={{ color: activeFilterCount > 0 ? '#1890ff' : '#999', fontSize: '16px' }} />
-              
-              {/* 기기 필터 */}
-              {showDeviceFilter && (
-                <Space.Compact>
-                  <Button size="small" style={{ pointerEvents: 'none', backgroundColor: '#f0f0f0', border: '1px solid #d9d9d9' }}>
-                    기기
-                  </Button>
-                  <Select
-                    value={filters.device}
-                    onChange={handleDeviceChange}
-                    options={deviceOptions}
-                    style={{ width: 120 }}
-                    disabled={loading}
-                    size="small"
-                  />
-                </Space.Compact>
-              )}
 
               {/* 브라우저 필터 */}
               {showBrowserFilter && (

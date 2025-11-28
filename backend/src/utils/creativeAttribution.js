@@ -21,7 +21,10 @@ async function calculateCreativeAttribution(creatives, startDate, endDate) {
     result[key] = {
       contributed_orders_count: 0,      // 결제건 기여 포함 수
       attributed_revenue: 0,             // 결제건 기여 금액
-      total_contributed_revenue: 0       // 기여 결제건 총 결제금액
+      total_contributed_revenue: 0,      // 기여 결제건 총 결제금액
+      single_touch_count: 0,             // 순수전환 횟수 (이 광고만 보고 구매한 횟수)
+      last_touch_count: 0,               // 막타 횟수 (마지막으로 본 광고로서 구매한 횟수)
+      last_touch_revenue: 0              // 막타 결제액 (마지막으로 본 광고로서 구매한 결제금액)
     };
   });
 
@@ -125,6 +128,16 @@ async function calculateCreativeAttribution(creatives, startDate, endDate) {
 
     const finalPayment = parseFloat(purchase.final_payment) || 0;
 
+    // 순수 전환(막타) 체크: 이 광고만 보고 구매했는지 확인
+    // 여정에 있는 고유한 광고 조합 수를 계산
+    const uniqueCreatives = new Set();
+    journey.forEach(touch => {
+      const touchKey = `${touch.utm_content}||${touch.utm_source}||${touch.utm_medium}||${touch.utm_campaign}`;
+      uniqueCreatives.add(touchKey);
+    });
+    
+    const isSingleTouch = uniqueCreatives.size === 1; // 하나의 광고만 봤는지
+
     // 막타 제외한 터치 목록 (막타 터치 하나만 제외, 같은 이름이어도 다른 터치는 포함)
     const nonLastTouches = journey.filter((touch, index) => 
       !(touch.sequence_order === lastTouch.sequence_order && 
@@ -142,11 +155,19 @@ async function calculateCreativeAttribution(creatives, startDate, endDate) {
 
     // 막타 광고 기여도 계산
     const lastTouchCreative = lastTouch.utm_content;
-    let lastTouchAttributedAmount = finalPayment * 0.5; // 막타는 무조건 50%
+    let lastTouchAttributedAmount;
 
-    // 막타 광고가 중간에도 있었다면 추가 기여
-    if (nonLastTouchCounts[lastTouchCreative] && totalNonLastTouches > 0) {
-      lastTouchAttributedAmount += finalPayment * 0.5 * (nonLastTouchCounts[lastTouchCreative] / totalNonLastTouches);
+    // 광고 1개만 봤으면 100% 기여
+    if (totalNonLastTouches === 0) {
+      lastTouchAttributedAmount = finalPayment; // 100%
+    } else {
+      // 여러 광고를 봤으면: 막타 50% + 비막타 50% 분배
+      lastTouchAttributedAmount = finalPayment * 0.5; // 막타 기본 50%
+      
+      // 막타 광고가 중간에도 있었다면 추가 기여
+      if (nonLastTouchCounts[lastTouchCreative]) {
+        lastTouchAttributedAmount += finalPayment * 0.5 * (nonLastTouchCounts[lastTouchCreative] / totalNonLastTouches);
+      }
     }
 
     // 막타 광고 기여도 누적 (정확한 조합에만 누적)
@@ -157,6 +178,16 @@ async function calculateCreativeAttribution(creatives, startDate, endDate) {
       result[lastTouchKey].contributed_orders_count += 1;
       result[lastTouchKey].attributed_revenue += lastTouchAttributedAmount;
       result[lastTouchKey].total_contributed_revenue += finalPayment;
+      
+      // 막타(Last Touch): 마지막으로 본 광고에 항상 카운트
+      result[lastTouchKey].last_touch_count += 1;
+      result[lastTouchKey].last_touch_revenue += finalPayment;
+      
+      // 순수 전환: 이 광고만 보고 구매한 경우에만 카운트
+      if (isSingleTouch) {
+        result[lastTouchKey].single_touch_count += 1;
+      }
+      
       contributedKeys.add(lastTouchKey); // 막타는 이미 처리했음을 표시
     }
 

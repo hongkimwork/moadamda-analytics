@@ -1,6 +1,15 @@
 /**
- * Moadamda Analytics Tracker
- * Phase 1: Basic pageview and visitor tracking
+ * Moadamda Analytics Tracker v20.2
+ * Updated: 2025-11-28
+ * 
+ * LATEST UPDATE (v20.2):
+ * - FIX: 로그인 페이지 리다이렉트 시 UTM 파라미터 유실 문제 해결
+ * - ADDED: 세션 스토리지 기반 UTM 파라미터 유지 로직
+ * - REASON: 리다이렉트 시 URL에서 UTM이 사라져 빈값으로 기록되는 문제
+ * 
+ * PREVIOUS (v20.1):
+ * - FIX: UTM 파라미터 이중/다중 인코딩 문제 해결
+ * - ADDED: fullyDecode() 함수로 UTM 값 완전 디코딩
  */
 (function() {
   'use strict';
@@ -73,6 +82,46 @@
     return 'pc';
   }
   
+  // Fully decode URL-encoded string (handles double/multiple encoding)
+  function fullyDecode(str) {
+    if (!str) return str;
+    let decoded = str;
+    let prev;
+    // Keep decoding until no more changes (handles multiple encoding layers)
+    while (decoded !== prev) {
+      prev = decoded;
+      try {
+        decoded = decodeURIComponent(decoded);
+      } catch (e) {
+        // If decoding fails, return current state
+        break;
+      }
+    }
+    return decoded;
+  }
+  
+  // UTM Session Storage utilities (to persist UTM across redirects like login page)
+  const UTM_STORAGE_KEY = '_ma_utm_params';
+  
+  function saveUtmToStorage(utmParams) {
+    try {
+      if (Object.keys(utmParams).length > 0) {
+        sessionStorage.setItem(UTM_STORAGE_KEY, JSON.stringify(utmParams));
+      }
+    } catch (e) {
+      // sessionStorage not available
+    }
+  }
+  
+  function getUtmFromStorage() {
+    try {
+      const stored = sessionStorage.getItem(UTM_STORAGE_KEY);
+      return stored ? JSON.parse(stored) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+  
   // Track pageview
   function trackPageView() {
     const data = {
@@ -89,18 +138,33 @@
       user_agent: navigator.userAgent
     };
     
-    // Extract ALL UTM parameters (utm_*)
+    // Extract ALL UTM parameters (utm_*) from current URL
     const urlParams = new URLSearchParams(window.location.search);
-    const utmParams = {};
+    let utmParams = {};
     
     // Collect all parameters that start with 'utm_'
+    // Use fullyDecode to handle double/multiple URL encoding from ad platforms
     for (const [key, value] of urlParams.entries()) {
       if (key.startsWith('utm_')) {
-        utmParams[key] = value;
+        utmParams[key] = fullyDecode(value);
       }
     }
     
-    // If any UTM parameters exist, add them to data
+    // UTM Persistence Logic: Handle redirects (e.g., login page)
+    // If URL has UTM params, save them to sessionStorage for later use
+    // If URL has no UTM params, try to restore from sessionStorage
+    if (Object.keys(utmParams).length > 0) {
+      // URL has UTM params - save to storage
+      saveUtmToStorage(utmParams);
+    } else {
+      // URL has no UTM params - try to restore from storage
+      const storedUtm = getUtmFromStorage();
+      if (storedUtm) {
+        utmParams = storedUtm;
+      }
+    }
+    
+    // If any UTM parameters exist (from URL or storage), add them to data
     if (Object.keys(utmParams).length > 0) {
       // Keep backward compatibility: send basic 3 UTM params separately
       data.utm_source = utmParams.utm_source || '';

@@ -1,26 +1,24 @@
-v19.0 (v042)
-Updated: 2025-10-30
+v20.2 (v045-fix)
+Updated: 2025-11-28
 
-🔥 CRITICAL FIX: 100% 신뢰할 수 있는 주문 추적
+🔧 FIX: 로그인 페이지 리다이렉트 시 UTM 파라미터 유실 해결
 
-NEW IN v19.0 (v042):
-✅ CRITICAL: visitor_id를 모든 주문에 자동 주입
-✅ 네이버페이/카카오페이/일반 주문 모두 추적
-✅ 누락 없는 완벽한 주문 데이터 수집
-✅ Cafe24 주문 옵션에 visitor_id 숨김 필드 추가
-✅ 다중 결제 수단 지원 (네이버페이, 카카오페이, 일반 결제)
+NEW IN v20.2 (v045-fix):
+✅ FIX: 세션 스토리지 기반 UTM 파라미터 유지 로직 추가
+✅ 로그인 페이지 등 리다이렉트 시에도 UTM 파라미터 보존
+✅ utm_source 빈값(-) 문제 해결
+✅ 기여도 중복 계산 문제 해결 (2.9% → 0%)
 
 HOW IT WORKS:
-1. 사용자 방문 시 visitor_id 생성 (_ma_id 쿠키)
-2. 주문 버튼 클릭 감지 (네이버페이/카카오페이/일반)
-3. visitor_id를 Cafe24 추가옵션(ma_visitor_id)에 자동 주입
-4. 주문 완료 시 Cafe24 주문 정보에 visitor_id 포함
-5. 백엔드에서 주문 조회 시 visitor_id로 사용자 방문 기록 연결
+1. URL에 UTM 파라미터가 있으면 sessionStorage에 저장
+2. URL에 UTM이 없으면 sessionStorage에서 복원
+3. 로그인 페이지로 리다이렉트되어도 UTM 정보 유지
+4. 브라우저 탭을 닫으면 sessionStorage 자동 삭제 (정상 동작)
 
 DEPLOYMENT INFO:
-- Backend: https://marketingzon.com/api/track
+- Backend: https://moadamda-analytics.co.kr/api/track
 - Dashboard: https://dashboard.marketingzon.com
-- Server: Naver Cloud Platform (211.188.53.220)
+- Server: Naver Cloud Platform
 - SSL: Auto-renewal (Let's Encrypt)
 
 Previous features maintained:
@@ -28,3 +26,4 @@ Previous features maintained:
 - Session end tracking
 - DOM parsing fallback for order data
 - Product tracking with multiple fallback sources
+- fullyDecode() for double/multiple URL encoding

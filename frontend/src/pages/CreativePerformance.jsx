@@ -1,12 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Table, Tag, Typography, Space, Button, Alert, message, Tooltip, Divider } from 'antd';
-import { ReloadOutlined, BarChartOutlined } from '@ant-design/icons';
-import { Search, BarChart3, RefreshCw, Layers } from 'lucide-react';
+import { Card, Table, Tag, Typography, Space, Button, Alert, message, Tooltip, Divider, Dropdown, Checkbox } from 'antd';
+import { BarChartOutlined, ShoppingCartOutlined, SettingOutlined, NodeIndexOutlined, FileSearchOutlined, SwapOutlined } from '@ant-design/icons';
+import { Search, BarChart3, RefreshCw, Layers, GitCompare } from 'lucide-react';
 import axios from 'axios';
 import dayjs from 'dayjs';
 import SearchFilterBar from '../components/SearchFilterBar';
 import DynamicUtmFilterBar from '../components/DynamicUtmFilterBar';
 import UtmSourceQuickFilter from '../components/UtmSourceQuickFilter';
+import CreativeOrdersModal from '../components/CreativeOrdersModal';
+import CreativeAnalysisModal from '../components/CreativeAnalysisModal';
+import CreativeJourneyModal from '../components/CreativeJourneyModal';
+import CreativeLandingModal from '../components/CreativeLandingModal';
+import CreativeCompareModal from '../components/CreativeCompareModal';
 
 const { Title } = Typography;
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -75,6 +80,112 @@ function CreativePerformance() {
   
   // UTM Source 퀵 필터 state
   const [quickFilterSources, setQuickFilterSources] = useState([]);
+
+  // 주문 보기 모달 state
+  const [ordersModalVisible, setOrdersModalVisible] = useState(false);
+  const [selectedCreative, setSelectedCreative] = useState(null);
+
+  // 성과 분석 모달 state
+  const [analysisModalVisible, setAnalysisModalVisible] = useState(false);
+  const [analysisCreative, setAnalysisCreative] = useState(null);
+
+  // 고객 여정 모달 state
+  const [journeyModalVisible, setJourneyModalVisible] = useState(false);
+  const [journeyCreative, setJourneyCreative] = useState(null);
+
+  // 페이지 분석 모달 state
+  const [landingModalVisible, setLandingModalVisible] = useState(false);
+  const [landingCreative, setLandingCreative] = useState(null);
+
+  // 소재 비교 선택 state
+  const [selectedCreatives, setSelectedCreatives] = useState([]);
+  const [compareModalVisible, setCompareModalVisible] = useState(false);
+
+  // 주문 보기 버튼 클릭 핸들러
+  const handleViewOrders = (record) => {
+    setSelectedCreative({
+      creative_name: record.creative_name,
+      utm_source: record.utm_source,
+      utm_medium: record.utm_medium,
+      utm_campaign: record.utm_campaign
+    });
+    setOrdersModalVisible(true);
+  };
+
+  // 성과 분석 버튼 클릭 핸들러
+  const handleViewAnalysis = (record) => {
+    setAnalysisCreative({
+      creative_name: record.creative_name,
+      utm_source: record.utm_source,
+      utm_medium: record.utm_medium,
+      utm_campaign: record.utm_campaign
+    });
+    setAnalysisModalVisible(true);
+  };
+
+  // 고객 여정 버튼 클릭 핸들러
+  const handleViewJourney = (record) => {
+    setJourneyCreative({
+      creative_name: record.creative_name,
+      utm_source: record.utm_source,
+      utm_medium: record.utm_medium,
+      utm_campaign: record.utm_campaign
+    });
+    setJourneyModalVisible(true);
+  };
+
+  // 페이지 분석 버튼 클릭 핸들러
+  const handleViewLanding = (record) => {
+    setLandingCreative({
+      creative_name: record.creative_name,
+      utm_source: record.utm_source,
+      utm_medium: record.utm_medium,
+      utm_campaign: record.utm_campaign
+    });
+    setLandingModalVisible(true);
+  };
+
+  // 소재 선택 핸들러 (비교용)
+  const getRowKey = (record) => `${record.creative_name}||${record.utm_source}||${record.utm_campaign}`;
+  
+  const handleSelectCreative = (record, checked) => {
+    const key = getRowKey(record);
+    if (checked) {
+      if (selectedCreatives.length < 5) {
+        setSelectedCreatives([...selectedCreatives, { key, ...record }]);
+      } else {
+        message.warning('최대 5개까지 선택할 수 있습니다');
+      }
+    } else {
+      setSelectedCreatives(selectedCreatives.filter(item => item.key !== key));
+    }
+  };
+
+  const handleSelectAll = (checked) => {
+    if (checked) {
+      const firstFive = data.slice(0, 5).map(record => ({ key: getRowKey(record), ...record }));
+      setSelectedCreatives(firstFive);
+      if (data.length > 5) {
+        message.info('최대 5개까지 선택되었습니다');
+      }
+    } else {
+      setSelectedCreatives([]);
+    }
+  };
+
+  const isSelected = (record) => {
+    const key = getRowKey(record);
+    return selectedCreatives.some(item => item.key === key);
+  };
+
+  // 소재 비교 모달 열기
+  const handleOpenCompare = () => {
+    if (selectedCreatives.length < 2) {
+      message.warning('비교하려면 최소 2개 이상 선택해주세요');
+      return;
+    }
+    setCompareModalVisible(true);
+  };
 
   // 요약 통계 계산 (현재 페이지 기준)
   const summaryStats = React.useMemo(() => {
@@ -181,6 +292,25 @@ function CreativePerformance() {
 
   // 테이블 컬럼 정의
   const columns = [
+    {
+      title: (
+        <Checkbox
+          checked={selectedCreatives.length > 0 && selectedCreatives.length === Math.min(data.length, 5)}
+          indeterminate={selectedCreatives.length > 0 && selectedCreatives.length < Math.min(data.length, 5)}
+          onChange={(e) => handleSelectAll(e.target.checked)}
+        />
+      ),
+      key: 'select',
+      width: 50,
+      align: 'center',
+      fixed: 'left',
+      render: (_, record) => (
+        <Checkbox
+          checked={isSelected(record)}
+          onChange={(e) => handleSelectCreative(record, e.target.checked)}
+        />
+      )
+    },
     {
       title: <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>UTM<br />Source</div>,
       dataIndex: 'utm_source',
@@ -291,7 +421,28 @@ function CreativePerformance() {
     },
 
     {
-      title: '결제액',
+      title: (
+        <Tooltip
+          title={
+            <div style={{ whiteSpace: 'pre-line' }}>
+              {`구매 직전 마지막으로 본 광고로서 발생한 결제금액의 합계입니다.
+다른 광고를 봤더라도 마지막에 이 광고를 보고 구매했다면 결제금액이 합산됩니다.
+
+예시: 철수가 10만원 구매
+• 광고 여정: A 광고 → B 광고 → C 광고 → 구매
+• 결과: A 광고 0원, B 광고 0원, C 광고 +10만원
+
+💡 이 숫자가 높으면?
+→ 이 광고가 구매 결정의 마지막 터치포인트로서 큰 매출을 이끌었다는 의미`}
+            </div>
+          }
+          overlayStyle={{ maxWidth: '420px' }}
+        >
+          <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>
+            막타<br />결제액
+          </div>
+        </Tooltip>
+      ),
       dataIndex: 'total_revenue',
       key: 'total_revenue',
       width: 85,
@@ -333,20 +484,18 @@ function CreativePerformance() {
         <Tooltip
           title={
             <div style={{ whiteSpace: 'pre-line' }}>
-              {`이 광고를 본 고객이 구매한 주문 개수입니다.
-바로 구매하지 않아도 포함됩니다.
+              {`이 광고를 본 적 있는 고객이 구매한 주문 건수입니다.
+다른 광고도 함께 봤더라도 모두 카운트됩니다.
 
-예시:
-• 철수: Meta 광고 봄 → 3일 후 네이버 광고 보고 구매
-  → Meta 광고: +1개, 네이버 광고: +1개
+예시: 철수가 10만원 구매
+• 철수의 광고 여정: A 광고 → B 광고 → 구매
+• 결과: A 광고 +1건, B 광고 +1건
 
-• 영희: Meta 광고만 보고 바로 구매  
-  → Meta 광고: +1개
-
-활용: 이 광고가 몇 개의 주문에 기여했는지 확인`}
+💡 이 숫자가 높으면?
+→ 많은 구매 고객이 이 광고를 거쳐갔다는 의미`}
             </div>
           }
-          overlayStyle={{ maxWidth: '500px' }}
+          overlayStyle={{ maxWidth: '380px' }}
         >
           <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>
             영향 준<br />주문 수
@@ -374,33 +523,60 @@ function CreativePerformance() {
         <Tooltip
           title={
             <div style={{ whiteSpace: 'pre-line' }}>
-              {`여러 광고를 거쳐 구매한 경우,
-각 광고가 실제로 벌어들인 금액입니다.
+              {`구매 직전 마지막으로 본 광고로서 구매한 횟수입니다.
+다른 광고를 봤더라도 마지막에 이 광고를 보고 구매했다면 카운트됩니다.
 
-계산 방식:
-• 막타(마지막) 광고: 50% 기본 보장
-• 나머지 50%: 접촉한 광고들이 접촉 횟수 비율로 나눔
+예시: 철수가 10만원 구매
+• 광고 여정: A 광고 → B 광고 → C 광고 → 구매
+• 결과: A 광고 0건, B 광고 0건, C 광고 +1건
 
-예시: 철수가 100,000원 구매
-• 광고 접촉 순서: Meta A → Meta B → 네이버 C(막타)
-
-1단계: 막타에 50% 먼저 줌
-   네이버 C = 50,000원
-
-2단계: 나머지 50%를 비막타들이 나눔
-   Meta A = 50,000 × 1/2 = 25,000원
-   Meta B = 50,000 × 1/2 = 25,000원
-
-결과:
-• 네이버 C: 50,000원
-• Meta A: 25,000원
-• Meta B: 25,000원
-합계: 100,000원 ✓
-
-활용: 이 광고의 실제 매출 기여도 측정`}
+💡 이 숫자가 높으면?
+→ 이 광고가 구매 결정의 마지막 터치포인트로 많이 작용했다는 의미`}
             </div>
           }
-          overlayStyle={{ maxWidth: '500px' }}
+          overlayStyle={{ maxWidth: '420px' }}
+        >
+          <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>
+            막타<br />횟수
+          </div>
+        </Tooltip>
+      ),
+      dataIndex: 'last_touch_count',
+      key: 'last_touch_count',
+      width: 70,
+      align: 'center',
+      render: (num) => (
+        <span style={{
+          color: num > 0 ? '#cf1322' : '#9ca3af',
+          fontWeight: num > 0 ? 600 : 400,
+          fontSize: '12px'
+        }}>
+          {formatNumber(num)}
+        </span>
+      ),
+      sorter: true,
+      showSorterTooltip: false
+    },
+    {
+      title: (
+        <Tooltip
+          title={
+            <div style={{ whiteSpace: 'pre-line' }}>
+              {`구매 금액을 각 광고의 기여도에 따라 나눈 금액입니다.
+
+계산 방식:
+• 광고 1개만 봤으면 → 그 광고가 100% 가져감
+• 여러 광고 봤으면 → 마지막 광고 50% + 나머지 광고들이 50% 나눔
+
+예시: 철수가 10만원 구매
+• 광고 여정: A 광고 → B 광고 → 구매
+• 결과: A 광고 5만원, B 광고 5만원
+
+💡 이 숫자가 높으면?
+→ 이 광고가 실제 매출에 크게 기여했다는 의미`}
+            </div>
+          }
+          overlayStyle={{ maxWidth: '400px' }}
         >
           <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>
             기여한<br />매출액
@@ -448,33 +624,22 @@ function CreativePerformance() {
         <Tooltip
           title={
             <div style={{ whiteSpace: 'pre-line' }}>
-              {`이 광고를 본 고객들이 실제로 결제한 금액의 합계입니다.
+              {`이 광고를 본 고객들이 결제한 금액의 총합입니다.
+기여도로 나누지 않고, 구매 금액 전체를 그대로 합산합니다.
 
-예시:
-철수가 basic_241230 광고를 7번 보고,
-자사몰배너 광고를 1번 보고 141,000원 구매했습니다.
+예시: 철수가 10만원 구매
+• 광고 여정: A 광고 → B 광고 → 구매
+• 결과: A 광고 +10만원, B 광고 +10만원 (둘 다 전액)
 
-각 광고의 "영향 준 주문 총액":
-• basic_241230: +141,000원
-• 자사몰배너: +141,000원
+💡 "기여한 매출액"과의 차이
+• 기여한 매출액: 나눠서 계산 (A 5만 + B 5만 = 10만원)
+• 영향 준 주문 총액: 전액 합산 (A 10만 + B 10만 = 20만원)
 
-왜 둘 다 141,000원?
-→ 둘 다 철수 주문에 관여했으니, 
-   원래 주문 금액 그대로 각각 집계합니다!
-
-이렇게 세는 이유:
-각 광고가 접촉한 고객들의 전체 구매력을 보기 위해서입니다.
-
-"기여한 매출액"과의 차이:
-• 영향 준 주문 총액: 141,000 + 141,000 = 282,000원 (중복 OK)
-• 기여한 매출액: basic는 약 122,000원, 자사몰은 약 19,000원 
-                (기여도로 나눠서 합하면 141,000원 딱!)
-
-활용법:
-이 광고를 본 고객들의 총 구매 규모를 파악할 때 사용합니다.`}
+💡 이 숫자가 높으면?
+→ 이 광고를 본 고객들의 전체 구매력이 크다는 의미`}
             </div>
           }
-          overlayStyle={{ maxWidth: '500px' }}
+          overlayStyle={{ maxWidth: '420px' }}
         >
           <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>
             영향 준<br />주문 총액
@@ -516,6 +681,57 @@ function CreativePerformance() {
       },
       sorter: true,
       showSorterTooltip: false
+    },
+    {
+      title: '상세 분석',
+      key: 'action',
+      width: 100,
+      align: 'center',
+      fixed: 'right',
+      render: (_, record) => {
+        const menuItems = [
+          {
+            key: 'orders',
+            label: '주문 보기',
+            icon: <ShoppingCartOutlined />,
+            disabled: record.contributed_orders_count === 0,
+            onClick: () => handleViewOrders(record)
+          },
+          {
+            key: 'analysis',
+            label: '성과 분석',
+            icon: <BarChartOutlined />,
+            onClick: () => handleViewAnalysis(record)
+          },
+          {
+            type: 'divider'
+          },
+          {
+            key: 'journey',
+            label: '고객 여정',
+            icon: <NodeIndexOutlined />,
+            onClick: () => handleViewJourney(record)
+          },
+          {
+            key: 'landing',
+            label: '페이지 분석',
+            icon: <FileSearchOutlined />,
+            onClick: () => handleViewLanding(record)
+          }
+        ];
+
+        return (
+          <Dropdown
+            menu={{ items: menuItems }}
+            trigger={['click']}
+            placement="bottomRight"
+          >
+            <Button icon={<SettingOutlined />}>
+              상세 분석
+            </Button>
+          </Dropdown>
+        );
+      }
     }
   ];
 
@@ -559,21 +775,42 @@ function CreativePerformance() {
                 각 광고 소재의 방문자 수, 페이지뷰, 체류시간, 구매 전환을 분석합니다
               </div>
             </div>
-            <Button
-              icon={<RefreshCw size={16} />}
-              onClick={fetchData}
-              loading={loading}
-              style={{
-                height: '40px',
-                borderRadius: '8px',
-                fontWeight: 500,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}
-            >
-              새로고침
-            </Button>
+            <Space>
+              {selectedCreatives.length > 0 && (
+                <Button
+                  type="primary"
+                  icon={<GitCompare size={16} />}
+                  onClick={handleOpenCompare}
+                  disabled={selectedCreatives.length < 2}
+                  style={{
+                    height: '40px',
+                    borderRadius: '8px',
+                    fontWeight: 500,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: selectedCreatives.length >= 2 ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : undefined
+                  }}
+                >
+                  소재 비교 ({selectedCreatives.length}개)
+                </Button>
+              )}
+              <Button
+                icon={<RefreshCw size={16} />}
+                onClick={fetchData}
+                loading={loading}
+                style={{
+                  height: '40px',
+                  borderRadius: '8px',
+                  fontWeight: 500,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                새로고침
+              </Button>
+            </Space>
           </div>
           <Tag 
             color="blue" 
@@ -729,6 +966,73 @@ function CreativePerformance() {
       }}>
         마지막 갱신: {dayjs().format('YYYY-MM-DD HH:mm:ss')}
       </div>
+
+      {/* 주문 보기 모달 */}
+      <CreativeOrdersModal
+        visible={ordersModalVisible}
+        onClose={() => {
+          setOrdersModalVisible(false);
+          setSelectedCreative(null);
+        }}
+        creative={selectedCreative}
+        dateRange={{
+          start: filters.dateRange[0],
+          end: filters.dateRange[1]
+        }}
+      />
+
+      {/* 성과 분석 모달 */}
+      <CreativeAnalysisModal
+        visible={analysisModalVisible}
+        onClose={() => {
+          setAnalysisModalVisible(false);
+          setAnalysisCreative(null);
+        }}
+        creative={analysisCreative}
+        dateRange={{
+          start: filters.dateRange[0],
+          end: filters.dateRange[1]
+        }}
+      />
+
+      {/* 고객 여정 모달 */}
+      <CreativeJourneyModal
+        visible={journeyModalVisible}
+        onClose={() => {
+          setJourneyModalVisible(false);
+          setJourneyCreative(null);
+        }}
+        creative={journeyCreative}
+        dateRange={{
+          start: filters.dateRange[0],
+          end: filters.dateRange[1]
+        }}
+      />
+
+      {/* 페이지 분석 모달 */}
+      <CreativeLandingModal
+        visible={landingModalVisible}
+        onClose={() => {
+          setLandingModalVisible(false);
+          setLandingCreative(null);
+        }}
+        creative={landingCreative}
+        dateRange={{
+          start: filters.dateRange[0],
+          end: filters.dateRange[1]
+        }}
+      />
+
+      {/* 소재 비교 모달 */}
+      <CreativeCompareModal
+        visible={compareModalVisible}
+        onClose={() => setCompareModalVisible(false)}
+        creatives={selectedCreatives}
+        dateRange={{
+          start: filters.dateRange[0],
+          end: filters.dateRange[1]
+        }}
+      />
     </div>
   );
 }

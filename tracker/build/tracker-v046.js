@@ -1,6 +1,6 @@
 /**
- * Moadamda Analytics Tracker v20.0 (v042-hotfix)
- * Updated: 2025-11-05
+ * Moadamda Analytics Tracker v20.2 (v046-fix)
+ * Updated: 2025-11-28
  * 
  * DEPLOYMENT INFO:
  * - Production Domain: marketingzon.com
@@ -8,11 +8,15 @@
  * - Dashboard: https://dashboard.marketingzon.com
  * - SSL: Let's Encrypt (Trusted Certificate)
  * 
- * LATEST UPDATE (v042-hotfix):
- * - CRITICAL FIX: Removed setupOrderTracking() function
- * - REMOVED: add_option_name injection that caused visible input field
- * - REASON: add_option is for customer input, not tracking data
- * - RESULT: Clean UI, no more ma_visitor_id input field visible
+ * LATEST UPDATE (v046-fix):
+ * - FIX: 로그인 페이지 리다이렉트 시 UTM 파라미터 유실 문제 해결
+ * - ADDED: 세션 스토리지 기반 UTM 파라미터 유지 로직
+ * - REASON: 리다이렉트 시 URL에서 UTM이 사라져 빈값(-) 으로 기록되는 문제
+ * - RESULT: utm_source 중복 기록 방지 → 기여도 중복 계산 해결 (2.9% → 0%)
+ * 
+ * PREVIOUS (v045-fix):
+ * - FIX: UTM 파라미터 이중/다중 인코딩 문제 해결
+ * - ADDED: fullyDecode() 함수로 UTM 값 완전 디코딩
  * 
  * Current features:
  * - Pageview tracking with UTM parameters
@@ -20,6 +24,7 @@
  * - Cart add tracking
  * - Session end tracking for UTM session duration
  * - Dynamic UTM parameter collection (all utm_* params)
+ * - UTM persistence across redirects (login page, etc.)
  */
 (function() {
   'use strict';
@@ -45,7 +50,7 @@
   let visitorId = getOrCreateVisitorId();
   let sessionId = getOrCreateSessionId();
   
-  console.log('[MA] Initializing Moadamda Analytics v20.0 (v042-hotfix)...');
+  console.log('[MA] Initializing Moadamda Analytics v20.2 (v046-fix)...');
   console.log('[MA] API URL:', CONFIG.apiUrl);
   console.log('[MA] Visitor ID:', visitorId);
   console.log('[MA] Session ID:', sessionId);
@@ -104,6 +109,51 @@
     return 'pc';
   }
   
+  // Fully decode URL-encoded string (handles double/multiple encoding)
+  function fullyDecode(str) {
+    if (!str) return str;
+    let decoded = str;
+    let prev;
+    // Keep decoding until no more changes (handles multiple encoding layers)
+    while (decoded !== prev) {
+      prev = decoded;
+      try {
+        decoded = decodeURIComponent(decoded);
+      } catch (e) {
+        // If decoding fails, return current state
+        break;
+      }
+    }
+    return decoded;
+  }
+  
+  // UTM Session Storage utilities (to persist UTM across redirects like login page)
+  const UTM_STORAGE_KEY = '_ma_utm_params';
+  
+  function saveUtmToStorage(utmParams) {
+    try {
+      if (Object.keys(utmParams).length > 0) {
+        sessionStorage.setItem(UTM_STORAGE_KEY, JSON.stringify(utmParams));
+        console.log('[MA] UTM params saved to storage:', utmParams);
+      }
+    } catch (e) {
+      // sessionStorage not available
+    }
+  }
+  
+  function getUtmFromStorage() {
+    try {
+      const stored = sessionStorage.getItem(UTM_STORAGE_KEY);
+      if (stored) {
+        console.log('[MA] UTM params restored from storage');
+        return JSON.parse(stored);
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+  
   // Send event immediately (for critical events like pageview, cart, purchase)
   function sendImmediately(event) {
     console.log('[MA] Sending event immediately:', event.type);
@@ -147,18 +197,33 @@
       user_agent: navigator.userAgent
     };
     
-    // Extract ALL UTM parameters (utm_*)
+    // Extract ALL UTM parameters (utm_*) from current URL
     const urlParams = new URLSearchParams(window.location.search);
-    const utmParams = {};
+    let utmParams = {};
     
     // Collect all parameters that start with 'utm_'
+    // Use fullyDecode to handle double/multiple URL encoding from ad platforms
     for (const [key, value] of urlParams.entries()) {
       if (key.startsWith('utm_')) {
-        utmParams[key] = value;
+        utmParams[key] = fullyDecode(value);
       }
     }
     
-    // If any UTM parameters exist, add them to data
+    // UTM Persistence Logic: Handle redirects (e.g., login page)
+    // If URL has UTM params, save them to sessionStorage for later use
+    // If URL has no UTM params, try to restore from sessionStorage
+    if (Object.keys(utmParams).length > 0) {
+      // URL has UTM params - save to storage
+      saveUtmToStorage(utmParams);
+    } else {
+      // URL has no UTM params - try to restore from storage
+      const storedUtm = getUtmFromStorage();
+      if (storedUtm) {
+        utmParams = storedUtm;
+      }
+    }
+    
+    // If any UTM parameters exist (from URL or storage), add them to data
     if (Object.keys(utmParams).length > 0) {
       // Keep backward compatibility: send basic 3 UTM params separately
       data.utm_source = utmParams.utm_source || '';
