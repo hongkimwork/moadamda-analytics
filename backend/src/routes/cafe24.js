@@ -54,7 +54,11 @@ router.get('/cafe24/callback', async (req, res) => {
     const data = await response.json();
     
     // 토큰을 DB에 저장
-    const expireDate = new Date(data.expires_at);
+    // Cafe24 API의 expires_at은 타임존 없이 KST로 반환됨 → 명시적으로 +09:00 추가
+    const expiresAtWithTz = data.expires_at.includes('+') || data.expires_at.includes('Z')
+      ? data.expires_at
+      : data.expires_at + '+09:00';
+    const expireDate = new Date(expiresAtWithTz);
     
     await db.query(
       `INSERT INTO cafe24_token (access_token, refresh_token, issued_date, expire_date)
