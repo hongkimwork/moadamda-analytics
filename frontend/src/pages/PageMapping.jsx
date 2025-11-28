@@ -752,23 +752,24 @@ function PageMapping() {
           <Space size={4} wrap style={{ maxWidth: '100%', lineHeight: '1.2' }}>
             {displayBadges.map((badge, idx) => (
               <Tooltip key={idx} title={badge.text} placement="top">
-                <Tag
-                  color={badge.color || '#1677ff'}
+                <span
                   style={{
+                    display: 'inline-block',
                     margin: '2px 0',
+                    padding: '2px 8px',
+                    borderRadius: '4px',
                     fontWeight: 600,
                     fontSize: '11px',
-                    border: 'none',
                     maxWidth: '80px',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
-                    display: 'inline-block',
-                    padding: '2px 8px'
+                    color: badge.text_color || '#fff',
+                    backgroundColor: badge.color || '#1677ff'
                   }}
                 >
                   {badge.text}
-                </Tag>
+                </span>
               </Tooltip>
             ))}
             {remainingCount > 0 && (

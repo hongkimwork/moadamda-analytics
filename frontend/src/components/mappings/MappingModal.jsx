@@ -1,42 +1,164 @@
-import { Modal, Form, Input, Button, Space, Typography, Switch } from 'antd';
+import { Modal, Form, Input, Button, Space, Typography, Switch, Popover, message } from 'antd';
 import { SketchPicker } from 'react-color';
-import { useState, useEffect } from 'react';
-import { getColorHistory, addColorToHistory } from '../../utils/colorHistory';
+import { useState, useEffect, useRef } from 'react';
 
 const { Text } = Typography;
 
+// API base URL
+const API_BASE = import.meta.env.VITE_API_URL || '';
+
+/**
+ * ColorPickerInput - 색상값 클릭 시 피커 팝업 표시
+ */
+function ColorPickerInput({ color, onChange, label }) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  return (
+    <div style={{ flex: 1 }}>
+      <div style={{ marginBottom: '8px', fontSize: '13px', color: 'rgba(0, 0, 0, 0.65)' }}>{label}</div>
+      <Popover
+        content={
+          <SketchPicker
+            color={color}
+            onChange={(c) => onChange(c.hex)}
+            disableAlpha={true}
+            styles={{
+              default: {
+                picker: {
+                  boxShadow: 'none',
+                  padding: '10px',
+                  width: '220px'
+                }
+              }
+            }}
+          />
+        }
+        trigger="click"
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        placement="bottomLeft"
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '6px 10px',
+            border: '1px solid #d9d9d9',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            background: '#fff',
+            transition: 'border-color 0.2s',
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.borderColor = '#4096ff'}
+          onMouseLeave={(e) => e.currentTarget.style.borderColor = '#d9d9d9'}
+        >
+          <div
+            style={{
+              width: '24px',
+              height: '24px',
+              borderRadius: '4px',
+              backgroundColor: color,
+              border: '1px solid rgba(0,0,0,0.1)',
+              flexShrink: 0
+            }}
+          />
+          <span style={{ 
+            fontSize: '13px', 
+            fontFamily: 'monospace',
+            color: '#374151',
+            textTransform: 'uppercase'
+          }}>
+            {color}
+          </span>
+        </div>
+      </Popover>
+    </div>
+  );
+}
+
 /**
  * MappingModal - 페이지 매핑 모달
- *
- * @param {boolean} visible - 모달 표시 여부
- * @param {function} onClose - 모달 닫기 핸들러
- * @param {function} onSubmit - 매핑 저장 핸들러
- * @param {string} url - 매핑할 URL
- * @param {object} form - Ant Design Form 인스턴스
- * @param {boolean} submitting - 저장 중 여부
- * @param {array} initialBadges - 초기 배지 배열 (수정 모드)
  */
 function MappingModal({ visible, onClose, onSubmit, url, form, submitting, initialBadges = [] }) {
-  // 최근 사용한 색상 히스토리 관리
-  const [colorHistory, setColorHistory] = useState([]);
-  
   // 다중 배지 관리
   const [badges, setBadges] = useState([]);
-  const [currentBadgeText, setCurrentBadgeText] = useState('');
-  const [currentBadgeColor, setCurrentBadgeColor] = useState('#1677ff');
   const [draggedIndex, setDraggedIndex] = useState(null);
+  
+  // 배경색/글자색 상태
+  const [bgColor, setBgColor] = useState('#1677ff');
+  const [textColor, setTextColor] = useState('#ffffff');
+  
+  // 최근 사용 배지 프리셋
+  const [badgePresets, setBadgePresets] = useState([]);
+  const [loadingPresets, setLoadingPresets] = useState(false);
+  const [hoveredPresetId, setHoveredPresetId] = useState(null);
 
-  // 모달이 열릴 때마다 색상 히스토리와 badges 초기화
+  // 최근 사용 배지 조회
+  const fetchBadgePresets = async () => {
+    try {
+      setLoadingPresets(true);
+      const response = await fetch(`${API_BASE}/api/mappings/badge-presets`);
+      const data = await response.json();
+      if (data.success) {
+        setBadgePresets(data.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch badge presets:', error);
+    } finally {
+      setLoadingPresets(false);
+    }
+  };
+
+  // 배지 프리셋 저장
+  const saveBadgePreset = async (text, bg_color, text_color) => {
+    try {
+      await fetch(`${API_BASE}/api/mappings/badge-presets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, bg_color, text_color })
+      });
+      // 저장 후 목록 갱신
+      fetchBadgePresets();
+    } catch (error) {
+      console.error('Failed to save badge preset:', error);
+    }
+  };
+
+  // 배지 프리셋 삭제
+  const deleteBadgePreset = async (id) => {
+    try {
+      await fetch(`${API_BASE}/api/mappings/badge-presets/${id}`, {
+        method: 'DELETE'
+      });
+      // 삭제 후 목록 갱신
+      setBadgePresets(prev => prev.filter(p => p.id !== id));
+    } catch (error) {
+      console.error('Failed to delete badge preset:', error);
+    }
+  };
+
+  // 모달이 열릴 때마다 초기화
   useEffect(() => {
     if (visible) {
-      const history = getColorHistory();
-      setColorHistory(history);
-      
+      fetchBadgePresets();
       // 초기 배지 로드 (수정 모드)
-      setBadges(initialBadges && initialBadges.length > 0 ? initialBadges : []);
+      if (initialBadges && initialBadges.length > 0) {
+        setBadges(initialBadges);
+        // 첫 배지의 색상으로 초기화
+        if (initialBadges[0]) {
+          setBgColor(initialBadges[0].color || '#1677ff');
+          setTextColor(initialBadges[0].text_color || '#ffffff');
+        }
+      } else {
+        setBadges([]);
+        setBgColor('#1677ff');
+        setTextColor('#ffffff');
+      }
     } else {
-      // 모달이 닫힐 때 badges 초기화
       setBadges([]);
+      setBgColor('#1677ff');
+      setTextColor('#ffffff');
     }
   }, [visible, initialBadges]);
 
@@ -47,18 +169,13 @@ function MappingModal({ visible, onClose, onSubmit, url, form, submitting, initi
 
   const handleDragOver = (e, index) => {
     e.preventDefault();
-    
     if (draggedIndex === null || draggedIndex === index) return;
     
     const newBadges = [...badges];
     const draggedBadge = newBadges[draggedIndex];
-    
-    // Remove dragged item
     newBadges.splice(draggedIndex, 1);
-    // Insert at new position
     newBadges.splice(index, 0, draggedBadge);
     
-    // Update order
     const reorderedBadges = newBadges.map((badge, idx) => ({
       ...badge,
       order: idx + 1
@@ -72,22 +189,48 @@ function MappingModal({ visible, onClose, onSubmit, url, form, submitting, initi
     setDraggedIndex(null);
   };
 
-  // 폼 제출 핸들러 (색상 히스토리 저장 + badges 배열 추가)
+  // 배지 추가
+  const handleAddBadge = () => {
+    const text = form.getFieldValue('badge_text');
+    
+    if (!text || !text.trim()) {
+      return;
+    }
+    
+    if (badges.length >= 10) {
+      message.warning('배지는 최대 10개까지 등록 가능합니다');
+      return;
+    }
+    
+    const newBadge = {
+      text: text.trim(),
+      color: bgColor,
+      text_color: textColor,
+      order: badges.length + 1
+    };
+    
+    setBadges([...badges, newBadge]);
+    form.setFieldsValue({ badge_text: '' });
+    
+    // 배지 프리셋 저장
+    saveBadgePreset(text.trim(), bgColor, textColor);
+  };
+
+  // 프리셋 클릭 - 텍스트와 색상 적용
+  const handlePresetClick = (preset) => {
+    form.setFieldsValue({ badge_text: preset.text });
+    setBgColor(preset.bg_color);
+    setTextColor(preset.text_color);
+  };
+
+  // 폼 제출 핸들러
   const handleSubmit = async (values) => {
-    // badges 배열 추가
     const submitData = {
       ...values,
+      badge_color: bgColor,
       badges: badges.length > 0 ? badges : null
     };
     
-    // 배지 색상이 있으면 히스토리에 추가
-    if (values.is_product_page && values.badge_color) {
-      addColorToHistory(values.badge_color);
-      // 히스토리 즉시 업데이트 (다음 열 때 반영)
-      setColorHistory(getColorHistory());
-    }
-    
-    // 원래 onSubmit 호출
     await onSubmit(submitData);
   };
 
@@ -97,7 +240,7 @@ function MappingModal({ visible, onClose, onSubmit, url, form, submitting, initi
       open={visible}
       onCancel={onClose}
       footer={null}
-      width={600}
+      width={680}
     >
       <div style={{ marginBottom: 16 }}>
         <Text type="secondary">URL:</Text>
@@ -119,8 +262,7 @@ function MappingModal({ visible, onClose, onSubmit, url, form, submitting, initi
         layout="vertical"
         onFinish={handleSubmit}
         initialValues={{
-          is_product_page: false,
-          badge_color: '#1677ff' // Default blue
+          is_product_page: false
         }}
       >
         <Form.Item
@@ -138,7 +280,7 @@ function MappingModal({ visible, onClose, onSubmit, url, form, submitting, initi
           />
         </Form.Item>
 
-        {/* 페이지 분류 - 레이블과 토글을 한 줄로 */}
+        {/* 페이지 분류 */}
         <div style={{ 
           display: 'flex', 
           alignItems: 'center', 
@@ -172,7 +314,7 @@ function MappingModal({ visible, onClose, onSubmit, url, form, submitting, initi
           noStyle
           shouldUpdate={(prevValues, currentValues) => prevValues.is_product_page !== currentValues.is_product_page}
         >
-          {({ getFieldValue, setFieldsValue }) =>
+          {({ getFieldValue }) =>
             getFieldValue('is_product_page') ? (
               <div style={{
                 padding: '20px',
@@ -185,18 +327,14 @@ function MappingModal({ visible, onClose, onSubmit, url, form, submitting, initi
                   📦 제품 배지 설정
                 </Typography.Title>
 
-                {/* 뱃지 텍스트 입력 - 상단 전체 너비 */}
+                {/* 뱃지 텍스트 입력 */}
                 <Form.Item
                   name="badge_text"
                   label="뱃지 텍스트 입력"
                   rules={[
                     {
                       validator: (_, value) => {
-                        // 이미 등록된 배지가 있으면 input이 비어있어도 OK
-                        if (badges.length > 0) {
-                          return Promise.resolve();
-                        }
-                        // 등록된 배지가 없으면 텍스트 필수
+                        if (badges.length > 0) return Promise.resolve();
                         if (!value || !value.trim()) {
                           return Promise.reject(new Error('뱃지 텍스트를 입력해주세요'));
                         }
@@ -204,7 +342,7 @@ function MappingModal({ visible, onClose, onSubmit, url, form, submitting, initi
                       }
                     }
                   ]}
-                  style={{ marginBottom: 20 }}
+                  style={{ marginBottom: 16 }}
                 >
                   <Input
                     placeholder="예: 모로실"
@@ -213,235 +351,228 @@ function MappingModal({ visible, onClose, onSubmit, url, form, submitting, initi
                   />
                 </Form.Item>
 
-                {/* 미리보기(좌측) + 색상 선택기(우측) 좌우 분할 */}
-                <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
-                  {/* 좌측: 미리보기 + 배지 리스트 */}
-                  <div style={{ flex: 1 }}>
-                    {/* 1. 미리보기 (107px) - 현재 입력 중인 배지 실시간 미리보기 */}
-                    <div style={{ marginBottom: '8px', fontSize: '14px', color: 'rgba(0, 0, 0, 0.88)' }}>뱃지 미리보기</div>
-                    <div style={{ 
-                      background: '#fff',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '8px',
-                      padding: '12px',
-                      display: 'flex',
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      height: '107px',
-                      marginBottom: '12px'
-                    }}>
-                      <Form.Item shouldUpdate noStyle>
-                        {({ getFieldValue }) => {
-                          const text = getFieldValue('badge_text') || '뱃지 텍스트';
-                          const color = getFieldValue('badge_color') || '#1677ff';
-
-                          return (
-                            <div style={{
-                              padding: '16px 20px',
-                              background: '#f9fafb',
-                              border: '1px solid #e5e7eb',
-                              borderRadius: '8px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '8px'
-                            }}>
-                              <span style={{ fontSize: '13px', fontWeight: '500', color: '#374151' }}>제품:</span>
-                              <span style={{
-                                display: 'inline-block',
-                                padding: '4px 12px',
-                                borderRadius: '4px',
-                                fontSize: '13px',
-                                fontWeight: '600',
-                                color: '#fff',
-                                backgroundColor: color,
-                                boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
-                              }}>
-                                {text}
-                              </span>
-                            </div>
-                          );
-                        }}
-                      </Form.Item>
-                    </div>
-
-                    {/* 2. 배지 리스트 (헤더에 추가 버튼 통합) */}
-                    <div style={{
-                      height: '213px',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '8px',
-                      overflow: 'auto',
-                      background: '#fff'
-                    }}>
-                      {/* 헤더: 제목(좌) + 추가 버튼(우) */}
-                      <div style={{
-                        padding: '8px 12px',
-                        borderBottom: '1px solid #e2e8f0',
-                        fontSize: '13px',
-                        fontWeight: '600',
-                        color: '#374151',
-                        background: '#f9fafb',
-                        position: 'sticky',
-                        top: 0,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: '8px'
-                      }}>
-                        <span>📋 등록된 배지 ({badges.length}개)</span>
-                        <Button
-                          type="primary"
-                          size="small"
-                          style={{ 
-                            fontSize: '12px',
-                            fontWeight: '600',
-                            padding: '0 12px',
-                            height: '28px'
-                          }}
-                          onClick={() => {
-                            const text = form.getFieldValue('badge_text');
-                            const color = form.getFieldValue('badge_color');
-                            
-                            if (!text || !text.trim()) {
-                              return;
-                            }
-                            
-                            if (badges.length >= 10) {
-                              return;
-                            }
-                            
-                            const newBadge = {
-                              text: text.trim(),
-                              color: color || '#1677ff',
-                              order: badges.length + 1
-                            };
-                            
-                            setBadges([...badges, newBadge]);
-                            form.setFieldsValue({ badge_text: '' });
-                            addColorToHistory(color || '#1677ff');
-                            setColorHistory(getColorHistory());
-                          }}
-                          disabled={badges.length >= 10}
+                {/* 최근 사용한 배지 */}
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ marginBottom: '8px', fontSize: '13px', color: 'rgba(0, 0, 0, 0.65)' }}>
+                    📌 최근 사용한 배지 (클릭 시 자동 적용)
+                  </div>
+                  <div style={{
+                    padding: '12px',
+                    background: '#fff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '8px',
+                    minHeight: '48px',
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: '8px',
+                    alignItems: 'center'
+                  }}>
+                    {loadingPresets ? (
+                      <span style={{ color: '#9ca3af', fontSize: '12px' }}>로딩 중...</span>
+                    ) : badgePresets.length === 0 ? (
+                      <span style={{ color: '#9ca3af', fontSize: '12px' }}>
+                        아직 저장된 배지가 없습니다. 배지를 추가하면 여기에 표시됩니다.
+                      </span>
+                    ) : (
+                      badgePresets.map((preset) => (
+                        <div
+                          key={preset.id}
+                          style={{ position: 'relative', display: 'inline-block' }}
+                          onMouseEnter={() => setHoveredPresetId(preset.id)}
+                          onMouseLeave={() => setHoveredPresetId(null)}
                         >
-                          + 배지 추가
-                        </Button>
-                      </div>
-                      
-                      {/* 배지 목록 */}
-                      <div style={{ padding: '8px' }}>
-                        {badges.length === 0 ? (
-                          <div style={{
-                            textAlign: 'center',
-                            padding: '20px',
-                            color: '#9ca3af',
-                            fontSize: '12px'
-                          }}>
-                            등록된 배지가 없습니다
-                          </div>
-                        ) : (
-                          badges.map((badge, idx) => (
-                            <div
-                              key={idx}
-                              draggable
-                              onDragStart={() => handleDragStart(idx)}
-                              onDragOver={(e) => handleDragOver(e, idx)}
-                              onDragEnd={handleDragEnd}
+                          <span
+                            onClick={() => handlePresetClick(preset)}
+                            style={{
+                              display: 'inline-block',
+                              padding: '4px 12px',
+                              borderRadius: '4px',
+                              fontSize: '12px',
+                              fontWeight: '600',
+                              color: preset.text_color,
+                              backgroundColor: preset.bg_color,
+                              cursor: 'pointer',
+                              transition: 'transform 0.15s, box-shadow 0.15s',
+                              boxShadow: hoveredPresetId === preset.id ? '0 2px 8px rgba(0,0,0,0.15)' : '0 1px 2px rgba(0,0,0,0.1)',
+                              transform: hoveredPresetId === preset.id ? 'scale(1.05)' : 'scale(1)'
+                            }}
+                          >
+                            {preset.text}
+                          </span>
+                          {hoveredPresetId === preset.id && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteBadgePreset(preset.id);
+                              }}
                               style={{
+                                position: 'absolute',
+                                top: '-6px',
+                                right: '-6px',
+                                width: '18px',
+                                height: '18px',
+                                borderRadius: '50%',
+                                background: '#ef4444',
+                                color: '#fff',
+                                border: 'none',
+                                fontSize: '12px',
+                                fontWeight: 'bold',
+                                cursor: 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
-                                justifyContent: 'space-between',
-                                padding: '8px',
-                                marginBottom: '4px',
-                                background: draggedIndex === idx ? '#e0e7ff' : '#f9fafb',
-                                border: '1px solid #e5e7eb',
-                                borderRadius: '6px',
-                                cursor: 'move',
-                                opacity: draggedIndex === idx ? 0.5 : 1,
-                                transition: 'all 0.2s'
+                                justifyContent: 'center',
+                                lineHeight: 1,
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
                               }}
                             >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span style={{ color: '#9ca3af', fontSize: '16px', cursor: 'grab' }}>⋮⋮</span>
-                                <span
-                                  style={{
-                                    display: 'inline-block',
-                                    padding: '2px 8px',
-                                    borderRadius: '4px',
-                                    fontSize: '11px',
-                                    fontWeight: '600',
-                                    color: '#fff',
-                                    backgroundColor: badge.color
-                                  }}
-                                >
-                                  {badge.text}
-                                </span>
-                              </div>
-                              <Button
-                                type="text"
-                                danger
-                                size="small"
-                                onClick={() => {
-                                  const newBadges = badges.filter((_, i) => i !== idx);
-                                  // Update order after deletion
-                                  setBadges(newBadges.map((b, i) => ({ ...b, order: i + 1 })));
-                                }}
-                                style={{ padding: '0 8px' }}
-                              >
-                                ×
-                              </Button>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 우측: 뱃지 색상 선택기 */}
-                  <div style={{ flex: '0 0 auto' }}>
-                    <div style={{ marginBottom: '8px', fontSize: '14px', color: 'rgba(0, 0, 0, 0.88)' }}>뱃지 색상</div>
-                    <Form.Item
-                      name="badge_color"
-                      noStyle
-                      rules={[{ required: true, message: '색상을 선택해주세요' }]}
-                    >
-                      <Input type="hidden" />
-                    </Form.Item>
-
-                    <Form.Item shouldUpdate noStyle>
-                      {({ getFieldValue }) => (
-                        <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden', display: 'inline-block' }}>
-                          <SketchPicker
-                            color={getFieldValue('badge_color') || '#1677ff'}
-                            onChange={(color) => setFieldsValue({ badge_color: color.hex })}
-                            disableAlpha={true}
-                            presetColors={colorHistory}
-                            styles={{
-                              default: {
-                                picker: {
-                                  boxShadow: 'none',
-                                  padding: '10px',
-                                  background: '#fff',
-                                  width: '220px',
-                                  borderRadius: 0
-                                }
-                              }
-                            }}
-                          />
+                              ×
+                            </button>
+                          )}
                         </div>
-                      )}
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* 배경색 / 글자색 선택 */}
+                <div style={{ display: 'flex', gap: '16px', marginBottom: 20 }}>
+                  <ColorPickerInput
+                    color={bgColor}
+                    onChange={setBgColor}
+                    label="배경색"
+                  />
+                  <ColorPickerInput
+                    color={textColor}
+                    onChange={setTextColor}
+                    label="글자색"
+                  />
+                </div>
+
+                {/* 미리보기 + 배지 추가 버튼 */}
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between',
+                  padding: '16px',
+                  background: '#fff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '8px',
+                  marginBottom: 16
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '13px', color: '#6b7280' }}>미리보기:</span>
+                    <span style={{ fontSize: '13px', fontWeight: '500', color: '#374151' }}>제품:</span>
+                    <Form.Item shouldUpdate noStyle>
+                      {({ getFieldValue }) => {
+                        const text = getFieldValue('badge_text') || '뱃지 텍스트';
+                        return (
+                          <span style={{
+                            display: 'inline-block',
+                            padding: '4px 12px',
+                            borderRadius: '4px',
+                            fontSize: '13px',
+                            fontWeight: '600',
+                            color: textColor,
+                            backgroundColor: bgColor,
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                          }}>
+                            {text}
+                          </span>
+                        );
+                      }}
                     </Form.Item>
-                    
-                    {/* 색상 히스토리 안내 - 히스토리 없을 때만 표시 */}
-                    {colorHistory.length === 0 && (
+                  </div>
+                  <Button
+                    type="primary"
+                    size="small"
+                    onClick={handleAddBadge}
+                    disabled={badges.length >= 10}
+                    style={{ fontWeight: '600' }}
+                  >
+                    + 배지 추가
+                  </Button>
+                </div>
+
+                {/* 등록된 배지 리스트 */}
+                <div style={{
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '8px',
+                  overflow: 'hidden',
+                  background: '#fff'
+                }}>
+                  <div style={{
+                    padding: '10px 12px',
+                    borderBottom: '1px solid #e2e8f0',
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    color: '#374151',
+                    background: '#f9fafb'
+                  }}>
+                    📋 등록된 배지 ({badges.length}개)
+                  </div>
+                  
+                  <div style={{ padding: '8px', maxHeight: '150px', overflow: 'auto' }}>
+                    {badges.length === 0 ? (
                       <div style={{
-                        marginTop: '8px',
-                        fontSize: '12px',
-                        color: '#4b5563',
                         textAlign: 'center',
-                        padding: '4px 0',
-                        fontStyle: 'italic'
+                        padding: '20px',
+                        color: '#9ca3af',
+                        fontSize: '12px'
                       }}>
-                        <span>💡 저장하면 최근 사용 색상이 여기 표시됩니다</span>
+                        등록된 배지가 없습니다
                       </div>
+                    ) : (
+                      badges.map((badge, idx) => (
+                        <div
+                          key={idx}
+                          draggable
+                          onDragStart={() => handleDragStart(idx)}
+                          onDragOver={(e) => handleDragOver(e, idx)}
+                          onDragEnd={handleDragEnd}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '8px',
+                            marginBottom: '4px',
+                            background: draggedIndex === idx ? '#e0e7ff' : '#f9fafb',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '6px',
+                            cursor: 'move',
+                            opacity: draggedIndex === idx ? 0.5 : 1,
+                            transition: 'all 0.2s'
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ color: '#9ca3af', fontSize: '16px', cursor: 'grab' }}>⋮⋮</span>
+                            <span
+                              style={{
+                                display: 'inline-block',
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                fontSize: '11px',
+                                fontWeight: '600',
+                                color: badge.text_color || '#fff',
+                                backgroundColor: badge.color
+                              }}
+                            >
+                              {badge.text}
+                            </span>
+                          </div>
+                          <Button
+                            type="text"
+                            danger
+                            size="small"
+                            onClick={() => {
+                              const newBadges = badges.filter((_, i) => i !== idx);
+                              setBadges(newBadges.map((b, i) => ({ ...b, order: i + 1 })));
+                            }}
+                            style={{ padding: '0 8px' }}
+                          >
+                            ×
+                          </Button>
+                        </div>
+                      ))
                     )}
                   </div>
                 </div>

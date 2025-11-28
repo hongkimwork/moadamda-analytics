@@ -26,6 +26,126 @@ function decodeUrlForDisplay(url) {
 }
 
 // ============================================================================
+// BADGE PRESETS API - Recently used badges
+// ============================================================================
+
+// GET /api/mappings/badge-presets
+// Get list of recently used badge presets (max 10, sorted by most recent)
+router.get('/badge-presets', async (req, res) => {
+  try {
+    const query = `
+      SELECT id, text, bg_color, text_color, use_count, created_at, updated_at
+      FROM badge_presets
+      ORDER BY updated_at DESC
+      LIMIT 10
+    `;
+    const result = await db.query(query);
+
+    res.json({
+      success: true,
+      data: result.rows
+    });
+  } catch (error) {
+    console.error('Badge presets query error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch badge presets',
+      message: error.message
+    });
+  }
+});
+
+// POST /api/mappings/badge-presets
+// Create or update a badge preset (upsert on text + bg_color + text_color)
+router.post('/badge-presets', async (req, res) => {
+  try {
+    const { text, bg_color, text_color } = req.body;
+
+    // Validation
+    if (!text || !text.trim()) {
+      return res.status(400).json({
+        error: 'Missing required field',
+        message: 'text is required'
+      });
+    }
+
+    if (!bg_color) {
+      return res.status(400).json({
+        error: 'Missing required field',
+        message: 'bg_color is required'
+      });
+    }
+
+    const finalTextColor = text_color || '#ffffff';
+
+    // Upsert: insert or update on conflict
+    const upsertQuery = `
+      INSERT INTO badge_presets (text, bg_color, text_color, use_count, updated_at)
+      VALUES ($1, $2, $3, 1, NOW())
+      ON CONFLICT (text, bg_color, text_color)
+      DO UPDATE SET 
+        use_count = badge_presets.use_count + 1,
+        updated_at = NOW()
+      RETURNING id, text, bg_color, text_color, use_count, created_at, updated_at
+    `;
+
+    const result = await db.query(upsertQuery, [text.trim(), bg_color, finalTextColor]);
+
+    // Clean up old presets if more than 10 exist
+    const cleanupQuery = `
+      DELETE FROM badge_presets
+      WHERE id NOT IN (
+        SELECT id FROM badge_presets
+        ORDER BY updated_at DESC
+        LIMIT 10
+      )
+    `;
+    await db.query(cleanupQuery);
+
+    res.status(201).json({
+      success: true,
+      data: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Badge preset creation error:', error);
+    res.status(500).json({
+      error: 'Failed to create badge preset',
+      message: error.message
+    });
+  }
+});
+
+// DELETE /api/mappings/badge-presets/:id
+// Delete a specific badge preset
+router.delete('/badge-presets/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const checkQuery = 'SELECT id FROM badge_presets WHERE id = $1';
+    const checkResult = await db.query(checkQuery, [id]);
+
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({
+        error: 'Not found',
+        message: 'Badge preset not found'
+      });
+    }
+
+    await db.query('DELETE FROM badge_presets WHERE id = $1', [id]);
+
+    res.json({
+      success: true,
+      message: 'Badge preset deleted successfully'
+    });
+  } catch (error) {
+    console.error('Badge preset deletion error:', error);
+    res.status(500).json({
+      error: 'Failed to delete badge preset',
+      message: error.message
+    });
+  }
+});
+
+// ============================================================================
 // 1. GET /api/mappings/all
 // Get list of all URLs (mapped + unmapped, excluding excluded)
 // ============================================================================
