@@ -1157,7 +1157,16 @@ router.get('/utm-attribution', async (req, res) => {
 // GET /api/stats/orders - Get paginated orders list
 router.get('/orders', async (req, res) => {
   try {
-    const { start, end, device = 'all', limit = 100, offset = 0 } = req.query;
+    const { 
+      start, 
+      end, 
+      device = 'all', 
+      limit = 100, 
+      offset = 0,
+      search = '',
+      sort_by = 'timestamp',
+      sort_order = 'desc'
+    } = req.query;
 
     if (!start || !end) {
       return res.status(400).json({ error: 'start and end dates are required (YYYY-MM-DD)' });
@@ -1168,6 +1177,7 @@ router.get('/orders', async (req, res) => {
 
     // Build device filter
     let deviceFilter = '';
+    let searchFilter = '';
     let queryParams = [start, end];
     let paramIndex = 3;
 
@@ -1177,6 +1187,31 @@ router.get('/orders', async (req, res) => {
       paramIndex++;
     }
 
+    // 검색 필터 (주문번호 또는 상품명)
+    if (search && search.trim()) {
+      const searchTerm = `%${search.trim()}%`;
+      searchFilter = `AND (
+        c.order_id ILIKE $${paramIndex} 
+        OR COALESCE(c.product_name, '') ILIKE $${paramIndex}
+      )`;
+      queryParams.push(searchTerm);
+      paramIndex++;
+    }
+
+    // 정렬 필드 매핑 (SQL injection 방지)
+    const sortFieldMap = {
+      'order_id': 'c.order_id',
+      'timestamp': 'c.timestamp',
+      'final_payment': 'c.final_payment',
+      'product_name': 'c.product_name',
+      'product_count': 'c.product_count',
+      'device_type': 'v.device_type',
+      'is_repurchase': 'is_repurchase',
+      'utm_source': 'utm_source'
+    };
+    const sortColumn = sortFieldMap[sort_by] || 'c.timestamp';
+    const sortDirection = sort_order === 'asc' ? 'ASC' : 'DESC';
+
     queryParams.push(parseInt(limit), parseInt(offset));
 
     // Main query: Get orders with all necessary info
@@ -1185,6 +1220,7 @@ router.get('/orders', async (req, res) => {
       SELECT 
         c.order_id,
         TO_CHAR(c.timestamp + INTERVAL '9 hours', 'YYYY-MM-DD HH24:MI:SS') as timestamp,
+        c.timestamp as raw_timestamp,
         c.final_payment,
         c.total_amount,
         c.product_count,
@@ -1217,7 +1253,19 @@ router.get('/orders', async (req, res) => {
             ORDER BY e.timestamp DESC 
             LIMIT 1
           )
-        ) as product_name
+        ) as product_name,
+        -- 재구매 여부: 동일 visitor_id로 이전 구매가 있는지 확인
+        CASE 
+          WHEN c.visitor_id IS NULL OR c.visitor_id = '' THEN NULL
+          WHEN EXISTS (
+            SELECT 1 FROM conversions c2 
+            WHERE c2.visitor_id = c.visitor_id 
+              AND c2.timestamp < c.timestamp
+              AND c2.paid = 'T'
+              AND c2.final_payment > 0
+          ) THEN true
+          ELSE false
+        END as is_repurchase
       FROM conversions c
       LEFT JOIN sessions s ON c.session_id = s.session_id
       LEFT JOIN visitors v ON c.visitor_id = v.visitor_id
@@ -1225,14 +1273,36 @@ router.get('/orders', async (req, res) => {
         AND c.timestamp < ($2::date + INTERVAL '1 day' - INTERVAL '9 hours')
         AND c.paid = 'T'
         AND c.final_payment > 0
+        AND c.order_id IS NOT NULL
         ${deviceFilter}
-      ORDER BY c.timestamp DESC
+        ${searchFilter}
+      ORDER BY ${sortColumn} ${sortDirection}
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `;
 
     const ordersResult = await db.query(ordersQuery, queryParams);
 
     // Count total orders for pagination
+    let countParams = [start, end];
+    let countParamIndex = 3;
+    let countDeviceFilter = '';
+    let countSearchFilter = '';
+
+    if (device !== 'all') {
+      countDeviceFilter = `AND v.device_type = $${countParamIndex}`;
+      countParams.push(device);
+      countParamIndex++;
+    }
+
+    if (search && search.trim()) {
+      const searchTerm = `%${search.trim()}%`;
+      countSearchFilter = `AND (
+        c.order_id ILIKE $${countParamIndex} 
+        OR COALESCE(c.product_name, '') ILIKE $${countParamIndex}
+      )`;
+      countParams.push(searchTerm);
+    }
+
     const countQuery = `
       SELECT COUNT(*) as total
       FROM conversions c
@@ -1241,10 +1311,10 @@ router.get('/orders', async (req, res) => {
         AND c.timestamp < ($2::date + INTERVAL '1 day' - INTERVAL '9 hours')
         AND c.paid = 'T'
         AND c.final_payment > 0
-        ${deviceFilter}
+        AND c.order_id IS NOT NULL
+        ${countDeviceFilter}
+        ${countSearchFilter}
     `;
-
-    const countParams = device !== 'all' ? [start, end, device] : [start, end];
     const countResult = await db.query(countQuery, countParams);
 
     // 기본 주문 데이터 매핑
@@ -1261,6 +1331,7 @@ router.get('/orders', async (req, res) => {
       device_type: row.device_type || null,
       utm_source: row.utm_source || null,
       utm_campaign: row.utm_campaign || null,
+      is_repurchase: row.is_repurchase,
       is_cafe24_only: !row.visitor_id || row.visitor_id === ''
     }));
     

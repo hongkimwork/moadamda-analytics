@@ -17,21 +17,21 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-11-28 | 데이터 정합성 조건 통일 | stats.js |
+| 2025-11-28 | 디바이스 필터 제거 | OrderListPage.jsx |
+| 2025-11-28 | 테이블 정렬 기능 버그 수정 | stats.js |
+| 2025-11-28 | 타임라인 카드 렌더링 수정 | JourneyTimeline.jsx |
+| 2025-11-28 | 기기필터 위치/옵션 개선 | SearchFilterBar.jsx |
+| 2025-11-28 | 주문분석 UI/UX 개선 | OrderListPage.jsx |
+| 2025-11-28 | 재구매 컬럼 API 응답 수정 | stats.js |
+| 2025-11-28 | 토큰 만료 타임존 버그 수정 | cafe24.js |
+| 2025-11-27 | 동기화 주기 10분으로 단축 | cafe24.js |
 | 2025-11-27 | Cafe24 동기화 중복코드 통합 | cafe24.js |
 | 2025-11-27 | 상품수 계산 로직 수정 (quantity 합산) | cafe24.js |
 | 2025-11-27 | 주문목록 상품수/재구매 컬럼 추가 | OrderAnalysis.jsx |
 | 2025-11-27 | 주문 분석2 페이지 제거 | App.jsx |
 | 2025-11-27 | 미니카드 전체표시+RangePicker | OrderAnalysis.jsx |
 | 2025-11-27 | 여정 카드 열 단계 6→4 변경 | OrderAnalysis.jsx |
-| 2025-11-27 | Cafe24 실시간 주문 동기화 | track.js, cafe24.js |
-| 2025-11-27 | 주문시간 KST 일관성 수정 | stats.js |
-| 2025-11-26 | 0원 주문 제외 필터 구현 | orders.js |
-| 2025-11-26 | 상품명 DB 저장 및 마이그레이션 | stats.js |
-| 2025-11-26 | visitor_id 백필 API 추가 | cafe24.js |
-| 2025-11-26 | 자동 동기화 및 visitor 매칭 | cafe24.js |
-| 2025-11-26 | Cafe24 API 연동 구현 | cafe24.js |
-| 2025-11-25 | 필터에서 viral 제외 처리 | DynamicUtmFilterBar.jsx |
-| 2025-11-25 | 퀵필터 바이럴 제거/추가버튼 수정 | UtmSourceQuickFilter.jsx |
 
 ---
 
