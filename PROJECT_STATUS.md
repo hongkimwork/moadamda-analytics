@@ -17,6 +17,7 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-12-01 | 광고클릭 오분류 근본 해결 | track.js, journeyCalculations.js |
 | 2025-12-01 | 광고카드 분석페이지 이동 기능 | AdEntryDivider.jsx |
 | 2025-12-01 | 광고카드 UI 통일+접속시간 추가 | AdEntryDivider.jsx |
 | 2025-12-01 | 타임라인 DOM높이 기반 열분할 | JourneyTimeline.jsx |
@@ -31,7 +32,6 @@
 | 2025-11-28 | 상세분석 드롭다운 버튼으로 변경 | CreativePerformance.jsx |
 | 2025-11-28 | UTM 유실 방지(세션스토리지) | tracker-v045.js |
 | 2025-11-28 | UTM 인코딩 데이터 225건 수정 | utm_sessions (DB) |
-| 2025-11-28 | 막타(Last Touch) 결제액 수정 | creativeAttribution.js |
 
 ---
 

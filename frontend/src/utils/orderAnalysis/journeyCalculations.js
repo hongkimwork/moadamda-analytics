@@ -18,8 +18,20 @@ function markAdEntryPoints(pages, utmHistory) {
     return pages;
   }
 
+  // FIX: 실제 광고 클릭만 필터링
+  // utm_source만 있고 utm_campaign/utm_content가 없는 경우는 "사이트 내 이동"이므로 제외
+  // 광고 클릭의 핵심 정보(캠페인/소재)가 있어야만 "광고 클릭"으로 표시
+  const validUtmSessions = utmHistory.filter(utm => 
+    utm.utm_campaign || utm.utm_content
+  );
+
+  // 유효한 광고 클릭 세션이 없으면 그대로 반환
+  if (validUtmSessions.length === 0) {
+    return pages;
+  }
+
   // UTM 세션 entry_time을 Date 객체로 변환
-  const utmEntryTimes = utmHistory.map(utm => ({
+  const utmEntryTimes = validUtmSessions.map(utm => ({
     entryTime: new Date(utm.entry_time),
     utm_source: utm.utm_source,
     utm_medium: utm.utm_medium,

@@ -154,14 +154,19 @@ async function handlePageview(event, clientIp) {
   }
 
   // 6. Phase 4.4: Track UTM session history for multi-touch attribution (with dynamic UTM support)
-  if (utm_source || utm_medium || utm_campaign || utm_params) {
+  // FIX: utm_source만 있는 경우는 "실제 광고 클릭"이 아닌 "사이트 내 이동"으로 판단
+  // 광고 클릭의 핵심 정보(캠페인/소재)가 있어야만 UTM 세션으로 기록
+  const utmContent = utm_params?.utm_content;
+  const hasAdClickInfo = utm_campaign || utmContent;
+  
+  if (hasAdClickInfo) {
     await trackUtmSession({
       session_id,
       visitor_id,
       utm_source,
       utm_medium,
       utm_campaign,
-      utm_params,  // 새로 추가: 모든 UTM 파라미터 전달
+      utm_params,
       url,
       timestamp: visitTime
     });
