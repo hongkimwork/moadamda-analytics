@@ -66,7 +66,7 @@ export function AdEntryDivider({ utmSession }) {
     ? (utm_content.length > 15 ? utm_content.slice(0, 15) + '...' : utm_content)
     : null;
 
-  // 카드 스타일 (TimelineItem의 일반 카드 스타일 기반, 광고 전용 색상 적용)
+  // 카드 스타일 (깔끔한 버전 - 왼쪽 외곽선 없음)
   const cardStyle = {
     borderRadius: '12px',
     padding: '14px 16px',
@@ -76,7 +76,6 @@ export function AdEntryDivider({ utmSession }) {
     marginBottom: '14px',
     position: 'relative',
     border: `1px solid ${AD_COLOR}25`,
-    borderLeft: `4px solid ${AD_COLOR}`,
     background: `linear-gradient(135deg, ${AD_COLOR}08 0%, #ffffff 100%)`
   };
 
