@@ -372,15 +372,15 @@ function CreativePerformance() {
             wordBreak: 'break-all',
             lineHeight: '1.5',
             textAlign: 'left',
-            color: '#0958d9',
+            color: '#1a1a1a',
             transition: 'color 0.2s ease'
           }}
           onDoubleClick={() => {
             navigator.clipboard.writeText(text);
             message.success('광고 소재 이름이 복사되었습니다');
           }}
-          onMouseEnter={(e) => e.target.style.color = '#1677ff'}
-          onMouseLeave={(e) => e.target.style.color = '#0958d9'}
+          onMouseEnter={(e) => e.target.style.color = '#595959'}
+          onMouseLeave={(e) => e.target.style.color = '#1a1a1a'}
           title="더블클릭하면 복사됩니다"
         >
           {text || '-'}
