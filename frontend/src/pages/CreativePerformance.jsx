@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card, Table, Tag, Typography, Space, Button, Alert, message, Tooltip, Divider, Dropdown, Checkbox } from 'antd';
 import { BarChartOutlined, ShoppingCartOutlined, SettingOutlined, NodeIndexOutlined, FileSearchOutlined, SwapOutlined } from '@ant-design/icons';
 import { Search, BarChart3, RefreshCw, Layers, GitCompare } from 'lucide-react';
@@ -55,6 +56,10 @@ const formatNumber = (num) => {
 // CreativePerformance 컴포넌트
 // ============================================================================
 function CreativePerformance() {
+  // URL 쿼리 파라미터 읽기 (광고 클릭 카드에서 이동 시 search 파라미터 사용)
+  const [searchParams] = useSearchParams();
+  const initialSearchTerm = searchParams.get('search') || '';
+
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
@@ -62,8 +67,8 @@ function CreativePerformance() {
   const [pageSize, setPageSize] = useState(500);
   const [error, setError] = useState(null);
 
-  // 검색 및 필터 state
-  const [searchTerm, setSearchTerm] = useState('');
+  // 검색 및 필터 state (URL 쿼리 파라미터 우선)
+  const [searchTerm, setSearchTerm] = useState(initialSearchTerm);
   const [filters, setFilters] = useState({
     dateRange: [
       dayjs().subtract(30, 'days').format('YYYY-MM-DD'),

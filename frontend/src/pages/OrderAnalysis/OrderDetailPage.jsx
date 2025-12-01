@@ -77,7 +77,7 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
     );
   }
 
-  const { order, purchase_journey, previous_visits, page_path } = data;
+  const { order, purchase_journey, previous_visits, page_path, utm_history } = data;
 
   // 구매 직전 경로 (광고 클릭 후 ~ 구매까지)
   const journeyPages = purchase_journey?.pages || page_path || [];
@@ -97,8 +97,8 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
   // 이전 방문 필터링
   const filteredPreviousVisits = filterPreviousVisits(previous_visits, order.timestamp, selectedDateRange);
 
-  // 모든 여정 통합
-  const allJourneys = buildAllJourneys(filteredPreviousVisits, validJourneyPages, purchaseDate);
+  // 모든 여정 통합 (광고 유입 시점 표시 포함)
+  const allJourneys = buildAllJourneys(filteredPreviousVisits, validJourneyPages, purchaseDate, utm_history || []);
 
   return (
     <div style={{ background: '#fafbfc', height: '100%', display: 'flex', flexDirection: 'column' }}>

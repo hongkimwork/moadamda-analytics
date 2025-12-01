@@ -7,43 +7,104 @@ import dayjs from 'dayjs';
 import { removeConcecutiveDuplicates, formatDuration } from './dataTransform';
 
 /**
+ * 페이지 배열에 광고 유입 시점 표시 추가
+ * UTM 세션 entry_time과 페이지 timestamp를 비교하여 광고 클릭 직후 첫 페이지에 마킹
+ * @param {Array} pages - 페이지 배열
+ * @param {Array} utmHistory - UTM 히스토리 배열
+ * @returns {Array} 광고 유입 시점이 표시된 페이지 배열
+ */
+function markAdEntryPoints(pages, utmHistory) {
+  if (!pages || pages.length === 0 || !utmHistory || utmHistory.length === 0) {
+    return pages;
+  }
+
+  // UTM 세션 entry_time을 Date 객체로 변환
+  const utmEntryTimes = utmHistory.map(utm => ({
+    entryTime: new Date(utm.entry_time),
+    utm_source: utm.utm_source,
+    utm_medium: utm.utm_medium,
+    utm_campaign: utm.utm_campaign,
+    utm_content: utm.utm_content,
+    entry_time: utm.entry_time
+  }));
+
+  // 각 페이지에 광고 유입 시점 표시
+  return pages.map((page, idx) => {
+    const pageTime = new Date(page.timestamp);
+    
+    // 이 페이지가 UTM 세션 시작 직후인지 확인
+    // (UTM entry_time과 페이지 timestamp가 30초 이내 차이)
+    const matchingUtm = utmEntryTimes.find(utm => {
+      const timeDiff = Math.abs(pageTime - utm.entryTime);
+      return timeDiff <= 30000; // 30초 이내
+    });
+
+    if (matchingUtm) {
+      // 이미 표시된 UTM은 제거 (중복 방지)
+      const utmIdx = utmEntryTimes.findIndex(u => u.entry_time === matchingUtm.entry_time);
+      if (utmIdx !== -1) {
+        utmEntryTimes.splice(utmIdx, 1);
+      }
+
+      return {
+        ...page,
+        adEntry: {
+          utm_source: matchingUtm.utm_source,
+          utm_medium: matchingUtm.utm_medium,
+          utm_campaign: matchingUtm.utm_campaign,
+          utm_content: matchingUtm.utm_content,
+          entry_time: matchingUtm.entry_time
+        }
+      };
+    }
+
+    return page;
+  });
+}
+
+/**
  * 모든 여정 통합 (이전 방문 + 구매 당일)
  * @param {Array} filteredPreviousVisits - 필터링된 이전 방문 배열
  * @param {Array} validJourneyPages - 구매 당일 페이지 배열
  * @param {string} purchaseDate - 구매일 (YYYY-MM-DD)
+ * @param {Array} utmHistory - UTM 히스토리 배열 (광고 유입 시점 표시용)
  * @returns {Array} 통합된 여정 배열
  */
-export function buildAllJourneys(filteredPreviousVisits, validJourneyPages, purchaseDate) {
+export function buildAllJourneys(filteredPreviousVisits, validJourneyPages, purchaseDate, utmHistory = []) {
   const journeys = [
     // 필터링된 이전 방문들 (연속 중복 제거 적용)
     ...filteredPreviousVisits.map((visit) => {
       const deduplicatedPages = removeConcecutiveDuplicates(visit.pages || []);
-      const totalDuration = deduplicatedPages.reduce((sum, p) => sum + (p.time_spent_seconds || 0), 0);
+      // 이전 방문에도 광고 유입 시점 표시 적용
+      const pagesWithAdEntry = markAdEntryPoints(deduplicatedPages, utmHistory);
+      const totalDuration = pagesWithAdEntry.reduce((sum, p) => sum + (p.time_spent_seconds || 0), 0);
 
       return {
         id: `visit-${visit.date}`,
         date: visit.date,
         type: 'visit',
         dateLabel: dayjs(visit.date).format('YYYY-MM-DD'),
-        pageCount: deduplicatedPages.length,
+        pageCount: pagesWithAdEntry.length,
         duration: formatDuration(totalDuration),
-        pages: deduplicatedPages,
+        pages: pagesWithAdEntry,
         color: '#9ca3af' // 회색
       };
     }),
     // 구매 당일 (연속 중복 제거 적용)
     (() => {
       const deduplicatedPages = removeConcecutiveDuplicates(validJourneyPages);
-      const totalDuration = deduplicatedPages.reduce((sum, p) => sum + (p.time_spent_seconds || 0), 0);
+      // 구매 당일에도 광고 유입 시점 표시 적용
+      const pagesWithAdEntry = markAdEntryPoints(deduplicatedPages, utmHistory);
+      const totalDuration = pagesWithAdEntry.reduce((sum, p) => sum + (p.time_spent_seconds || 0), 0);
 
       return {
         id: 'purchase',
         date: purchaseDate,
         type: 'purchase',
         dateLabel: purchaseDate,
-        pageCount: deduplicatedPages.length,
+        pageCount: pagesWithAdEntry.length,
         duration: formatDuration(totalDuration),
-        pages: deduplicatedPages,
+        pages: pagesWithAdEntry,
         color: '#60a5fa' // 밝은 파스텔 블루
       };
     })()
@@ -62,19 +123,36 @@ export function buildAllJourneys(filteredPreviousVisits, validJourneyPages, purc
 }
 
 /**
- * 타임라인 다단 배치 계산
+ * 타임라인 다단 배치 계산 (광고 카드 포함)
+ * 광고 유입이 있는 페이지는 2칸(광고카드+페이지카드)으로 계산하여
+ * 열당 실제 표시되는 아이템 수가 균등하도록 분할
  * @param {Array} pages - 페이지 배열
  * @param {number} maxItemsPerColumn - 컬럼당 최대 아이템 수 (기본: 4)
  * @returns {Array<Array>} 컬럼별로 분할된 페이지 배열
  */
 export function getColumns(pages, maxItemsPerColumn = 4) {
-  const columnCount = Math.ceil(pages.length / maxItemsPerColumn);
   const columns = [];
+  let currentColumn = [];
+  let currentItemCount = 0;
 
-  for (let i = 0; i < columnCount; i++) {
-    const start = i * maxItemsPerColumn;
-    const end = start + maxItemsPerColumn;
-    columns.push(pages.slice(start, end));
+  pages.forEach((page) => {
+    // 광고 카드가 있으면 2칸, 없으면 1칸
+    const itemCount = page.adEntry ? 2 : 1;
+
+    // 현재 열에 추가 시 최대치 초과하면 새 열 시작
+    if (currentItemCount + itemCount > maxItemsPerColumn && currentColumn.length > 0) {
+      columns.push(currentColumn);
+      currentColumn = [];
+      currentItemCount = 0;
+    }
+
+    currentColumn.push(page);
+    currentItemCount += itemCount;
+  });
+
+  // 마지막 열 추가
+  if (currentColumn.length > 0) {
+    columns.push(currentColumn);
   }
 
   return columns;

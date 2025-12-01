@@ -101,6 +101,14 @@ export function TimelineItemContent({
   const durationText = getDurationText(durationSeconds, isPurchaseComplete);
   const cardStyle = getCardStyle(isExit, isPurchaseComplete);
 
+  // 접속 시간 포맷 (HH:MM:SS)
+  const accessTime = page.timestamp ? new Date(page.timestamp).toLocaleTimeString('ko-KR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }) : '';
+
   return (
     <div
       style={cardStyle}
@@ -195,8 +203,7 @@ export function TimelineItemContent({
           color: '#111827',
           lineHeight: '1.5',
           fontWeight: '600',
-          letterSpacing: '-0.01em',
-          marginBottom: isPurchaseComplete ? '8px' : '0'
+          letterSpacing: '-0.01em'
         }}>
           <span style={{
             color: '#6b7280',
@@ -210,6 +217,20 @@ export function TimelineItemContent({
             {urlInfo.name}
           </span>
         </div>
+
+        {/* 접속 시간 */}
+        {accessTime && (
+          <div style={{
+            fontSize: '11px',
+            color: '#6b7280',
+            marginTop: '6px',
+            fontWeight: '400',
+            marginBottom: isPurchaseComplete ? '8px' : '0'
+          }}>
+            <span style={{ marginRight: '4px' }}>접속 시간:</span>
+            <span style={{ color: '#374151', fontWeight: '500' }}>{accessTime}</span>
+          </div>
+        )}
 
         {/* 구매 완료 단계 - 구매한 상품명 맨 마지막에 표시 */}
         {isPurchaseComplete && (() => {
@@ -252,7 +273,7 @@ export function TimelineItemContent({
         style={{
           position: 'absolute',
           right: '10px',
-          bottom: '10px',
+          bottom: '6px',
           fontSize: '16px',
           color: '#9ca3af',
           cursor: 'pointer',

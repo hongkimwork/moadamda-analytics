@@ -1459,25 +1459,21 @@ router.get('/order-detail/:orderId', async (req, res) => {
       });
     }
 
-    // 2-1. 구매 직전 경로 (마지막 UTM 접촉 이후 ~ 구매까지)
-    // 광고 효과 측정에 사용되는 핵심 경로
+    // 2-1. 구매 당일 전체 경로 (구매 당일의 모든 페이지뷰)
+    // UTM 기준 제거 - 직접 방문 포함 모든 페이지 이동 표시
+    // FIX: 타임존 문제 해결 - DB timestamp(KST)와 JavaScript timestamp(UTC) 불일치 수정
+    // DB에 저장된 날짜 기준으로 비교하기 위해 AT TIME ZONE 사용
     const purchaseJourneyQuery = `
-      WITH last_utm_contact AS (
-        SELECT MAX(entry_timestamp) as utm_timestamp
-        FROM utm_sessions
-        WHERE visitor_id = $1
-      ),
-      purchase_journey_pages AS (
+      WITH purchase_journey_pages AS (
         SELECT
           p.page_url,
           p.page_title,
           p.timestamp,
           LEAD(p.timestamp) OVER (ORDER BY p.timestamp) as next_timestamp
         FROM pageviews p
-        CROSS JOIN last_utm_contact
         WHERE p.visitor_id = $1
-          AND p.timestamp >= COALESCE(last_utm_contact.utm_timestamp, p.timestamp)
-          AND p.timestamp <= $2
+          AND DATE(p.timestamp) = DATE(($2::timestamptz AT TIME ZONE 'Asia/Seoul'))
+          AND p.timestamp <= ($2::timestamptz AT TIME ZONE 'Asia/Seoul')
         ORDER BY p.timestamp ASC
       )
       SELECT
@@ -1496,15 +1492,11 @@ router.get('/order-detail/:orderId', async (req, res) => {
     `;
     const purchaseJourneyResult = await db.query(purchaseJourneyQuery, [order.visitor_id, order.timestamp]);
 
-    // 2-2. 과거 방문 이력 (마지막 UTM 접촉 이전)
-    // 고객이 이전에 어떤 페이지를 봤는지 참고용
+    // 2-2. 과거 방문 이력 (구매 당일 이전의 모든 방문)
+    // UTM 기준 제거 - 구매 당일 이전의 모든 페이지 이동 표시
+    // FIX: 타임존 문제 해결 - DB timestamp(KST)와 JavaScript timestamp(UTC) 불일치 수정
     const previousVisitsQuery = `
-      WITH last_utm_contact AS (
-        SELECT MAX(entry_timestamp) as utm_timestamp
-        FROM utm_sessions
-        WHERE visitor_id = $1
-      ),
-      previous_pageviews AS (
+      WITH previous_pageviews AS (
         SELECT
           p.page_url,
           p.page_title,
@@ -1512,10 +1504,8 @@ router.get('/order-detail/:orderId', async (req, res) => {
           DATE(p.timestamp) as visit_date,
           LEAD(p.timestamp) OVER (PARTITION BY DATE(p.timestamp) ORDER BY p.timestamp) as next_timestamp
         FROM pageviews p
-        CROSS JOIN last_utm_contact
         WHERE p.visitor_id = $1
-          AND p.timestamp < COALESCE(last_utm_contact.utm_timestamp, $2::timestamp)
-          AND DATE(p.timestamp) < DATE($2)
+          AND DATE(p.timestamp) < DATE(($2::timestamptz AT TIME ZONE 'Asia/Seoul'))
       )
       SELECT
         visit_date,
