@@ -15,27 +15,6 @@ function formatPrice(amount) {
 }
 
 /**
- * 결제 수단 한글화
- */
-function getPaymentMethodText(method) {
-  const methodMap = {
-    'card': '신용카드',
-    'cash': '무통장입금',
-    'bank': '계좌이체',
-    'phone': '휴대폰결제',
-    'point': '포인트',
-    'naverpay': '네이버페이',
-    'kakaopay': '카카오페이',
-    'payco': '페이코',
-    'ssgpay': 'SSG페이',
-    'lpay': 'L페이',
-    'tosspay': '토스페이',
-    'etc': '기타'
-  };
-  return methodMap[method?.toLowerCase()] || method || '-';
-}
-
-/**
  * 주문 상태 텍스트 및 색상
  */
 function getStatusConfig(orderStatus, paid) {
@@ -79,33 +58,14 @@ export function PurchaseTimelineItem({ order }) {
   const {
     timestamp,
     final_payment = 0,
-    total_amount = 0,
     payment_details = {},
     order_items = []
   } = order;
 
   const {
-    discount_amount = 0,
-    mileage_used = 0,
-    points_spent = 0,
-    credits_spent = 0,
-    shipping_fee = 0,
-    payment_method = null,
     order_status = 'confirmed',
     paid = 'T'
   } = payment_details;
-
-  // Cafe24 API 값 그대로 사용 (복잡한 계산 없이 표시)
-  // 상품 금액 = total_amount - shipping_fee (Cafe24의 order_price_amount)
-  const productAmount = total_amount - shipping_fee;
-
-  // 할인/차감 항목 중 실제로 값이 있는 것만 필터링
-  const deductions = [
-    { label: '할인', value: discount_amount },
-    { label: '마일리지', value: mileage_used },
-    { label: '포인트', value: points_spent },
-    { label: '적립금', value: credits_spent }
-  ].filter(item => item.value > 0);
 
   const statusConfig = getStatusConfig(order_status, paid);
 
@@ -219,68 +179,11 @@ export function PurchaseTimelineItem({ order }) {
         padding: '10px',
         border: '1px solid #e2e8f0'
       }}>
-        {/* 상품 금액 (할인/차감 항목 또는 배송비가 있을 때만 표시) */}
-        {(deductions.length > 0 || shipping_fee > 0) && (
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '4px'
-          }}>
-            <span style={{ fontSize: '10px', color: '#64748b' }}>
-              상품 금액
-            </span>
-            <span style={{ fontSize: '10px', color: '#334155' }}>
-              {formatPrice(productAmount)}원
-            </span>
-          </div>
-        )}
-
-        {/* 배송비 */}
-        {shipping_fee > 0 && (
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '4px'
-          }}>
-            <span style={{ fontSize: '10px', color: '#64748b' }}>
-              배송비
-            </span>
-            <span style={{ fontSize: '10px', color: '#334155' }}>
-              +{formatPrice(shipping_fee)}원
-            </span>
-          </div>
-        )}
-
-        {/* 할인/차감 항목들 */}
-        {deductions.map((item, idx) => (
-          <div
-            key={idx}
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '4px'
-            }}
-          >
-            <span style={{ fontSize: '10px', color: '#64748b' }}>
-              {item.label}
-            </span>
-            <span style={{ fontSize: '10px', color: '#dc2626' }}>
-              -{formatPrice(item.value)}원
-            </span>
-          </div>
-        ))}
-
-        {/* 최종 결제 금액 */}
+        {/* 결제 금액 */}
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'center',
-          marginTop: deductions.length > 0 || shipping_fee > 0 ? '6px' : '0',
-          paddingTop: deductions.length > 0 || shipping_fee > 0 ? '6px' : '0',
-          borderTop: deductions.length > 0 || shipping_fee > 0 ? '1px dashed #e2e8f0' : 'none'
+          alignItems: 'center'
         }}>
           <span style={{
             fontSize: '10px',
@@ -298,34 +201,12 @@ export function PurchaseTimelineItem({ order }) {
           </span>
         </div>
 
-        {/* 결제 수단 */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginTop: '6px'
-        }}>
-          <span style={{
-            fontSize: '10px',
-            color: '#64748b'
-          }}>
-            결제 수단
-          </span>
-          <span style={{
-            fontSize: '11px',
-            fontWeight: '600',
-            color: '#334155'
-          }}>
-            {getPaymentMethodText(payment_method)}
-          </span>
-        </div>
-
         {/* 결제 상태 */}
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          marginTop: '4px'
+          marginTop: '6px'
         }}>
           <span style={{
             fontSize: '10px',

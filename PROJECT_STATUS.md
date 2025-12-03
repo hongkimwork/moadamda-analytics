@@ -17,6 +17,7 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-12-03 | 구매카드 결제정보 단순화 | PurchaseTimelineItem.jsx |
 | 2025-12-03 | 결제금액 컬럼+할인계산 개선 | OrderListPage.jsx, PurchaseTimelineItem.jsx |
 | 2025-12-03 | 상품 판매가 표시 버그 수정 | stats.js |
 | 2025-12-03 | 구매완료 카드 타임라인 통합 | PurchaseTimelineItem.jsx |
@@ -31,7 +32,6 @@
 | 2025-12-03 | 트래커v047 인앱브라우저 개선 | tracker-v047.js, track.js |
 | 2025-12-03 | 긴 여정 좌측 잘림 현상 수정 | OrderDetailPage.jsx |
 | 2025-12-01 | 광고클릭 오분류 근본 해결 | track.js, journeyCalculations.js |
-| 2025-12-01 | 광고카드 분석페이지 이동 기능 | AdEntryDivider.jsx |
 
 ---
 
