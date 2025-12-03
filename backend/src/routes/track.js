@@ -67,6 +67,18 @@ async function processEvent(event, clientIp) {
     case 'session_end':
       await handleSessionEnd(event);
       break;
+    // NEW v047: checkout_attempt - 결제 시도 이벤트
+    case 'checkout_attempt':
+      await handleCheckoutAttempt(event, clientIp);
+      break;
+    // NEW v047: heartbeat - 체류시간 주기적 업데이트
+    case 'heartbeat':
+      await handleHeartbeat(event);
+      break;
+    // NEW v047: tracker_error - 트래커 에러 로깅
+    case 'tracker_error':
+      handleTrackerError(event);
+      break;
     default:
       console.warn('Unknown event type:', type);
   }
@@ -461,10 +473,107 @@ async function handleSessionEnd(event) {
         AND exit_timestamp IS NULL
     `, [endTime, visitor_id, session_id]);
 
-    // UTM sessions closed
+    // Update session end_time and duration
+    await db.query(`
+      UPDATE sessions
+      SET 
+        end_time = $1,
+        duration_seconds = EXTRACT(EPOCH FROM ($1 - start_time))::INTEGER
+      WHERE session_id = $2
+    `, [endTime, session_id]);
+
   } catch (error) {
     console.error('Error handling session end:', error);
   }
+}
+
+// NEW v047: Handle checkout attempt event
+async function handleCheckoutAttempt(event, clientIp) {
+  const { visitor_id, session_id, timestamp, url, referrer } = event;
+  const eventTime = new Date(timestamp);
+
+  try {
+    // 1. Ensure visitor exists
+    const visitorCheck = await db.query(
+      'SELECT visitor_id FROM visitors WHERE visitor_id = $1',
+      [visitor_id]
+    );
+
+    if (visitorCheck.rows.length === 0) {
+      await db.query(`
+        INSERT INTO visitors (visitor_id, first_visit, last_visit, visit_count, ip_address, last_ip)
+        VALUES ($1, $2, $3, 1, $4, $5)
+        ON CONFLICT (visitor_id) DO NOTHING
+      `, [visitor_id, eventTime, eventTime, clientIp || 'unknown', clientIp || 'unknown']);
+    }
+
+    // 2. Ensure session exists
+    const sessionCheck = await db.query(
+      'SELECT session_id FROM sessions WHERE session_id = $1',
+      [session_id]
+    );
+
+    if (sessionCheck.rows.length === 0) {
+      await db.query(`
+        INSERT INTO sessions (session_id, visitor_id, start_time, end_time, entry_url, pageview_count, ip_address, duration_seconds)
+        VALUES ($1, $2, $3, $4, $5, 0, $6, 0)
+        ON CONFLICT (session_id) DO NOTHING
+      `, [session_id, visitor_id, eventTime, eventTime, url || '', clientIp || 'unknown']);
+    }
+
+    // 3. Insert checkout_attempt event into events table
+    await db.query(`
+      INSERT INTO events (session_id, visitor_id, event_type, timestamp, metadata)
+      VALUES ($1, $2, 'checkout_attempt', $3, $4)
+    `, [session_id, visitor_id, eventTime, JSON.stringify({ url, referrer })]);
+
+    console.log(`[Track] Checkout attempt: visitor=${visitor_id.substring(0, 8)}...`);
+  } catch (error) {
+    console.error('Error handling checkout attempt:', error);
+  }
+}
+
+// NEW v047: Handle heartbeat event for session duration tracking
+async function handleHeartbeat(event) {
+  const { visitor_id, session_id, timestamp } = event;
+  const heartbeatTime = new Date(timestamp);
+
+  try {
+    // Update session end_time and duration_seconds
+    await db.query(`
+      UPDATE sessions 
+      SET 
+        end_time = $1,
+        duration_seconds = EXTRACT(EPOCH FROM ($1 - start_time))::INTEGER
+      WHERE session_id = $2
+    `, [heartbeatTime, session_id]);
+
+    // Also update UTM sessions if any are open
+    await db.query(`
+      UPDATE utm_sessions
+      SET 
+        exit_timestamp = $1,
+        duration_seconds = EXTRACT(EPOCH FROM ($1 - entry_timestamp))::INTEGER
+      WHERE visitor_id = $2
+        AND session_id = $3
+        AND exit_timestamp IS NULL
+    `, [heartbeatTime, visitor_id, session_id]);
+
+  } catch (error) {
+    // Heartbeat errors are not critical, just log them
+    console.error('Error handling heartbeat:', error.message);
+  }
+}
+
+// NEW v047: Handle tracker error logging
+function handleTrackerError(event) {
+  const { visitor_id, session_id, timestamp, message, filename, lineno, colno } = event;
+  
+  // Log to console for monitoring
+  console.error(`[Tracker Error] visitor=${visitor_id?.substring(0, 8)}... | ${message} | ${filename}:${lineno}:${colno}`);
+  
+  // Note: We don't store tracker errors in DB to avoid noise
+  // If needed, can be stored in a separate error_logs table
 }
 
 module.exports = router;
