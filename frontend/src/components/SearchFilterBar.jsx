@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Input, Select, DatePicker, Button, Space, Card } from 'antd';
+import { Input, Select, DatePicker, Button, Space, Card, Checkbox } from 'antd';
 import { SearchOutlined, FilterOutlined, ReloadOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 
@@ -20,6 +20,9 @@ const { RangePicker } = DatePicker;
  * @param {boolean} props.showBouncedFilter - 즉시 이탈 여부 필터 표시 여부
  * @param {boolean} props.showConvertedFilter - 구매 여부 필터 표시 여부
  * @param {boolean} props.showDateFilter - 날짜 필터 표시 여부
+ * @param {boolean} props.showCancelledFilter - 취소/반품 포함 필터 표시 여부
+ * @param {boolean} props.includeCancelled - 취소/반품 포함 여부 (외부 제어)
+ * @param {Function} props.onCancelledChange - 취소/반품 포함 변경 콜백
  * @param {boolean} props.loading - 로딩 상태
  * 
  * Note: UTM 필터는 동적 UTM 필터 컴포넌트 (DynamicUtmFilterBar)를 사용하세요
@@ -36,6 +39,9 @@ function SearchFilterBar({
   showBouncedFilter = false,
   showConvertedFilter = false,
   showDateFilter = true,
+  showCancelledFilter = false,
+  includeCancelled = false,
+  onCancelledChange,
   loading = false
 }) {
   // 검색어 state
@@ -339,6 +345,22 @@ function SearchFilterBar({
               >
                 최근 30일
               </Button>
+              
+              {/* 취소/반품 포함 체크박스 */}
+              {showCancelledFilter && (
+                <Checkbox
+                  checked={includeCancelled}
+                  onChange={(e) => onCancelledChange && onCancelledChange(e.target.checked)}
+                  disabled={loading}
+                  style={{ 
+                    marginLeft: '8px',
+                    fontWeight: 500,
+                    color: '#6b7280'
+                  }}
+                >
+                  취소/반품 포함
+                </Checkbox>
+              )}
               
               {/* 기기 필터 - 날짜 버튼 우측에 배치 */}
               {showDeviceFilter && (

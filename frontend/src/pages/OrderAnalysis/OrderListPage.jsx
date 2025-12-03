@@ -5,7 +5,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Card, Table, Button, Tag, Space, Typography, Modal } from 'antd';
-import { ShoppingCart, RefreshCw } from 'lucide-react';
+import { ShoppingCart, RefreshCw, XCircle } from 'lucide-react';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ko';
 import { useOrderList } from '../../hooks/useOrderList';
@@ -14,6 +14,21 @@ import SearchFilterBar from '../../components/SearchFilterBar';
 import { OrderDetailPageContent } from './OrderDetailPage';
 
 const { Title } = Typography;
+
+/**
+ * 주문 상태 뱃지 렌더링
+ */
+const OrderStatusBadge = ({ order }) => {
+  const { order_status, canceled } = order;
+  
+  if (canceled === 'T' || order_status === 'cancelled') {
+    return <Tag color="red" icon={<XCircle size={10} />} style={{ margin: 0 }}>취소</Tag>;
+  }
+  if (order_status === 'refunded') {
+    return <Tag color="orange" style={{ margin: 0 }}>반품</Tag>;
+  }
+  return null;
+};
 
 /**
  * OrderListPage 컴포넌트
@@ -32,7 +47,9 @@ export function OrderListPage() {
     handleSort,
     handleReset,
     sortField,
-    sortOrder
+    sortOrder,
+    includeCancelled,
+    setIncludeCancelled
   } = useOrderList();
 
   const { userMappings } = useUserMappings();
@@ -98,8 +115,11 @@ export function OrderListPage() {
       sorter: () => 0,
       sortOrder: getSortOrder('order_id'),
       showSorterTooltip: false,
-      render: (text) => (
-        <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{text}</span>
+      render: (text, record) => (
+        <Space size={4}>
+          <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{text}</span>
+          <OrderStatusBadge order={record} />
+        </Space>
       )
     },
     {
@@ -113,21 +133,21 @@ export function OrderListPage() {
       render: (timestamp) => dayjs(timestamp).format('YYYY-MM-DD HH:mm:ss')
     },
     {
-      title: '금액',
-      dataIndex: 'final_payment',
-      key: 'final_payment',
+      title: '주문금액',
+      dataIndex: 'total_amount',
+      key: 'total_amount',
       width: 120,
       align: 'right',
       sorter: () => 0,
-      sortOrder: getSortOrder('final_payment'),
+      sortOrder: getSortOrder('total_amount'),
       showSorterTooltip: false,
-      render: (amount) => `${amount.toLocaleString()}원`
+      render: (amount) => `${(amount || 0).toLocaleString()}원`
     },
     {
       title: '상품명',
       dataIndex: 'product_name',
       key: 'product_name',
-      width: 300,
+      width: 280,
       ellipsis: true,
       sorter: () => 0,
       sortOrder: getSortOrder('product_name'),
@@ -137,7 +157,7 @@ export function OrderListPage() {
       title: '상품수',
       dataIndex: 'product_count',
       key: 'product_count',
-      width: 80,
+      width: 70,
       align: 'center',
       sorter: () => 0,
       sortOrder: getSortOrder('product_count'),
@@ -164,7 +184,7 @@ export function OrderListPage() {
       title: '재구매',
       dataIndex: 'is_repurchase',
       key: 'is_repurchase',
-      width: 80,
+      width: 70,
       align: 'center',
       sorter: () => 0,
       sortOrder: getSortOrder('is_repurchase'),
@@ -179,19 +199,19 @@ export function OrderListPage() {
       }
     },
     {
-      title: 'UTM Source',
+      title: 'UTM',
       dataIndex: 'utm_source',
       key: 'utm_source',
-      width: 110,
+      width: 100,
       sorter: () => 0,
       sortOrder: getSortOrder('utm_source'),
       showSorterTooltip: false,
       render: (source) => source ? <Tag>{source}</Tag> : '-'
     },
     {
-      title: '상세보기',
+      title: '상세',
       key: 'action',
-      width: 100,
+      width: 70,
       fixed: 'right',
       render: (_, record) => (
         <Button
@@ -245,20 +265,20 @@ export function OrderListPage() {
               </div>
             </div>
             <Button
-              icon={<RefreshCw size={16} />}
-              onClick={refetch}
-              loading={loading}
-              style={{
-                height: '40px',
-                borderRadius: '8px',
-                fontWeight: 500,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}
-            >
-              새로고침
-            </Button>
+                icon={<RefreshCw size={16} />}
+                onClick={refetch}
+                loading={loading}
+                style={{
+                  height: '40px',
+                  borderRadius: '8px',
+                  fontWeight: 500,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                새로고침
+              </Button>
           </div>
           <Tag 
             color="blue" 
@@ -289,6 +309,9 @@ export function OrderListPage() {
         showBouncedFilter={false}
         showConvertedFilter={false}
         showDateFilter={true}
+        showCancelledFilter={true}
+        includeCancelled={includeCancelled}
+        onCancelledChange={setIncludeCancelled}
         loading={loading}
       />
 

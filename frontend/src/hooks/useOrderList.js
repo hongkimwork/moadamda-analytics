@@ -25,6 +25,9 @@ export function useOrderList() {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState(null);
   const [sortOrder, setSortOrder] = useState(null);
+  
+  // 취소/반품 주문 포함 여부
+  const [includeCancelled, setIncludeCancelled] = useState(false);
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -38,6 +41,7 @@ export function useOrderList() {
           end: endDate,
           device: deviceFilter,
           search: searchTerm,
+          include_cancelled: includeCancelled ? 'true' : 'false',
           // null이면 파라미터 제외 → 서버 기본 정렬(timestamp desc) 사용
           ...(sortField && { sort_by: sortField }),
           ...(sortOrder && { sort_order: sortOrder }),
@@ -53,7 +57,7 @@ export function useOrderList() {
       console.error('주문 목록 조회 실패:', error);
       setLoading(false);
     }
-  }, [dateRange, deviceFilter, searchTerm, sortField, sortOrder]);
+  }, [dateRange, deviceFilter, searchTerm, sortField, sortOrder, includeCancelled]);
 
   useEffect(() => {
     fetchOrders();
@@ -77,6 +81,7 @@ export function useOrderList() {
     setSortOrder(null);
     setDeviceFilter('all');
     setDateRange([dayjs().subtract(7, 'day'), dayjs()]);
+    setIncludeCancelled(false);
   }, []);
 
   return {
@@ -95,7 +100,10 @@ export function useOrderList() {
     sortField,
     sortOrder,
     handleSort,
-    handleReset
+    handleReset,
+    // 취소 주문 포함
+    includeCancelled,
+    setIncludeCancelled
   };
 }
 
