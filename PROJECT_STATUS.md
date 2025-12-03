@@ -17,6 +17,9 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-12-03 | 구매완료 카드 분리+상세정보 | PurchaseCompleteCard.jsx |
+| 2025-12-03 | 주문금액 0원 버그 수정 배포 | cafe24.js |
+| 2025-12-03 | 포인트결제/취소주문 표시 개선 | cafe24.js, stats.js, OrderListPage.jsx |
 | 2025-12-03 | 트래커 인앱 강화전송+재시도 | tracker-v047.js, track.js |
 | 2025-12-03 | 시간대 버그 전체 수정 | stats.js, range.js, creative-performance.js |
 | 2025-12-03 | 트래커v047 인앱브라우저 개선 | tracker-v047.js, track.js |
@@ -29,9 +32,6 @@
 | 2025-12-01 | 광고 클릭 구분선 기능 추가 | JourneyTimeline.jsx |
 | 2025-12-01 | 고객여정 타임존 버그 수정 | stats.js |
 | 2025-11-28 | 크리에이티브/주문분석 개선 배포 | CreativePerformance.jsx |
-| 2025-11-28 | 배지 글자색 선택 기능 추가 | MappingModal.jsx |
-| 2025-11-28 | 소재 비교 분석 기능 추가 | CreativeCompareModal.jsx |
-| 2025-11-28 | 페이지 분석 기능 추가 | CreativeLandingModal.jsx |
 
 ---
 

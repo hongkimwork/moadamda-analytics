@@ -4,10 +4,11 @@
  * DOM 높이 측정 기반 동적 열 분할
  */
 
-import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { Timeline, Alert } from 'antd';
 import { TimelineItemContent, getTimelineItemColor } from './TimelineItem';
 import AdEntryDivider from './AdEntryDivider';
+import PurchaseCompleteCard from './PurchaseCompleteCard';
 
 // 열 최대 높이 (모달 내 가용 공간 기준)
 const MAX_COLUMN_HEIGHT = 550;
@@ -227,6 +228,13 @@ export function JourneyTimeline({ journey, userMappings, order, findMatchingMapp
             </div>
           );
         })}
+
+        {/* 구매 여정인 경우 구매 완료 카드 표시 */}
+        {journey.type === 'purchase' && order && (
+          <div style={{ flexShrink: 0, alignSelf: 'flex-start' }}>
+            <PurchaseCompleteCard order={order} />
+          </div>
+        )}
       </div>
     </div>
   );

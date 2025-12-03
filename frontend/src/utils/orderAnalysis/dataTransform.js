@@ -103,14 +103,9 @@ export function validateTimeSpent(pages, maxSeconds = 600) {
 /**
  * 체류시간 텍스트 생성
  * @param {number} durationSeconds - 체류시간(초)
- * @param {boolean} isPurchaseComplete - 구매 완료 단계 여부
  * @returns {string} 체류시간 텍스트
  */
-export function getDurationText(durationSeconds, isPurchaseComplete = false) {
-  if (isPurchaseComplete) {
-    return '';
-  }
-
+export function getDurationText(durationSeconds) {
   if (durationSeconds >= 60) {
     return `${Math.floor(durationSeconds / 60)}분 ${durationSeconds % 60}초 체류`;
   }

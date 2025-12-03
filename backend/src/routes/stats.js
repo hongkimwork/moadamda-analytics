@@ -1407,7 +1407,7 @@ router.get('/order-detail/:orderId', async (req, res) => {
   try {
     const { orderId } = req.params;
 
-    // 1. 주문 기본 정보
+    // 1. 주문 기본 정보 (결제 상세 정보 포함)
     const orderQuery = `
       SELECT
         c.order_id,
@@ -1417,6 +1417,16 @@ router.get('/order-detail/:orderId', async (req, res) => {
         c.product_count,
         c.visitor_id,
         c.session_id,
+        c.discount_amount,
+        c.mileage_used,
+        c.points_spent,
+        c.credits_spent,
+        c.shipping_fee,
+        c.payment_method_name,
+        c.order_place_name,
+        c.order_status,
+        c.paid,
+        c.product_name as db_product_name,
         s.ip_address,
         s.entry_url,
         v.device_type,
@@ -1434,7 +1444,7 @@ router.get('/order-detail/:orderId', async (req, res) => {
             AND e.timestamp <= c.timestamp
           ORDER BY e.timestamp DESC
           LIMIT 1
-        ) as product_name
+        ) as event_product_name
       FROM conversions c
       LEFT JOIN sessions s ON c.session_id = s.session_id
       LEFT JOIN visitors v ON c.visitor_id = v.visitor_id
@@ -1495,6 +1505,44 @@ router.get('/order-detail/:orderId', async (req, res) => {
         pageview_count: 0,
         total_events: 0
       });
+    }
+
+    // Cafe24 API에서 다중 상품 정보 가져오기 (visitor_id가 있는 일반 주문)
+    let orderItems = [];
+    if (process.env.CAFE24_AUTH_KEY) {
+      try {
+        const cafe24Client = require('../utils/cafe24');
+        const detail = await cafe24Client.getOrderDetail(orderId);
+        if (detail.order?.items) {
+          orderItems = detail.order.items.map(item => ({
+            product_name: item.product_name,
+            product_price: parseInt(item.product_price) || 0,
+            quantity: parseInt(item.quantity) || 1,
+            option_value: item.option_value || null
+          }));
+        }
+      } catch (e) {
+        console.error('[Order Detail] Cafe24 API error (items):', e.message);
+        // API 실패 시 DB 저장 정보로 폴백
+        if (order.db_product_name || order.event_product_name) {
+          orderItems = [{
+            product_name: order.db_product_name || order.event_product_name || '상품명 없음',
+            product_price: parseInt(order.total_amount) || 0,
+            quantity: parseInt(order.product_count) || 1,
+            option_value: null
+          }];
+        }
+      }
+    } else {
+      // Cafe24 미연동 시 DB 정보로 대체
+      if (order.db_product_name || order.event_product_name) {
+        orderItems = [{
+          product_name: order.db_product_name || order.event_product_name || '상품명 없음',
+          product_price: parseInt(order.total_amount) || 0,
+          quantity: parseInt(order.product_count) || 1,
+          option_value: null
+        }];
+      }
     }
 
     // 2-1. 구매 당일 전체 경로 (구매 당일의 모든 페이지뷰)
@@ -1721,10 +1769,10 @@ router.get('/order-detail/:orderId', async (req, res) => {
       order: {
         order_id: order.order_id,
         timestamp: order.timestamp,
-        final_payment: order.final_payment,
-        total_amount: order.total_amount,
-        product_count: order.product_count,
-        product_name: order.product_name,
+        final_payment: parseInt(order.final_payment) || 0,
+        total_amount: parseInt(order.total_amount) || 0,
+        product_count: parseInt(order.product_count) || 1,
+        product_name: order.db_product_name || order.event_product_name || '상품명 없음',
         visitor_id: order.visitor_id,
         session_id: order.session_id,
         ip_address: order.ip_address || 'unknown',
@@ -1735,7 +1783,21 @@ router.get('/order-detail/:orderId', async (req, res) => {
         utm_medium: order.utm_medium || null,
         utm_campaign: order.utm_campaign || null,
         first_visit: order.first_visit,
-        entry_url: order.entry_url || null
+        entry_url: order.entry_url || null,
+        // 결제 상세 정보
+        payment_details: {
+          discount_amount: parseInt(order.discount_amount) || 0,
+          mileage_used: parseInt(order.mileage_used) || 0,
+          points_spent: parseInt(order.points_spent) || 0,
+          credits_spent: parseInt(order.credits_spent) || 0,
+          shipping_fee: parseInt(order.shipping_fee) || 0,
+          payment_method: order.payment_method_name || null,
+          order_place: order.order_place_name || null,
+          order_status: order.order_status || 'confirmed',
+          paid: order.paid || 'T'
+        },
+        // 구매 상품 목록
+        order_items: orderItems
       },
       // 구매 직전 경로 (광고 클릭 후)
       purchase_journey: {
