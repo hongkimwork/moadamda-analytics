@@ -501,22 +501,22 @@ router.get('/daily', async (req, res) => {
     endDate.setHours(23, 59, 59, 999);
 
     // 1. Daily visitors (with device filter)
-    // FIX (2025-12-03): KST 기준으로 일별 집계 (UTC 저장 → KST 변환)
+    // NOTE: DB의 timestamp는 KST 값으로 저장됨 - 타임존 변환 불필요
     const dailyVisitorsQuery = device && device !== 'all'
       ? `SELECT 
-           DATE(p.timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul') as date,
+           DATE(p.timestamp) as date,
            COUNT(DISTINCT p.visitor_id) as visitors
          FROM pageviews p
          JOIN visitors v ON p.visitor_id = v.visitor_id
          WHERE p.timestamp >= $1 AND p.timestamp <= $2 AND v.device_type = $3
-         GROUP BY DATE(p.timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')
+         GROUP BY DATE(p.timestamp)
          ORDER BY date`
       : `SELECT 
-           DATE(timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul') as date,
+           DATE(timestamp) as date,
            COUNT(DISTINCT visitor_id) as visitors
          FROM pageviews
          WHERE timestamp >= $1 AND timestamp <= $2
-         GROUP BY DATE(timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')
+         GROUP BY DATE(timestamp)
          ORDER BY date`;
     
     const dailyParams = device && device !== 'all' 
@@ -526,47 +526,47 @@ router.get('/daily', async (req, res) => {
     const dailyVisitorsResult = await db.query(dailyVisitorsQuery, dailyParams);
 
     // 2. Daily pageviews (with device filter)
-    // FIX (2025-12-03): KST 기준으로 일별 집계
+    // NOTE: DB의 timestamp는 KST 값으로 저장됨 - 타임존 변환 불필요
     const dailyPageviewsQuery = device && device !== 'all'
       ? `SELECT 
-           DATE(p.timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul') as date,
+           DATE(p.timestamp) as date,
            COUNT(*) as pageviews
          FROM pageviews p
          JOIN visitors v ON p.visitor_id = v.visitor_id
          WHERE p.timestamp >= $1 AND p.timestamp <= $2 AND v.device_type = $3
-         GROUP BY DATE(p.timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')
+         GROUP BY DATE(p.timestamp)
          ORDER BY date`
       : `SELECT 
-           DATE(timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul') as date,
+           DATE(timestamp) as date,
            COUNT(*) as pageviews
          FROM pageviews
          WHERE timestamp >= $1 AND timestamp <= $2
-         GROUP BY DATE(timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')
+         GROUP BY DATE(timestamp)
          ORDER BY date`;
     
     const dailyPageviewsResult = await db.query(dailyPageviewsQuery, dailyParams);
 
     // 3. Daily revenue and orders (with device filter)
-    // FIX (2025-12-03): KST 기준으로 일별 집계
+    // NOTE: DB의 timestamp는 KST 값으로 저장됨 - 타임존 변환 불필요
     const dailyRevenueQuery = device && device !== 'all'
       ? `SELECT 
-           DATE(c.timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul') as date,
+           DATE(c.timestamp) as date,
            COALESCE(SUM(c.total_amount), 0) as total_revenue,
            COALESCE(SUM(CASE WHEN c.final_payment > 0 THEN c.final_payment ELSE c.total_amount END), 0) as final_revenue,
            COUNT(*) as orders
          FROM conversions c
          JOIN visitors v ON c.visitor_id = v.visitor_id
          WHERE c.timestamp >= $1 AND c.timestamp <= $2 AND v.device_type = $3
-         GROUP BY DATE(c.timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')
+         GROUP BY DATE(c.timestamp)
          ORDER BY date`
       : `SELECT 
-           DATE(timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul') as date,
+           DATE(timestamp) as date,
            COALESCE(SUM(total_amount), 0) as total_revenue,
            COALESCE(SUM(CASE WHEN final_payment > 0 THEN final_payment ELSE total_amount END), 0) as final_revenue,
            COUNT(*) as orders
          FROM conversions
          WHERE timestamp >= $1 AND timestamp <= $2
-         GROUP BY DATE(timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')
+         GROUP BY DATE(timestamp)
          ORDER BY date`;
     
     const dailyRevenueResult = await db.query(dailyRevenueQuery, dailyParams);
@@ -1230,11 +1230,12 @@ router.get('/orders', async (req, res) => {
     queryParams.push(parseInt(limit), parseInt(offset));
 
     // Main query: Get orders with all necessary info
-    // timestamp를 KST(+9시간)로 변환하여 반환 (서버 타임존 무관하게 일관된 시간 표시)
+    // NOTE: DB의 timestamp 컬럼은 KST 값으로 저장됨 (timestamp without time zone + TZ=Asia/Seoul)
+    // 따라서 타임존 변환 없이 직접 날짜 비교 수행
     const ordersQuery = `
       SELECT 
         c.order_id,
-        TO_CHAR(c.timestamp + INTERVAL '9 hours', 'YYYY-MM-DD HH24:MI:SS') as timestamp,
+        TO_CHAR(c.timestamp, 'YYYY-MM-DD HH24:MI:SS') as timestamp,
         c.timestamp as raw_timestamp,
         c.final_payment,
         c.total_amount,
@@ -1290,8 +1291,8 @@ router.get('/orders', async (req, res) => {
       FROM conversions c
       LEFT JOIN sessions s ON c.session_id = s.session_id
       LEFT JOIN visitors v ON c.visitor_id = v.visitor_id
-      WHERE c.timestamp >= ($1::date - INTERVAL '9 hours')
-        AND c.timestamp < ($2::date + INTERVAL '1 day' - INTERVAL '9 hours')
+      WHERE c.timestamp >= $1::date
+        AND c.timestamp < ($2::date + INTERVAL '1 day')
         AND c.paid = 'T'
         AND c.order_id IS NOT NULL
         ${amountFilter}
@@ -1333,12 +1334,13 @@ router.get('/orders', async (req, res) => {
       countAmountFilter = `AND (c.final_payment > 0 OR c.total_amount > 0)`;
     }
 
+    // NOTE: DB의 timestamp 컬럼은 KST 값으로 저장됨
     const countQuery = `
       SELECT COUNT(*) as total
       FROM conversions c
       LEFT JOIN visitors v ON c.visitor_id = v.visitor_id
-      WHERE c.timestamp >= ($1::date - INTERVAL '9 hours')
-        AND c.timestamp < ($2::date + INTERVAL '1 day' - INTERVAL '9 hours')
+      WHERE c.timestamp >= $1::date
+        AND c.timestamp < ($2::date + INTERVAL '1 day')
         AND c.paid = 'T'
         AND c.order_id IS NOT NULL
         ${countAmountFilter}
