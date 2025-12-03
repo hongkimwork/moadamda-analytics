@@ -733,10 +733,11 @@ router.post('/creative-performance/analysis', async (req, res) => {
     }
 
     // 3. 일별 추이 데이터 조회 (UV, 전환수, 매출)
+    // FIX (2025-12-03): KST 기준으로 일별 집계 (UTC 저장 → KST 변환)
     const dailyTrendQuery = `
       WITH daily_uv AS (
         SELECT 
-          DATE(us.entry_timestamp) as date,
+          DATE(us.entry_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul') as date,
           COUNT(DISTINCT us.visitor_id) as uv
         FROM utm_sessions us
         WHERE us.utm_params->>'utm_content' = $1
@@ -745,11 +746,11 @@ router.post('/creative-performance/analysis', async (req, res) => {
           AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
           AND us.entry_timestamp >= $5
           AND us.entry_timestamp <= $6
-        GROUP BY DATE(us.entry_timestamp)
+        GROUP BY DATE(us.entry_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')
       ),
       daily_orders AS (
         SELECT 
-          DATE(c.timestamp) as date,
+          DATE(c.timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul') as date,
           COUNT(DISTINCT c.order_id) as orders,
           SUM(c.final_payment) as revenue
         FROM conversions c
@@ -759,7 +760,7 @@ router.post('/creative-performance/analysis', async (req, res) => {
           AND c.final_payment > 0
           AND c.timestamp >= $5
           AND c.timestamp <= $6
-        GROUP BY DATE(c.timestamp)
+        GROUP BY DATE(c.timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')
       )
       SELECT 
         COALESCE(u.date, o.date) as date,
@@ -1743,10 +1744,11 @@ router.post('/creative-performance/compare', async (req, res) => {
       });
 
       // 2-6. 일별 추이 조회
+      // FIX (2025-12-03): KST 기준으로 일별 집계
       const dailyQuery = `
         WITH daily_uv AS (
           SELECT 
-            DATE(us.entry_timestamp) as date,
+            DATE(us.entry_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul') as date,
             COUNT(DISTINCT us.visitor_id) as uv
           FROM utm_sessions us
           WHERE us.utm_params->>'utm_content' = $1
@@ -1755,11 +1757,11 @@ router.post('/creative-performance/compare', async (req, res) => {
             AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
             AND us.entry_timestamp >= $5
             AND us.entry_timestamp <= $6
-          GROUP BY DATE(us.entry_timestamp)
+          GROUP BY DATE(us.entry_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')
         ),
         daily_conv AS (
           SELECT 
-            DATE(c.timestamp) as date,
+            DATE(c.timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul') as date,
             COUNT(DISTINCT c.order_id) as conversion_count,
             SUM(c.final_payment) as revenue
           FROM conversions c
@@ -1769,7 +1771,7 @@ router.post('/creative-performance/compare', async (req, res) => {
             AND c.final_payment > 0
             AND c.timestamp >= $5
             AND c.timestamp <= $6
-          GROUP BY DATE(c.timestamp)
+          GROUP BY DATE(c.timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')
         )
         SELECT 
           COALESCE(u.date, c.date) as date,

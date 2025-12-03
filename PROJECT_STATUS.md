@@ -17,6 +17,7 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-12-03 | 시간대 버그 전체 수정 | stats.js, range.js, creative-performance.js |
 | 2025-12-03 | 트래커v047 인앱브라우저 개선 | tracker-v047.js, track.js |
 | 2025-12-03 | 긴 여정 좌측 잘림 현상 수정 | OrderDetailPage.jsx |
 | 2025-12-01 | 광고클릭 오분류 근본 해결 | track.js, journeyCalculations.js |

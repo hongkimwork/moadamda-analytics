@@ -501,21 +501,22 @@ router.get('/daily', async (req, res) => {
     endDate.setHours(23, 59, 59, 999);
 
     // 1. Daily visitors (with device filter)
+    // FIX (2025-12-03): KST 기준으로 일별 집계 (UTC 저장 → KST 변환)
     const dailyVisitorsQuery = device && device !== 'all'
       ? `SELECT 
-           DATE(p.timestamp) as date,
+           DATE(p.timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul') as date,
            COUNT(DISTINCT p.visitor_id) as visitors
          FROM pageviews p
          JOIN visitors v ON p.visitor_id = v.visitor_id
          WHERE p.timestamp >= $1 AND p.timestamp <= $2 AND v.device_type = $3
-         GROUP BY DATE(p.timestamp)
+         GROUP BY DATE(p.timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')
          ORDER BY date`
       : `SELECT 
-           DATE(timestamp) as date,
+           DATE(timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul') as date,
            COUNT(DISTINCT visitor_id) as visitors
          FROM pageviews
          WHERE timestamp >= $1 AND timestamp <= $2
-         GROUP BY DATE(timestamp)
+         GROUP BY DATE(timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')
          ORDER BY date`;
     
     const dailyParams = device && device !== 'all' 
@@ -525,45 +526,47 @@ router.get('/daily', async (req, res) => {
     const dailyVisitorsResult = await db.query(dailyVisitorsQuery, dailyParams);
 
     // 2. Daily pageviews (with device filter)
+    // FIX (2025-12-03): KST 기준으로 일별 집계
     const dailyPageviewsQuery = device && device !== 'all'
       ? `SELECT 
-           DATE(p.timestamp) as date,
+           DATE(p.timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul') as date,
            COUNT(*) as pageviews
          FROM pageviews p
          JOIN visitors v ON p.visitor_id = v.visitor_id
          WHERE p.timestamp >= $1 AND p.timestamp <= $2 AND v.device_type = $3
-         GROUP BY DATE(p.timestamp)
+         GROUP BY DATE(p.timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')
          ORDER BY date`
       : `SELECT 
-           DATE(timestamp) as date,
+           DATE(timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul') as date,
            COUNT(*) as pageviews
          FROM pageviews
          WHERE timestamp >= $1 AND timestamp <= $2
-         GROUP BY DATE(timestamp)
+         GROUP BY DATE(timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')
          ORDER BY date`;
     
     const dailyPageviewsResult = await db.query(dailyPageviewsQuery, dailyParams);
 
     // 3. Daily revenue and orders (with device filter)
+    // FIX (2025-12-03): KST 기준으로 일별 집계
     const dailyRevenueQuery = device && device !== 'all'
       ? `SELECT 
-           DATE(c.timestamp) as date,
+           DATE(c.timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul') as date,
            COALESCE(SUM(c.total_amount), 0) as total_revenue,
            COALESCE(SUM(CASE WHEN c.final_payment > 0 THEN c.final_payment ELSE c.total_amount END), 0) as final_revenue,
            COUNT(*) as orders
          FROM conversions c
          JOIN visitors v ON c.visitor_id = v.visitor_id
          WHERE c.timestamp >= $1 AND c.timestamp <= $2 AND v.device_type = $3
-         GROUP BY DATE(c.timestamp)
+         GROUP BY DATE(c.timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')
          ORDER BY date`
       : `SELECT 
-           DATE(timestamp) as date,
+           DATE(timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul') as date,
            COALESCE(SUM(total_amount), 0) as total_revenue,
            COALESCE(SUM(CASE WHEN final_payment > 0 THEN final_payment ELSE total_amount END), 0) as final_revenue,
            COUNT(*) as orders
          FROM conversions
          WHERE timestamp >= $1 AND timestamp <= $2
-         GROUP BY DATE(timestamp)
+         GROUP BY DATE(timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')
          ORDER BY date`;
     
     const dailyRevenueResult = await db.query(dailyRevenueQuery, dailyParams);
@@ -1461,8 +1464,9 @@ router.get('/order-detail/:orderId', async (req, res) => {
 
     // 2-1. 구매 당일 전체 경로 (구매 당일의 모든 페이지뷰)
     // UTM 기준 제거 - 직접 방문 포함 모든 페이지 이동 표시
-    // FIX: 타임존 문제 해결 - DB timestamp(KST)와 JavaScript timestamp(UTC) 불일치 수정
-    // DB에 저장된 날짜 기준으로 비교하기 위해 AT TIME ZONE 사용
+    // FIX (2025-12-03): 타임존 불일치 버그 수정
+    // 문제: p.timestamp는 UTC로 저장, order.timestamp를 KST로 변환 시 날짜 불일치 발생
+    // 해결: 양쪽 모두 KST로 변환하여 비교
     const purchaseJourneyQuery = `
       WITH purchase_journey_pages AS (
         SELECT
@@ -1472,8 +1476,8 @@ router.get('/order-detail/:orderId', async (req, res) => {
           LEAD(p.timestamp) OVER (ORDER BY p.timestamp) as next_timestamp
         FROM pageviews p
         WHERE p.visitor_id = $1
-          AND DATE(p.timestamp) = DATE(($2::timestamptz AT TIME ZONE 'Asia/Seoul'))
-          AND p.timestamp <= ($2::timestamptz AT TIME ZONE 'Asia/Seoul')
+          AND DATE(p.timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul') = DATE($2 AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')
+          AND p.timestamp <= $2
         ORDER BY p.timestamp ASC
       )
       SELECT
@@ -1494,18 +1498,20 @@ router.get('/order-detail/:orderId', async (req, res) => {
 
     // 2-2. 과거 방문 이력 (구매 당일 이전의 모든 방문)
     // UTM 기준 제거 - 구매 당일 이전의 모든 페이지 이동 표시
-    // FIX: 타임존 문제 해결 - DB timestamp(KST)와 JavaScript timestamp(UTC) 불일치 수정
+    // FIX (2025-12-03): 타임존 불일치 버그 수정
+    // 문제: p.timestamp는 UTC로 저장, order.timestamp를 KST로 변환 시 날짜 불일치 발생
+    // 해결: 양쪽 모두 KST로 변환하여 비교, visit_date도 KST 기준으로 반환
     const previousVisitsQuery = `
       WITH previous_pageviews AS (
         SELECT
           p.page_url,
           p.page_title,
           p.timestamp,
-          DATE(p.timestamp) as visit_date,
-          LEAD(p.timestamp) OVER (PARTITION BY DATE(p.timestamp) ORDER BY p.timestamp) as next_timestamp
+          DATE(p.timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul') as visit_date,
+          LEAD(p.timestamp) OVER (PARTITION BY DATE(p.timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul') ORDER BY p.timestamp) as next_timestamp
         FROM pageviews p
         WHERE p.visitor_id = $1
-          AND DATE(p.timestamp) < DATE(($2::timestamptz AT TIME ZONE 'Asia/Seoul'))
+          AND DATE(p.timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul') < DATE($2 AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')
       )
       SELECT
         visit_date,
