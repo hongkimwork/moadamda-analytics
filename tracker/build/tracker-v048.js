@@ -1,5 +1,5 @@
 /**
- * Moadamda Analytics Tracker v20.3 (v047)
+ * Moadamda Analytics Tracker v20.4 (v047)
  * Updated: 2025-12-03
  * 
  * DEPLOYMENT INFO:
@@ -8,12 +8,18 @@
  * - Dashboard: https://dashboard.marketingzon.com
  * - SSL: Let's Encrypt (Trusted Certificate)
  * 
- * LATEST UPDATE (v047):
+ * LATEST UPDATE (v20.4):
+ * - ADDED: 인앱 브라우저 감지 (FB/IG/카카오/네이버/라인)
+ * - ADDED: 인앱 브라우저 강화 전송 (sendBeacon + fetch 동시)
+ * - ADDED: sendBeacon 실패 시 fetch fallback
+ * - ADDED: 실패 이벤트 sessionStorage 저장 및 재시도
+ * - ADDED: 쿠폰 선택 페이지 추적 (coupon_select)
+ * 
+ * PREVIOUS (v20.3):
  * - ADDED: visibilitychange 이벤트 - 앱 전환 시 데이터 전송 보장
  * - ADDED: checkout_attempt 이벤트 - 결제 시도 추적 (주문서 페이지)
  * - ADDED: heartbeat 기능 - 30초마다 체류시간 업데이트
  * - ADDED: 에러 로깅 - 트래커 오류 감지 및 보고
- * - FIX: 인앱 브라우저(Meta 등)에서 데이터 유실 개선
  * 
  * PREVIOUS (v046-fix):
  * - FIX: 로그인 페이지 리다이렉트 시 UTM 파라미터 유실 문제 해결
@@ -26,9 +32,12 @@
  * - Session end tracking for UTM session duration
  * - Dynamic UTM parameter collection (all utm_* params)
  * - UTM persistence across redirects (login page, etc.)
- * - Checkout attempt tracking (NEW)
- * - Heartbeat for accurate session duration (NEW)
- * - Error logging (NEW)
+ * - Checkout attempt tracking
+ * - Heartbeat for accurate session duration
+ * - Error logging
+ * - In-app browser detection & enhanced sending (NEW)
+ * - Failed event retry mechanism (NEW)
+ * - Coupon select page tracking (NEW)
  */
 (function() {
   'use strict';
@@ -54,10 +63,20 @@
   let eventQueue = [];
   let visitorId = getOrCreateVisitorId();
   let sessionId = getOrCreateSessionId();
-  let heartbeatTimer = null;  // NEW: heartbeat timer reference
-  let sessionEndSent = false;  // NEW: prevent duplicate session_end
+  let heartbeatTimer = null;  // heartbeat timer reference
+  let sessionEndSent = false;  // prevent duplicate session_end
+  let retryTimer = null;  // NEW: retry timer for failed events
   
-  console.log('[MA] Initializing Moadamda Analytics v20.3 (v047)...');
+  // NEW: Detect in-app browser (Facebook, Instagram, KakaoTalk, Naver, Line, etc.)
+  function isInAppBrowser() {
+    const ua = navigator.userAgent || '';
+    return /FBAN|FBAV|Instagram|Line|KAKAOTALK|NAVER|SamsungBrowser.*CrossApp/i.test(ua);
+  }
+  
+  const IS_IN_APP = isInAppBrowser();
+  
+  console.log('[MA] Initializing Moadamda Analytics v20.4 (v047)...');
+  console.log('[MA] In-app browser detected:', IS_IN_APP);
   console.log('[MA] API URL:', CONFIG.apiUrl);
   console.log('[MA] Visitor ID:', visitorId);
   console.log('[MA] Session ID:', sessionId);
@@ -161,7 +180,76 @@
     }
   }
   
+  // NEW: Failed events storage key
+  const FAILED_EVENTS_KEY = '_ma_failed_events';
+  
+  // NEW: Save failed event to sessionStorage for retry
+  function saveFailedEvent(event) {
+    try {
+      const failed = JSON.parse(sessionStorage.getItem(FAILED_EVENTS_KEY) || '[]');
+      // Avoid duplicates and limit to 10 events
+      const exists = failed.some(e => e.type === event.type && e.timestamp === event.timestamp);
+      if (!exists) {
+        failed.push(event);
+        // Keep only last 10 events to prevent storage overflow
+        const trimmed = failed.slice(-10);
+        sessionStorage.setItem(FAILED_EVENTS_KEY, JSON.stringify(trimmed));
+        console.log('[MA] Failed event saved for retry:', event.type);
+      }
+    } catch (e) {
+      // sessionStorage not available
+    }
+  }
+  
+  // NEW: Get failed events from sessionStorage
+  function getFailedEvents() {
+    try {
+      return JSON.parse(sessionStorage.getItem(FAILED_EVENTS_KEY) || '[]');
+    } catch (e) {
+      return [];
+    }
+  }
+  
+  // NEW: Clear failed events after successful retry
+  function clearFailedEvents() {
+    try {
+      sessionStorage.removeItem(FAILED_EVENTS_KEY);
+    } catch (e) {}
+  }
+  
+  // NEW: Retry failed events
+  function retryFailedEvents() {
+    const failed = getFailedEvents();
+    if (failed.length === 0) return;
+    
+    console.log('[MA] Retrying', failed.length, 'failed events...');
+    
+    const payload = {
+      site_id: CONFIG.siteId,
+      events: failed
+    };
+    
+    fetch(CONFIG.apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      keepalive: true,
+      mode: 'cors',
+      credentials: 'omit'
+    })
+    .then(response => {
+      if (response.ok) {
+        clearFailedEvents();
+        console.log('[MA] Failed events retry successful');
+      }
+    })
+    .catch(() => {
+      console.log('[MA] Failed events retry failed, will try again later');
+    });
+  }
+  
   // Send event immediately (for critical events like pageview, cart, purchase)
+  // Enhanced for in-app browsers: uses both sendBeacon AND fetch for reliability
   function sendImmediately(event) {
     console.log('[MA] Sending event immediately:', event.type);
     const payload = {
@@ -169,37 +257,91 @@
       events: [event]
     };
     
-    // Use fetch instead of sendBeacon to avoid CORS issues
+    // In-app browser: use BOTH sendBeacon and fetch for maximum reliability
+    if (IS_IN_APP) {
+      console.log('[MA] In-app browser detected, using dual send strategy');
+      
+      // Try sendBeacon first (works better during page transitions)
+      if (navigator.sendBeacon) {
+        const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+        navigator.sendBeacon(CONFIG.apiUrl, blob);
+      }
+      
+      // Also send via fetch as backup
+      fetch(CONFIG.apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        keepalive: true,
+        mode: 'cors',
+        credentials: 'omit'
+      })
+      .then(response => {
+        if (response.ok) {
+          console.log('[MA] Event sent successfully (in-app):', event.type);
+        }
+      })
+      .catch(err => {
+        console.error('[MA] In-app send failed:', err);
+        saveFailedEvent(event);
+      });
+      
+      return;
+    }
+    
+    // Normal browser: use fetch with fallback
     fetch(CONFIG.apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
       keepalive: true,
       mode: 'cors',
-      credentials: 'omit'  // Explicitly omit credentials to avoid CORS issues
+      credentials: 'omit'
     })
     .then(response => {
       if (!response.ok) {
         console.error('[MA] Send failed:', response.status, response.statusText);
+        saveFailedEvent(event);
       } else {
         console.log('[MA] Event sent successfully:', event.type);
       }
     })
-    .catch(err => console.error('[MA] Send failed:', err));
+    .catch(err => {
+      console.error('[MA] Send failed:', err);
+      saveFailedEvent(event);
+    });
   }
   
-  // Send event via sendBeacon (for page unload scenarios)
+  // Send event via sendBeacon with fetch fallback (for page unload scenarios)
   function sendViaBeacon(event) {
     const payload = {
       site_id: CONFIG.siteId,
       events: [event]
     };
     
+    // Try sendBeacon first
     if (navigator.sendBeacon) {
       const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
-      return navigator.sendBeacon(CONFIG.apiUrl, blob);
+      const sent = navigator.sendBeacon(CONFIG.apiUrl, blob);
+      if (sent) return true;
     }
-    return false;
+    
+    // Fallback to fetch with keepalive (works during page unload in most browsers)
+    try {
+      fetch(CONFIG.apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        keepalive: true,
+        mode: 'cors',
+        credentials: 'omit'
+      });
+      return true;
+    } catch (e) {
+      // Save for retry on next page load
+      saveFailedEvent(event);
+      return false;
+    }
   }
   
   // Track pageview
@@ -259,7 +401,7 @@
     console.log('[MA] Pageview tracked and sent immediately');
   }
   
-  // NEW: Track checkout attempt (when user enters order form page)
+  // Track checkout attempt (when user enters order form page)
   function trackCheckoutAttempt() {
     const checkoutEvent = {
       type: 'checkout_attempt',
@@ -272,6 +414,21 @@
     
     sendImmediately(checkoutEvent);
     console.log('[MA] Checkout attempt tracked');
+  }
+  
+  // NEW: Track coupon select page (when user enters coupon selection page)
+  function trackCouponSelect() {
+    const couponEvent = {
+      type: 'coupon_select',
+      visitor_id: visitorId,
+      session_id: sessionId,
+      timestamp: new Date().toISOString(),
+      url: window.location.href,
+      referrer: document.referrer
+    };
+    
+    sendImmediately(couponEvent);
+    console.log('[MA] Coupon select tracked');
   }
   
   // NEW: Send heartbeat for session duration tracking
@@ -602,6 +759,9 @@
     // Setup error logging first
     setupErrorLogging();
     
+    // NEW: Retry any failed events from previous page loads
+    retryFailedEvents();
+    
     // Track initial pageview
     trackPageView();
     
@@ -619,9 +779,14 @@
       trackPurchase();
     }
     
-    // NEW: Detect checkout attempt (order form page)
+    // Detect checkout attempt (order form page)
     if (url.includes('/order/orderform.html') || pathname.includes('/order/orderform')) {
       trackCheckoutAttempt();
+    }
+    
+    // NEW: Detect coupon select page
+    if (url.includes('/coupon/coupon_select.html') || pathname.includes('/coupon/coupon_select')) {
+      trackCouponSelect();
     }
     
     // Send session end event when user leaves page
@@ -632,7 +797,7 @@
       sendSessionEnd();
     });
     
-    // NEW: Handle visibility change (app switching, tab switching)
+    // Handle visibility change (app switching, tab switching)
     document.addEventListener('visibilitychange', function() {
       if (document.visibilityState === 'hidden') {
         // Page is hidden (user switched to another app/tab)
@@ -644,11 +809,19 @@
         console.log('[MA] Page visible, resuming tracking');
         sessionEndSent = false;  // Reset flag to allow new session_end
         startHeartbeat();
+        // Also retry failed events when page becomes visible
+        retryFailedEvents();
       }
     });
     
+    // NEW: Set up periodic retry for failed events (every 30 seconds)
+    retryTimer = setInterval(retryFailedEvents, 30000);
+    
     console.log('[MA] Session end tracking initialized');
     console.log('[MA] Visibility change tracking initialized');
+    if (IS_IN_APP) {
+      console.log('[MA] In-app browser mode: enhanced sending enabled');
+    }
   }
   
   // Start tracking when DOM is ready

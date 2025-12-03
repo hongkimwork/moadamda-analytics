@@ -67,17 +67,21 @@ async function processEvent(event, clientIp) {
     case 'session_end':
       await handleSessionEnd(event);
       break;
-    // NEW v047: checkout_attempt - 결제 시도 이벤트
+    // v047: checkout_attempt - 결제 시도 이벤트
     case 'checkout_attempt':
       await handleCheckoutAttempt(event, clientIp);
       break;
-    // NEW v047: heartbeat - 체류시간 주기적 업데이트
+    // v047: heartbeat - 체류시간 주기적 업데이트
     case 'heartbeat':
       await handleHeartbeat(event);
       break;
-    // NEW v047: tracker_error - 트래커 에러 로깅
+    // v047: tracker_error - 트래커 에러 로깅
     case 'tracker_error':
       handleTrackerError(event);
+      break;
+    // NEW v20.4: coupon_select - 쿠폰 선택 페이지 이벤트
+    case 'coupon_select':
+      await handleCouponSelect(event, clientIp);
       break;
     default:
       console.warn('Unknown event type:', type);
@@ -565,7 +569,7 @@ async function handleHeartbeat(event) {
   }
 }
 
-// NEW v047: Handle tracker error logging
+// v047: Handle tracker error logging
 function handleTrackerError(event) {
   const { visitor_id, session_id, timestamp, message, filename, lineno, colno } = event;
   
@@ -574,6 +578,52 @@ function handleTrackerError(event) {
   
   // Note: We don't store tracker errors in DB to avoid noise
   // If needed, can be stored in a separate error_logs table
+}
+
+// NEW v20.4: Handle coupon select event
+async function handleCouponSelect(event, clientIp) {
+  const { visitor_id, session_id, timestamp, url, referrer } = event;
+  const eventTime = new Date(timestamp);
+
+  try {
+    // 1. Ensure visitor exists
+    const visitorCheck = await db.query(
+      'SELECT visitor_id FROM visitors WHERE visitor_id = $1',
+      [visitor_id]
+    );
+
+    if (visitorCheck.rows.length === 0) {
+      await db.query(`
+        INSERT INTO visitors (visitor_id, first_visit, last_visit, visit_count, ip_address, last_ip)
+        VALUES ($1, $2, $3, 1, $4, $5)
+        ON CONFLICT (visitor_id) DO NOTHING
+      `, [visitor_id, eventTime, eventTime, clientIp || 'unknown', clientIp || 'unknown']);
+    }
+
+    // 2. Ensure session exists
+    const sessionCheck = await db.query(
+      'SELECT session_id FROM sessions WHERE session_id = $1',
+      [session_id]
+    );
+
+    if (sessionCheck.rows.length === 0) {
+      await db.query(`
+        INSERT INTO sessions (session_id, visitor_id, start_time, end_time, entry_url, pageview_count, ip_address, duration_seconds)
+        VALUES ($1, $2, $3, $4, $5, 0, $6, 0)
+        ON CONFLICT (session_id) DO NOTHING
+      `, [session_id, visitor_id, eventTime, eventTime, url || '', clientIp || 'unknown']);
+    }
+
+    // 3. Insert coupon_select event into events table
+    await db.query(`
+      INSERT INTO events (session_id, visitor_id, event_type, timestamp, metadata)
+      VALUES ($1, $2, 'coupon_select', $3, $4)
+    `, [session_id, visitor_id, eventTime, JSON.stringify({ url, referrer })]);
+
+    console.log(`[Track] Coupon select: visitor=${visitor_id.substring(0, 8)}...`);
+  } catch (error) {
+    console.error('Error handling coupon select:', error);
+  }
 }
 
 module.exports = router;

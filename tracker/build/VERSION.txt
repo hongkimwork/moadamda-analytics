@@ -1,35 +1,35 @@
-v20.3 (v047)
+v20.4 (v047)
 Updated: 2025-12-03
 
-🚀 MAJOR UPDATE: 인앱 브라우저 추적 개선 + 체류시간 정밀화
+🚀 MAJOR UPDATE: 인앱 브라우저 강화 전송 + 실패 이벤트 재시도
 
-NEW IN v20.3 (v047):
-✅ visibilitychange 이벤트 - 앱 전환 시 데이터 전송 보장
-✅ checkout_attempt 이벤트 - 결제 시도(주문서 페이지 진입) 추적
-✅ heartbeat 기능 - 30초마다 체류시간 업데이트
-✅ 에러 로깅 - 트래커 오류 감지 및 보고
-✅ 인앱 브라우저(Meta/Instagram)에서 데이터 유실 개선
+NEW IN v20.4 (v047):
+✅ 인앱 브라우저 감지 (FB/IG/카카오/네이버/라인)
+✅ 인앱 브라우저 강화 전송 (sendBeacon + fetch 동시 사용)
+✅ sendBeacon 실패 시 fetch fallback
+✅ 실패 이벤트 sessionStorage 저장 및 재시도 (30초 간격)
+✅ 쿠폰 선택 페이지 추적 (coupon_select)
 
 WHY THIS UPDATE:
-- 분석 결과 28%의 주문에서 경로 데이터 누락 발견
-- 주요 원인: Meta 광고 인앱 브라우저에서 결제 앱 전환 시 추적 끊김
-- 해결: visibilitychange로 앱 전환 감지, heartbeat로 체류시간 지속 추적
+- 배포 DB 검증 결과 21.5%~50% 데이터 누락 발견
+- 주요 원인: 인앱 브라우저에서 페이지 전환 시 데이터 유실
+- 해결: 이중 전송 전략 + 실패 시 재시도 메커니즘
 
 BACKEND CHANGES (track.js):
-- checkout_attempt 이벤트 핸들러 추가
-- heartbeat 이벤트 핸들러 추가 (sessions 테이블 duration_seconds 업데이트)
-- tracker_error 이벤트 핸들러 추가 (로그 출력)
+- coupon_select 이벤트 핸들러 추가
+
+Previous v20.3 features maintained:
+- visibilitychange 이벤트
+- checkout_attempt 이벤트
+- heartbeat 기능 (30초 간격)
+- 에러 로깅
+- Dynamic UTM parameter collection
+- Session end tracking
+- DOM parsing fallback for order data
+- UTM persistence via sessionStorage
 
 DEPLOYMENT INFO:
 - Backend: https://moadamda-analytics.co.kr/api/track
 - Dashboard: https://marketingzon.com
 - Server: Naver Cloud Platform
 - SSL: Auto-renewal (Let's Encrypt)
-
-Previous features maintained:
-- Dynamic UTM parameter collection
-- Session end tracking
-- DOM parsing fallback for order data
-- Product tracking with multiple fallback sources
-- fullyDecode() for double/multiple URL encoding
-- UTM persistence via sessionStorage

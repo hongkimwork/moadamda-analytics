@@ -17,6 +17,7 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-12-03 | 트래커 인앱 강화전송+재시도 | tracker-v047.js, track.js |
 | 2025-12-03 | 시간대 버그 전체 수정 | stats.js, range.js, creative-performance.js |
 | 2025-12-03 | 트래커v047 인앱브라우저 개선 | tracker-v047.js, track.js |
 | 2025-12-03 | 긴 여정 좌측 잘림 현상 수정 | OrderDetailPage.jsx |
@@ -31,8 +32,6 @@
 | 2025-11-28 | 배지 글자색 선택 기능 추가 | MappingModal.jsx |
 | 2025-11-28 | 소재 비교 분석 기능 추가 | CreativeCompareModal.jsx |
 | 2025-11-28 | 페이지 분석 기능 추가 | CreativeLandingModal.jsx |
-| 2025-11-28 | 고객 여정 분석 기능 추가 | CreativeJourneyModal.jsx |
-| 2025-11-28 | 상세분석 드롭다운 버튼으로 변경 | CreativePerformance.jsx |
 
 ---
 
