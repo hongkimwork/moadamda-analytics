@@ -267,6 +267,14 @@ async function handleEcommerceEvent(event, clientIp) {
     let actualShippingFee = shipping_fee || 0;
     let actualProductCount = quantity || 1;
     let actualProductName = product_name || null;
+    // 새 필드들
+    let actualPointsSpent = 0;
+    let actualCreditsSpent = 0;
+    let actualOrderPlaceName = null;
+    let actualPaymentMethodName = null;
+    let actualCafe24Status = null;
+    let actualCanceled = 'F';
+    let actualOrderStatus = 'confirmed';
 
     if (cafe24) {
       try {
@@ -279,14 +287,39 @@ async function handleEcommerceEvent(event, clientIp) {
           // Use Cafe24's accurate values
           actualPaid = cafe24Order.paid || 'F';
           actualFinalPayment = Math.round(parseFloat(cafe24Order.actual_order_amount?.payment_amount || 0));
-          actualTotalAmount = Math.round(parseFloat(cafe24Order.actual_order_amount?.total_order_amount || cafe24Order.order_amount || 0));
+          // total_amount = order_price_amount + shipping_fee (상품가 + 배송비)
+          const orderPriceAmount = Math.round(parseFloat(cafe24Order.actual_order_amount?.order_price_amount || 0));
+          const shippingFeeAmount = Math.round(parseFloat(cafe24Order.actual_order_amount?.shipping_fee || 0));
+          actualTotalAmount = orderPriceAmount + shippingFeeAmount;
           actualDiscountAmount = Math.round(parseFloat(cafe24Order.actual_order_amount?.total_discount_amount || 0));
           actualMileageUsed = Math.round(parseFloat(cafe24Order.actual_order_amount?.mileage_spent_amount || 0));
           actualShippingFee = Math.round(parseFloat(cafe24Order.actual_order_amount?.shipping_fee || 0));
           actualProductCount = cafe24Order.items?.length || 1;
           actualProductName = cafe24Order.items?.[0]?.product_name || product_name || null;
           
-          console.log(`[Track] Cafe24 API verified order ${order_id}: paid=${actualPaid}, final_payment=${actualFinalPayment}`);
+          // 새 필드들
+          actualPointsSpent = Math.round(parseFloat(cafe24Order.actual_order_amount?.points_spent_amount || 0));
+          actualCreditsSpent = Math.round(parseFloat(cafe24Order.actual_order_amount?.credits_spent_amount || 0));
+          actualOrderPlaceName = cafe24Order.order_place_name || null;
+          actualPaymentMethodName = Array.isArray(cafe24Order.payment_method_name) 
+            ? cafe24Order.payment_method_name.join(', ') 
+            : (cafe24Order.payment_method_name || null);
+          actualCafe24Status = cafe24Order.items?.[0]?.order_status || null;
+          actualCanceled = cafe24Order.canceled || 'F';
+          
+          // order_status 결정
+          if (actualCafe24Status) {
+            if (actualCafe24Status.startsWith('C')) {
+              actualOrderStatus = 'cancelled';
+            } else if (actualCafe24Status.startsWith('R')) {
+              actualOrderStatus = 'refunded';
+            }
+          }
+          if (actualCanceled === 'T') {
+            actualOrderStatus = 'cancelled';
+          }
+          
+          console.log(`[Track] Cafe24 API verified order ${order_id}: paid=${actualPaid}, final_payment=${actualFinalPayment}, points=${actualPointsSpent}`);
         }
       } catch (cafe24Error) {
         // Cafe24 API error - fall back to tracker values but mark as unverified
@@ -313,9 +346,12 @@ async function handleEcommerceEvent(event, clientIp) {
         session_id, visitor_id, order_id, total_amount, 
         product_count, timestamp, discount_amount, 
         mileage_used, shipping_fee, final_payment,
-        utm_source, utm_campaign, paid, product_name, synced_at
+        utm_source, utm_campaign, paid, product_name, synced_at,
+        points_spent, credits_spent, order_place_name, payment_method_name,
+        cafe24_status, canceled, order_status
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW(),
+              $15, $16, $17, $18, $19, $20, $21)
       ON CONFLICT (order_id) DO UPDATE SET
         visitor_id = COALESCE(conversions.visitor_id, EXCLUDED.visitor_id),
         session_id = COALESCE(conversions.session_id, EXCLUDED.session_id),
@@ -328,6 +364,13 @@ async function handleEcommerceEvent(event, clientIp) {
         product_name = COALESCE(EXCLUDED.product_name, conversions.product_name),
         utm_source = COALESCE(EXCLUDED.utm_source, conversions.utm_source),
         utm_campaign = COALESCE(EXCLUDED.utm_campaign, conversions.utm_campaign),
+        points_spent = EXCLUDED.points_spent,
+        credits_spent = EXCLUDED.credits_spent,
+        order_place_name = EXCLUDED.order_place_name,
+        payment_method_name = EXCLUDED.payment_method_name,
+        cafe24_status = EXCLUDED.cafe24_status,
+        canceled = EXCLUDED.canceled,
+        order_status = EXCLUDED.order_status,
         synced_at = NOW()
     `, [
       session_id, visitor_id, order_id, actualTotalAmount,
@@ -339,7 +382,14 @@ async function handleEcommerceEvent(event, clientIp) {
       utm.utm_source || null,
       utm.utm_campaign || null,
       actualPaid,
-      actualProductName
+      actualProductName,
+      actualPointsSpent,
+      actualCreditsSpent,
+      actualOrderPlaceName,
+      actualPaymentMethodName,
+      actualCafe24Status,
+      actualCanceled,
+      actualOrderStatus
     ]);
 
     // Mark session as converted and update duration_seconds

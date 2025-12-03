@@ -388,13 +388,40 @@ async function syncOrdersForRange(startDate, endDate, options = {}) {
     for (const order of cafe24Orders) {
       try {
         // 결제 금액 계산 (Cafe24 API 값 사용)
-        const totalAmount = Math.round(parseFloat(order.actual_order_amount?.total_order_amount || order.order_amount || 0));
+        // total_amount = order_price_amount + shipping_fee (상품가 + 배송비)
+        const orderPriceAmount = Math.round(parseFloat(order.actual_order_amount?.order_price_amount || 0));
+        const shippingFeeAmount = Math.round(parseFloat(order.actual_order_amount?.shipping_fee || 0));
+        const totalAmount = orderPriceAmount + shippingFeeAmount;
         const finalPayment = Math.round(parseFloat(order.actual_order_amount?.payment_amount || 0));
         const discountAmount = Math.round(parseFloat(order.actual_order_amount?.total_discount_amount || 0));
         const mileageUsed = Math.round(parseFloat(order.actual_order_amount?.mileage_spent_amount || 0));
         const shippingFee = Math.round(parseFloat(order.actual_order_amount?.shipping_fee || 0));
         const productName = order.items?.[0]?.product_name || null;
         const paid = order.paid || 'T';
+        
+        // 새 필드: 포인트/적립금/주문경로/결제수단/상태
+        const pointsSpent = Math.round(parseFloat(order.actual_order_amount?.points_spent_amount || 0));
+        const creditsSpent = Math.round(parseFloat(order.actual_order_amount?.credits_spent_amount || 0));
+        const orderPlaceName = order.order_place_name || null;
+        const paymentMethodName = Array.isArray(order.payment_method_name) 
+          ? order.payment_method_name.join(', ') 
+          : (order.payment_method_name || null);
+        const cafe24Status = order.items?.[0]?.order_status || null;
+        const canceled = order.canceled || 'F';
+        
+        // order_status 결정 (Cafe24 상태 코드 기반)
+        // C로 시작 = 취소, R로 시작 = 반품, 그 외 = confirmed
+        let orderStatus = 'confirmed';
+        if (cafe24Status) {
+          if (cafe24Status.startsWith('C')) {
+            orderStatus = 'cancelled';
+          } else if (cafe24Status.startsWith('R')) {
+            orderStatus = 'refunded';
+          }
+        }
+        if (canceled === 'T') {
+          orderStatus = 'cancelled';
+        }
         
         // 기존 주문 여부 확인
         const existingOrder = existingOrderMap.get(order.order_id);
@@ -430,9 +457,12 @@ async function syncOrdersForRange(startDate, endDate, options = {}) {
           `INSERT INTO conversions (
             visitor_id, session_id, order_id, total_amount, final_payment, 
             product_count, timestamp, discount_amount, mileage_used, 
-            shipping_fee, order_status, synced_at, product_name, paid
+            shipping_fee, order_status, synced_at, product_name, paid,
+            points_spent, credits_spent, order_place_name, payment_method_name,
+            cafe24_status, canceled
           ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), $12, $13
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), $12, $13,
+            $14, $15, $16, $17, $18, $19
           )
           ON CONFLICT (order_id) DO UPDATE SET
             paid = EXCLUDED.paid,
@@ -443,6 +473,13 @@ async function syncOrdersForRange(startDate, endDate, options = {}) {
             mileage_used = EXCLUDED.mileage_used,
             shipping_fee = EXCLUDED.shipping_fee,
             product_name = COALESCE(EXCLUDED.product_name, conversions.product_name),
+            points_spent = EXCLUDED.points_spent,
+            credits_spent = EXCLUDED.credits_spent,
+            order_place_name = EXCLUDED.order_place_name,
+            payment_method_name = EXCLUDED.payment_method_name,
+            cafe24_status = EXCLUDED.cafe24_status,
+            canceled = EXCLUDED.canceled,
+            order_status = EXCLUDED.order_status,
             synced_at = NOW()`,
           [
             visitorId,
@@ -455,9 +492,15 @@ async function syncOrdersForRange(startDate, endDate, options = {}) {
             discountAmount,
             mileageUsed,
             shippingFee,
-            'confirmed',
+            orderStatus,
             productName,
-            paid
+            paid,
+            pointsSpent,
+            creditsSpent,
+            orderPlaceName,
+            paymentMethodName,
+            cafe24Status,
+            canceled
           ]
         );
         
@@ -697,7 +740,10 @@ async function updatePendingPayments() {
         // 입금 완료된 경우 (paid='T')
         if (cafe24Order.paid === 'T') {
           const finalPayment = Math.round(parseFloat(cafe24Order.actual_order_amount?.payment_amount || 0));
-          const totalAmount = Math.round(parseFloat(cafe24Order.actual_order_amount?.total_order_amount || cafe24Order.order_amount || 0));
+          // total_amount = order_price_amount + shipping_fee (상품가 + 배송비)
+          const orderPriceAmount = Math.round(parseFloat(cafe24Order.actual_order_amount?.order_price_amount || 0));
+          const shippingFeeAmount = Math.round(parseFloat(cafe24Order.actual_order_amount?.shipping_fee || 0));
+          const totalAmount = orderPriceAmount + shippingFeeAmount;
           
           // DB 업데이트
           await db.query(
@@ -710,7 +756,7 @@ async function updatePendingPayments() {
           );
           
           updatedCount++;
-          console.log(`[Cafe24 Pending] Updated ${order.order_id}: paid=T, final_payment=${finalPayment}`);
+          console.log(`[Cafe24 Pending] Updated ${order.order_id}: paid=T, final_payment=${finalPayment}, total=${totalAmount}`);
         }
         
         // Rate limit 방지

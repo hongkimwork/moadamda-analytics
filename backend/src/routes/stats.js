@@ -1168,7 +1168,8 @@ router.get('/orders', async (req, res) => {
       offset = 0,
       search = '',
       sort_by = 'timestamp',
-      sort_order = 'desc'
+      sort_order = 'desc',
+      include_cancelled = 'false'  // 취소/반품 주문 포함 여부
     } = req.query;
 
     if (!start || !end) {
@@ -1181,6 +1182,7 @@ router.get('/orders', async (req, res) => {
     // Build device filter
     let deviceFilter = '';
     let searchFilter = '';
+    let cancelledFilter = '';
     let queryParams = [start, end];
     let paramIndex = 3;
 
@@ -1201,11 +1203,21 @@ router.get('/orders', async (req, res) => {
       paramIndex++;
     }
 
+    // 취소/반품 주문 필터 및 금액 조건
+    // - 취소 미포함 시: 정상 주문만 + 금액 > 0 조건
+    // - 취소 포함 시: 모든 주문 (취소 주문은 금액이 0일 수 있음)
+    let amountFilter = '';
+    if (include_cancelled !== 'true') {
+      cancelledFilter = `AND (c.canceled = 'F' OR c.canceled IS NULL) AND (c.order_status = 'confirmed' OR c.order_status IS NULL)`;
+      amountFilter = `AND (c.final_payment > 0 OR c.total_amount > 0)`;
+    }
+
     // 정렬 필드 매핑 (SQL injection 방지)
     const sortFieldMap = {
       'order_id': 'c.order_id',
       'timestamp': 'c.timestamp',
       'final_payment': 'c.final_payment',
+      'total_amount': 'c.total_amount',
       'product_name': 'c.product_name',
       'product_count': 'c.product_count',
       'device_type': 'v.device_type',
@@ -1229,6 +1241,12 @@ router.get('/orders', async (req, res) => {
         c.product_count,
         c.visitor_id,
         c.session_id,
+        c.points_spent,
+        c.credits_spent,
+        c.order_place_name,
+        c.payment_method_name,
+        c.order_status,
+        c.canceled,
         s.ip_address,
         v.device_type,
         -- UTM 데이터: utm_sessions 우선, 없으면 visitors 테이블 사용
@@ -1265,7 +1283,7 @@ router.get('/orders', async (req, res) => {
             WHERE c2.visitor_id = c.visitor_id 
               AND c2.timestamp < c.timestamp
               AND c2.paid = 'T'
-              AND c2.final_payment > 0
+              AND (c2.final_payment > 0 OR c2.total_amount > 0)
           ) THEN true
           ELSE false
         END as is_repurchase
@@ -1275,8 +1293,9 @@ router.get('/orders', async (req, res) => {
       WHERE c.timestamp >= ($1::date - INTERVAL '9 hours')
         AND c.timestamp < ($2::date + INTERVAL '1 day' - INTERVAL '9 hours')
         AND c.paid = 'T'
-        AND c.final_payment > 0
         AND c.order_id IS NOT NULL
+        ${amountFilter}
+        ${cancelledFilter}
         ${deviceFilter}
         ${searchFilter}
       ORDER BY ${sortColumn} ${sortDirection}
@@ -1290,6 +1309,7 @@ router.get('/orders', async (req, res) => {
     let countParamIndex = 3;
     let countDeviceFilter = '';
     let countSearchFilter = '';
+    let countCancelledFilter = '';
 
     if (device !== 'all') {
       countDeviceFilter = `AND v.device_type = $${countParamIndex}`;
@@ -1306,6 +1326,13 @@ router.get('/orders', async (req, res) => {
       countParams.push(searchTerm);
     }
 
+    // 취소 필터 및 금액 조건 (카운트용)
+    let countAmountFilter = '';
+    if (include_cancelled !== 'true') {
+      countCancelledFilter = `AND (c.canceled = 'F' OR c.canceled IS NULL) AND (c.order_status = 'confirmed' OR c.order_status IS NULL)`;
+      countAmountFilter = `AND (c.final_payment > 0 OR c.total_amount > 0)`;
+    }
+
     const countQuery = `
       SELECT COUNT(*) as total
       FROM conversions c
@@ -1313,8 +1340,9 @@ router.get('/orders', async (req, res) => {
       WHERE c.timestamp >= ($1::date - INTERVAL '9 hours')
         AND c.timestamp < ($2::date + INTERVAL '1 day' - INTERVAL '9 hours')
         AND c.paid = 'T'
-        AND c.final_payment > 0
         AND c.order_id IS NOT NULL
+        ${countAmountFilter}
+        ${countCancelledFilter}
         ${countDeviceFilter}
         ${countSearchFilter}
     `;
@@ -1335,7 +1363,14 @@ router.get('/orders', async (req, res) => {
       utm_source: row.utm_source || null,
       utm_campaign: row.utm_campaign || null,
       is_repurchase: row.is_repurchase,
-      is_cafe24_only: !row.visitor_id || row.visitor_id === ''
+      is_cafe24_only: !row.visitor_id || row.visitor_id === '',
+      // 새 필드들
+      points_spent: parseInt(row.points_spent) || 0,
+      credits_spent: parseInt(row.credits_spent) || 0,
+      order_place_name: row.order_place_name || null,
+      payment_method_name: row.payment_method_name || null,
+      order_status: row.order_status || 'confirmed',
+      canceled: row.canceled || 'F'
     }));
     
     // 최종 매핑 (상품명/IP/디바이스 기본값 설정)
