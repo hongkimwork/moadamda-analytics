@@ -16,17 +16,26 @@ import { OrderDetailPageContent } from './OrderDetailPage';
 const { Title } = Typography;
 
 /**
- * 주문 상태 뱃지 렌더링
+ * 주문 상태 뱃지 렌더링 (결제상태 + 취소/반품 상태)
  */
 const OrderStatusBadge = ({ order }) => {
-  const { order_status, canceled } = order;
+  const { order_status, canceled, paid } = order;
   
+  // 입금대기 상태 (paid = 'F')
+  if (paid === 'F') {
+    return <Tag color="gold" style={{ margin: 0 }}>입금대기</Tag>;
+  }
+  
+  // 취소 상태
   if (canceled === 'T' || order_status === 'cancelled') {
     return <Tag color="red" icon={<XCircle size={10} />} style={{ margin: 0 }}>취소</Tag>;
   }
+  
+  // 반품 상태
   if (order_status === 'refunded') {
     return <Tag color="orange" style={{ margin: 0 }}>반품</Tag>;
   }
+  
   return null;
 };
 
@@ -49,7 +58,9 @@ export function OrderListPage() {
     sortField,
     sortOrder,
     includeCancelled,
-    setIncludeCancelled
+    setIncludeCancelled,
+    includePending,
+    setIncludePending
   } = useOrderList();
 
   const { userMappings } = useUserMappings();
@@ -115,11 +126,8 @@ export function OrderListPage() {
       sorter: () => 0,
       sortOrder: getSortOrder('order_id'),
       showSorterTooltip: false,
-      render: (text, record) => (
-        <Space size={4}>
-          <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{text}</span>
-          <OrderStatusBadge order={record} />
-        </Space>
+      render: (text) => (
+        <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{text}</span>
       )
     },
     {
@@ -133,13 +141,49 @@ export function OrderListPage() {
       render: (timestamp) => dayjs(timestamp).format('YYYY-MM-DD HH:mm:ss')
     },
     {
-      title: '주문금액',
+      title: '결제상태',
+      dataIndex: 'paid',
+      key: 'paid',
+      width: 90,
+      align: 'center',
+      render: (paid, record) => {
+        const { order_status, canceled } = record;
+        
+        // 입금대기
+        if (paid === 'F') {
+          return <Tag color="gold">입금대기</Tag>;
+        }
+        // 취소
+        if (canceled === 'T' || order_status === 'cancelled') {
+          return <Tag color="red">취소</Tag>;
+        }
+        // 반품
+        if (order_status === 'refunded') {
+          return <Tag color="orange">반품</Tag>;
+        }
+        // 입금완료
+        return <Tag color="green">입금완료</Tag>;
+      }
+    },
+    {
+      title: '총 주문금액',
       dataIndex: 'total_amount',
       key: 'total_amount',
-      width: 120,
+      width: 110,
       align: 'right',
       sorter: () => 0,
       sortOrder: getSortOrder('total_amount'),
+      showSorterTooltip: false,
+      render: (amount) => `${(amount || 0).toLocaleString()}원`
+    },
+    {
+      title: '실 결제금액',
+      dataIndex: 'final_payment',
+      key: 'final_payment',
+      width: 110,
+      align: 'right',
+      sorter: () => 0,
+      sortOrder: getSortOrder('final_payment'),
       showSorterTooltip: false,
       render: (amount) => `${(amount || 0).toLocaleString()}원`
     },
@@ -312,6 +356,9 @@ export function OrderListPage() {
         showCancelledFilter={true}
         includeCancelled={includeCancelled}
         onCancelledChange={setIncludeCancelled}
+        showPendingFilter={true}
+        includePending={includePending}
+        onPendingChange={setIncludePending}
         loading={loading}
       />
 
@@ -336,7 +383,7 @@ export function OrderListPage() {
             showSizeChanger: true,
             pageSizeOptions: ['20', '50', '100', '200']
           }}
-          scroll={{ x: 1300 }}
+          scroll={{ x: 1450 }}
           size="small"
           style={{
             borderRadius: '8px',

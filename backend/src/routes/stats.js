@@ -1169,7 +1169,8 @@ router.get('/orders', async (req, res) => {
       search = '',
       sort_by = 'timestamp',
       sort_order = 'desc',
-      include_cancelled = 'false'  // 취소/반품 주문 포함 여부
+      include_cancelled = 'false',  // 취소/반품 주문 포함 여부
+      include_pending = 'false'     // 입금대기 주문 포함 여부
     } = req.query;
 
     if (!start || !end) {
@@ -1201,6 +1202,14 @@ router.get('/orders', async (req, res) => {
       )`;
       queryParams.push(searchTerm);
       paramIndex++;
+    }
+
+    // 입금대기 주문 필터
+    // - 입금대기 미포함 시: paid = 'T' (입금완료만)
+    // - 입금대기 포함 시: paid 조건 없음 (전체)
+    let paidFilter = '';
+    if (include_pending !== 'true') {
+      paidFilter = `AND c.paid = 'T'`;
     }
 
     // 취소/반품 주문 필터 및 금액 조건
@@ -1248,6 +1257,7 @@ router.get('/orders', async (req, res) => {
         c.payment_method_name,
         c.order_status,
         c.canceled,
+        c.paid,
         s.ip_address,
         v.device_type,
         -- UTM 데이터: utm_sessions 우선, 없으면 visitors 테이블 사용
@@ -1293,7 +1303,7 @@ router.get('/orders', async (req, res) => {
       LEFT JOIN visitors v ON c.visitor_id = v.visitor_id
       WHERE c.timestamp >= $1::date
         AND c.timestamp < ($2::date + INTERVAL '1 day')
-        AND c.paid = 'T'
+        ${paidFilter}
         AND c.order_id IS NOT NULL
         ${amountFilter}
         ${cancelledFilter}
@@ -1327,6 +1337,12 @@ router.get('/orders', async (req, res) => {
       countParams.push(searchTerm);
     }
 
+    // 입금대기 필터 (카운트용)
+    let countPaidFilter = '';
+    if (include_pending !== 'true') {
+      countPaidFilter = `AND c.paid = 'T'`;
+    }
+
     // 취소 필터 및 금액 조건 (카운트용)
     let countAmountFilter = '';
     if (include_cancelled !== 'true') {
@@ -1341,7 +1357,7 @@ router.get('/orders', async (req, res) => {
       LEFT JOIN visitors v ON c.visitor_id = v.visitor_id
       WHERE c.timestamp >= $1::date
         AND c.timestamp < ($2::date + INTERVAL '1 day')
-        AND c.paid = 'T'
+        ${countPaidFilter}
         AND c.order_id IS NOT NULL
         ${countAmountFilter}
         ${countCancelledFilter}
@@ -1372,7 +1388,8 @@ router.get('/orders', async (req, res) => {
       order_place_name: row.order_place_name || null,
       payment_method_name: row.payment_method_name || null,
       order_status: row.order_status || 'confirmed',
-      canceled: row.canceled || 'F'
+      canceled: row.canceled || 'F',
+      paid: row.paid || 'T'
     }));
     
     // 최종 매핑 (상품명/IP/디바이스 기본값 설정)
@@ -1494,8 +1511,8 @@ router.get('/order-detail/:orderId', async (req, res) => {
           payment_method: cafe24Order?.payment_method_name || '-',
           order_items: cafe24Order?.items?.map(item => ({
             product_name: item.product_name,
-            product_price: item.product_price,
-            quantity: item.quantity,
+            product_price: parseInt(item.product_sale_price) || parseInt(item.product_price) || 0,
+            quantity: parseInt(item.quantity) || 1,
             option_value: item.option_value
           })) || []
         },
@@ -1518,7 +1535,7 @@ router.get('/order-detail/:orderId', async (req, res) => {
         if (detail.order?.items) {
           orderItems = detail.order.items.map(item => ({
             product_name: item.product_name,
-            product_price: parseInt(item.product_price) || 0,
+            product_price: parseInt(item.product_sale_price) || parseInt(item.product_price) || 0,
             quantity: parseInt(item.quantity) || 1,
             option_value: item.option_value || null
           }));

@@ -8,7 +8,7 @@ import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { Timeline, Alert } from 'antd';
 import { TimelineItemContent, getTimelineItemColor } from './TimelineItem';
 import AdEntryDivider from './AdEntryDivider';
-import PurchaseCompleteCard from './PurchaseCompleteCard';
+import PurchaseTimelineItem from './PurchaseTimelineItem';
 
 // 열 최대 높이 (모달 내 가용 공간 기준)
 const MAX_COLUMN_HEIGHT = 550;
@@ -23,6 +23,7 @@ function buildTimelineItems(pages, journey, userMappings, order, findMatchingMap
   
   pages.forEach((page, globalIdx) => {
     const isLast = globalIdx === pages.length - 1;
+    // 구매 여정인 경우 마지막 페이지는 이탈이 아님 (구매 완료 아이템이 뒤따름)
     const isExit = isLast && journey.type !== 'purchase';
 
     // 광고 유입 시점인 경우 광고 클릭 카드 먼저 추가
@@ -47,6 +48,16 @@ function buildTimelineItems(pages, journey, userMappings, order, findMatchingMap
       isExit
     });
   });
+
+  // 구매 여정인 경우 마지막에 구매 완료 아이템 추가
+  if (journey.type === 'purchase' && order) {
+    items.push({
+      key: 'purchase-complete',
+      type: 'purchase',
+      color: 'blue',
+      order
+    });
+  }
 
   return items;
 }
@@ -129,6 +140,9 @@ export function JourneyTimeline({ journey, userMappings, order, findMatchingMapp
   const renderItemContent = (item) => {
     if (item.type === 'ad') {
       return <AdEntryDivider utmSession={item.utmSession} />;
+    }
+    if (item.type === 'purchase') {
+      return <PurchaseTimelineItem order={item.order} />;
     }
     return (
       <TimelineItemContent
@@ -228,13 +242,6 @@ export function JourneyTimeline({ journey, userMappings, order, findMatchingMapp
             </div>
           );
         })}
-
-        {/* 구매 여정인 경우 구매 완료 카드 표시 */}
-        {journey.type === 'purchase' && order && (
-          <div style={{ flexShrink: 0, alignSelf: 'flex-start' }}>
-            <PurchaseCompleteCard order={order} />
-          </div>
-        )}
       </div>
     </div>
   );
