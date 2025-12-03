@@ -23,6 +23,9 @@ const { RangePicker } = DatePicker;
  * @param {boolean} props.showCancelledFilter - 취소/반품 포함 필터 표시 여부
  * @param {boolean} props.includeCancelled - 취소/반품 포함 여부 (외부 제어)
  * @param {Function} props.onCancelledChange - 취소/반품 포함 변경 콜백
+ * @param {boolean} props.showPendingFilter - 입금대기 포함 필터 표시 여부
+ * @param {boolean} props.includePending - 입금대기 포함 여부 (외부 제어)
+ * @param {Function} props.onPendingChange - 입금대기 포함 변경 콜백
  * @param {boolean} props.loading - 로딩 상태
  * 
  * Note: UTM 필터는 동적 UTM 필터 컴포넌트 (DynamicUtmFilterBar)를 사용하세요
@@ -42,6 +45,9 @@ function SearchFilterBar({
   showCancelledFilter = false,
   includeCancelled = false,
   onCancelledChange,
+  showPendingFilter = false,
+  includePending = false,
+  onPendingChange,
   loading = false
 }) {
   // 검색어 state
@@ -359,6 +365,22 @@ function SearchFilterBar({
                   }}
                 >
                   취소/반품 포함
+                </Checkbox>
+              )}
+              
+              {/* 입금대기 포함 체크박스 */}
+              {showPendingFilter && (
+                <Checkbox
+                  checked={includePending}
+                  onChange={(e) => onPendingChange && onPendingChange(e.target.checked)}
+                  disabled={loading}
+                  style={{ 
+                    marginLeft: '8px',
+                    fontWeight: 500,
+                    color: '#6b7280'
+                  }}
+                >
+                  입금대기 포함
                 </Checkbox>
               )}
               
