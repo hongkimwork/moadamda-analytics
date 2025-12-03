@@ -1464,10 +1464,10 @@ router.get('/order-detail/:orderId', async (req, res) => {
 
     // 2-1. 구매 당일 전체 경로 (구매 당일의 모든 페이지뷰)
     // UTM 기준 제거 - 직접 방문 포함 모든 페이지 이동 표시
-    // FIX (2025-12-03): 타임존 불일치 버그 수정
-    // 문제: p.timestamp는 UTC로 저장 (timestamp without time zone)
-    //       $2는 JS Date로 전달되어 timestamptz로 해석됨
-    // 해결: p.timestamp는 UTC→KST 변환, $2는 timestamptz→KST 변환
+    // FIX (2025-12-03): 타임존 비교 버그 수정
+    // 핵심: p.timestamp는 KST로 저장됨 (timestamp without time zone)
+    //       $2는 JS Date → timestamptz (UTC)
+    // 해결: $2를 KST로 변환하여 p.timestamp(KST)와 동일 기준으로 비교
     const purchaseJourneyQuery = `
       WITH purchase_journey_pages AS (
         SELECT
@@ -1477,8 +1477,8 @@ router.get('/order-detail/:orderId', async (req, res) => {
           LEAD(p.timestamp) OVER (ORDER BY p.timestamp) as next_timestamp
         FROM pageviews p
         WHERE p.visitor_id = $1
-          AND DATE(p.timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul') = DATE(($2::timestamptz) AT TIME ZONE 'Asia/Seoul')
-          AND p.timestamp <= $2
+          AND DATE(p.timestamp) = DATE(($2::timestamptz) AT TIME ZONE 'Asia/Seoul')
+          AND p.timestamp <= (($2::timestamptz) AT TIME ZONE 'Asia/Seoul')
         ORDER BY p.timestamp ASC
       )
       SELECT
@@ -1499,21 +1499,21 @@ router.get('/order-detail/:orderId', async (req, res) => {
 
     // 2-2. 과거 방문 이력 (구매 당일 이전의 모든 방문)
     // UTM 기준 제거 - 구매 당일 이전의 모든 페이지 이동 표시
-    // FIX (2025-12-03): 타임존 불일치 버그 수정
-    // 문제: p.timestamp는 UTC로 저장 (timestamp without time zone)
-    //       $2는 JS Date로 전달되어 timestamptz로 해석됨
-    // 해결: p.timestamp는 UTC→KST 변환, $2는 timestamptz→KST 변환
+    // FIX (2025-12-03): 타임존 비교 버그 수정
+    // 핵심: p.timestamp는 KST로 저장됨 (timestamp without time zone)
+    //       $2는 JS Date → timestamptz (UTC)
+    // 해결: $2를 KST로 변환하여 p.timestamp(KST)와 동일 기준으로 비교
     const previousVisitsQuery = `
       WITH previous_pageviews AS (
         SELECT
           p.page_url,
           p.page_title,
           p.timestamp,
-          DATE(p.timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul') as visit_date,
-          LEAD(p.timestamp) OVER (PARTITION BY DATE(p.timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul') ORDER BY p.timestamp) as next_timestamp
+          DATE(p.timestamp) as visit_date,
+          LEAD(p.timestamp) OVER (PARTITION BY DATE(p.timestamp) ORDER BY p.timestamp) as next_timestamp
         FROM pageviews p
         WHERE p.visitor_id = $1
-          AND DATE(p.timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul') < DATE(($2::timestamptz) AT TIME ZONE 'Asia/Seoul')
+          AND DATE(p.timestamp) < DATE(($2::timestamptz) AT TIME ZONE 'Asia/Seoul')
       )
       SELECT
         visit_date,
