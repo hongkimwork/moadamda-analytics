@@ -225,17 +225,16 @@ async function getMemberInfo(memberId) {
 /**
  * 시간 + 상품 기반 visitor_id 매칭
  * 주문 시간 ±30분 내 동일 상품 add_to_cart 이벤트 검색
- * @param {Date} orderDate - 주문 시간
+ * @param {string} orderDate - Cafe24 주문 시간 (예: "2025-12-03T07:20:54+09:00")
  * @param {number} productNo - 상품 번호
  * @returns {Object|null} { visitor_id, session_id } 또는 null
  */
 async function findMatchingVisitor(orderDate, productNo) {
   try {
-    // 주문 시간 ±30분 범위 계산
-    const orderTime = new Date(orderDate);
-    const startTime = new Date(orderTime.getTime() - 30 * 60 * 1000);
-    const endTime = new Date(orderTime.getTime() + 30 * 60 * 1000);
+    // KST 시간을 그대로 추출하여 사용 (events 테이블도 KST로 저장됨)
+    const kstTimestamp = parseKSTTimestamp(orderDate);
     
+    // SQL에서 직접 ±30분 범위 계산 (JavaScript 타임존 변환 방지)
     // 동일 상품을 add_to_cart한 visitor 검색
     const result = await db.query(
       `SELECT 
@@ -246,10 +245,10 @@ async function findMatchingVisitor(orderDate, productNo) {
       FROM events e
       WHERE e.event_type = 'add_to_cart'
         AND e.product_id = $2
-        AND e.timestamp BETWEEN $3 AND $4
+        AND e.timestamp BETWEEN ($1::timestamp - INTERVAL '30 minutes') AND ($1::timestamp + INTERVAL '30 minutes')
       ORDER BY time_diff_seconds ASC
       LIMIT 1`,
-      [orderTime, String(productNo), startTime, endTime]
+      [kstTimestamp, String(productNo)]
     );
     
     if (result.rows.length === 0) {
@@ -488,7 +487,7 @@ async function syncOrdersForRange(startDate, endDate, options = {}) {
             totalAmount,
             finalPayment,
             productCount,
-            new Date(order.order_date),
+            parseKSTTimestamp(order.order_date),  // KST 시간 그대로 저장 (UTC 변환 방지)
             discountAmount,
             mileageUsed,
             shippingFee,
@@ -810,6 +809,28 @@ function startAutoSyncTask() {
 // 유틸리티 함수
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Cafe24 order_date에서 KST 시간을 그대로 추출
+ * Cafe24 API는 KST(+09:00) 시간을 반환하는데, new Date()로 파싱하면 UTC로 변환됨
+ * 이 함수는 타임존 변환 없이 KST 시간 값을 그대로 반환
+ * 
+ * @param {string} dateString - Cafe24 order_date (예: "2025-12-03T07:20:54+09:00")
+ * @returns {string} KST 시간 문자열 (예: "2025-12-03 07:20:54")
+ */
+function parseKSTTimestamp(dateString) {
+  if (!dateString) return null;
+  
+  // ISO 형식에서 날짜/시간 부분만 추출 (타임존 정보 무시)
+  // "2025-12-03T07:20:54+09:00" → "2025-12-03 07:20:54"
+  const match = dateString.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})/);
+  if (match) {
+    return `${match[1]} ${match[2]}`;
+  }
+  
+  // 매칭 실패 시 원본 반환 (fallback)
+  return dateString;
 }
 
 module.exports = {
