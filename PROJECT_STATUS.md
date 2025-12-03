@@ -17,6 +17,7 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-12-03 | 취소/반품 포함 필터 추가 | SearchFilterBar.jsx |
 | 2025-12-03 | 구매완료 카드 분리+상세정보 | PurchaseCompleteCard.jsx |
 | 2025-12-03 | 주문금액 0원 버그 수정 배포 | cafe24.js |
 | 2025-12-03 | 포인트결제/취소주문 표시 개선 | cafe24.js, stats.js, OrderListPage.jsx |
@@ -31,7 +32,6 @@
 | 2025-12-01 | 여정 열 분할 로직 수정 | journeyCalculations.js |
 | 2025-12-01 | 광고 클릭 구분선 기능 추가 | JourneyTimeline.jsx |
 | 2025-12-01 | 고객여정 타임존 버그 수정 | stats.js |
-| 2025-11-28 | 크리에이티브/주문분석 개선 배포 | CreativePerformance.jsx |
 
 ---
 
