@@ -1465,10 +1465,9 @@ router.get('/order-detail/:orderId', async (req, res) => {
     // 2-1. 구매 당일 전체 경로 (구매 당일의 모든 페이지뷰)
     // UTM 기준 제거 - 직접 방문 포함 모든 페이지 이동 표시
     // FIX (2025-12-03): 타임존 불일치 버그 수정
-    // - 날짜 필터: KST 기준 (한국 사용자가 인식하는 "구매 당일")
-    // - 시간 필터: UTC 기준 (구매 시점 이전의 pageview만 포함)
-    // 참고: p.timestamp는 timestamp without time zone (UTC 저장)
-    //       $2는 JS Date → timestamptz (UTC)
+    // 문제: p.timestamp는 UTC로 저장 (timestamp without time zone)
+    //       $2는 JS Date로 전달되어 timestamptz로 해석됨
+    // 해결: p.timestamp는 UTC→KST 변환, $2는 timestamptz→KST 변환
     const purchaseJourneyQuery = `
       WITH purchase_journey_pages AS (
         SELECT
@@ -1478,10 +1477,8 @@ router.get('/order-detail/:orderId', async (req, res) => {
           LEAD(p.timestamp) OVER (ORDER BY p.timestamp) as next_timestamp
         FROM pageviews p
         WHERE p.visitor_id = $1
-          -- 날짜 필터 (KST): 구매 당일 한국 기준
           AND DATE(p.timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul') = DATE(($2::timestamptz) AT TIME ZONE 'Asia/Seoul')
-          -- 시간 필터 (UTC): 구매 시점 이전만 (구매 후 pageview 제외)
-          AND (p.timestamp AT TIME ZONE 'UTC') <= ($2::timestamptz)
+          AND p.timestamp <= $2
         ORDER BY p.timestamp ASC
       )
       SELECT
@@ -1896,4 +1893,3 @@ router.get('/utm-values', async (req, res) => {
 });
 
 module.exports = router;
-

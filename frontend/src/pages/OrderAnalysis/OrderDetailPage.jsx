@@ -270,15 +270,14 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
         ) : (
           (() => {
             const expandedJourneysList = allJourneys.filter(journey => expandedJourneys.includes(journey.id));
-            const isLongJourney = expandedJourneysList.length === 1 && expandedJourneysList[0].pages.length >= 34;
-            const shouldCenterAlign = expandedJourneys.length === 1 && !isLongJourney;
 
             return (
               <div style={{
                 display: 'flex',
                 gap: '20px',
                 alignItems: 'flex-start',
-                justifyContent: shouldCenterAlign ? 'center' : 'flex-start'
+                width: 'fit-content',
+                margin: expandedJourneysList.length === 1 ? '0 auto' : '0'
               }}>
                 {expandedJourneysList.map(journey => (
                   <JourneyTimeline
