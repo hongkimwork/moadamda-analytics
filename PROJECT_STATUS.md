@@ -17,6 +17,10 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-12-08 | 대시보드 환불주문 제외 적용 | range.js |
+| 2025-12-08 | 서버 12.4 버전 롤백 | range.js, basic.js |
+| 2025-12-08 | 중복 stats 라우터 제거 | stats.js, orders.js |
+| 2025-12-08 | SSH 자동 인증키 설정 | moadamda-key.pem |
 | 2025-12-05 | 매출 계산 오류 수정 | cafe24.js, range.js |
 | 2025-12-05 | 대시보드 날짜표시+증감률 개선 | MyDashboard.jsx |
 | 2025-12-05 | 대시보드 Cafe24 API 연결 | MyDashboard.jsx |
@@ -26,11 +30,8 @@
 | 2025-12-04 | 네이버 검색광고 API 연동 | naverAd.js |
 | 2025-12-04 | 소재분석 모달 95vh 고정 | CreativeOrdersModal.jsx |
 | 2025-12-03 | 구매카드 결제정보 단순화 | PurchaseTimelineItem.jsx |
-| 2025-12-03 | 결제금액 컬럼+할인계산 개선 | OrderListPage.jsx, PurchaseTimelineItem.jsx |
+| 2025-12-03 | 결제금액 컬럼+할인계산 개선 | OrderListPage.jsx |
 | 2025-12-03 | 상품 판매가 표시 버그 수정 | stats.js |
-| 2025-12-03 | 구매완료 카드 타임라인 통합 | PurchaseTimelineItem.jsx |
-| 2025-12-03 | 입금대기 포함 필터 추가 | OrderListPage.jsx |
-| 2025-12-03 | Cafe24 주문 타임존 버그 수정 | cafe24.js |
 
 ---
 
