@@ -391,7 +391,14 @@ async function syncOrdersForRange(startDate, endDate, options = {}) {
         const orderPriceAmount = Math.round(parseFloat(order.actual_order_amount?.order_price_amount || 0));
         const shippingFeeAmount = Math.round(parseFloat(order.actual_order_amount?.shipping_fee || 0));
         const totalAmount = orderPriceAmount + shippingFeeAmount;
-        const finalPayment = Math.round(parseFloat(order.actual_order_amount?.payment_amount || 0));
+        
+        // final_payment 계산: payment_amount + naver_point 합산
+        // - payment_amount: PG결제금액 (카드, 무통장 등)
+        // - naver_point: 네이버페이 포인트 결제금액
+        // 둘 다 있는 경우 합산해야 Cafe24 관리자 "결제합계"와 일치
+        const paymentAmount = Math.round(parseFloat(order.actual_order_amount?.payment_amount || 0));
+        const naverPoint = Math.round(parseFloat(order.naver_point || 0));
+        const finalPayment = paymentAmount + naverPoint;
         const discountAmount = Math.round(parseFloat(order.actual_order_amount?.total_discount_amount || 0));
         const mileageUsed = Math.round(parseFloat(order.actual_order_amount?.mileage_spent_amount || 0));
         const shippingFee = Math.round(parseFloat(order.actual_order_amount?.shipping_fee || 0));
@@ -738,7 +745,10 @@ async function updatePendingPayments() {
         
         // 입금 완료된 경우 (paid='T')
         if (cafe24Order.paid === 'T') {
-          const finalPayment = Math.round(parseFloat(cafe24Order.actual_order_amount?.payment_amount || 0));
+          // final_payment 계산: payment_amount + naver_point 합산
+          const paymentAmount = Math.round(parseFloat(cafe24Order.actual_order_amount?.payment_amount || 0));
+          const naverPoint = Math.round(parseFloat(cafe24Order.naver_point || 0));
+          const finalPayment = paymentAmount + naverPoint;
           // total_amount = order_price_amount + shipping_fee (상품가 + 배송비)
           const orderPriceAmount = Math.round(parseFloat(cafe24Order.actual_order_amount?.order_price_amount || 0));
           const shippingFeeAmount = Math.round(parseFloat(cafe24Order.actual_order_amount?.shipping_fee || 0));

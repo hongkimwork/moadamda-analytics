@@ -13,7 +13,8 @@ import {
   LinkOutlined,
   ExperimentOutlined,
   BarChartOutlined,
-  SettingOutlined
+  SettingOutlined,
+  AppstoreOutlined
 } from '@ant-design/icons';
 import './index.css';
 
@@ -28,6 +29,7 @@ const OrderDetailPage = lazy(() =>
 const DataTables = lazy(() => import('./pages/DataTables'));
 const PageMapping = lazy(() => import('./pages/PageMapping'));
 const CreativePerformance = lazy(() => import('./pages/CreativePerformance'));
+const MyDashboard = lazy(() => import('./pages/MyDashboard'));
 
 const { Sider, Content } = Layout;
 
@@ -44,6 +46,7 @@ function AppLayout() {
   const getSelectedKeys = () => {
     const path = location.pathname;
     if (path === '/creative-performance') return ['creative-performance'];
+    if (path === '/my-dashboard') return ['my-dashboard'];
     if (path === '/page-mapping') return ['page-mapping'];
     if (path.startsWith('/order/')) return ['orders'];
     if (path === '/' || path.startsWith('/order')) return ['orders'];
@@ -69,6 +72,12 @@ function AppLayout() {
           icon: <BarChartOutlined />,
           label: '광고 소재 모수 분석',
           onClick: () => navigate('/creative-performance')
+        },
+        {
+          key: 'my-dashboard',
+          icon: <AppstoreOutlined />,
+          label: '나만의 대시보드',
+          onClick: () => navigate('/my-dashboard')
         }
       ]
     },
@@ -194,6 +203,9 @@ function AppLayout() {
               
               {/* 광고 소재 모수 분석 */}
               <Route path="/creative-performance" element={<CreativePerformance />} />
+              
+              {/* 나만의 대시보드 */}
+              <Route path="/my-dashboard" element={<MyDashboard />} />
               
               {/* 페이지 매핑 */}
               <Route path="/page-mapping" element={<PageMapping />} />

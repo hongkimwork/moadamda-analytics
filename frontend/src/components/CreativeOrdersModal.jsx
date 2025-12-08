@@ -176,8 +176,13 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
       onCancel={onClose}
       footer={null}
       width={900}
+      style={{ top: '2.5vh' }}
       styles={{
-        body: { padding: '16px 24px' }
+        body: { 
+          padding: '16px 24px',
+          height: 'calc(95vh - 60px)',
+          overflowY: 'auto'
+        }
       }}
     >
       {/* 광고 소재 정보 */}

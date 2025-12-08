@@ -131,3 +131,19 @@
   font-size: 13px;
 }
 
+/* ============================================================================
+   모달 열림 시 배경 스크롤 방지
+   ============================================================================ */
+
+/* Ant Design 모달이 열렸을 때 body 스크롤 완전 차단 */
+body.ant-scrolling-effect {
+  overflow: hidden !important;
+  position: fixed !important;
+  width: 100% !important;
+}
+
+/* 모달 마스크 클릭 시 스크롤 방지 */
+.ant-modal-wrap {
+  overflow: hidden !important;
+}
+

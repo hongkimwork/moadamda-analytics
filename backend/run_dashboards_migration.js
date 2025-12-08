@@ -16,15 +16,11 @@ async function runMigration() {
         await client.connect();
         console.log('Connected to database');
 
-        // 1. 대시보드 테이블 생성 마이그레이션 실행
-        const dashboardMigrationSql = fs.readFileSync(path.join(__dirname, 'backend/migrations/create_dashboards.sql'), 'utf8');
+        // 경로 수정: backend 폴더 내에서 실행되므로 ../backend/migrations 가 아니라 ./migrations
+        const dashboardMigrationSql = fs.readFileSync(path.join(__dirname, 'migrations/create_dashboards.sql'), 'utf8');
         console.log('Running create_dashboards migration...');
         await client.query(dashboardMigrationSql);
         console.log('Dashboards tables created successfully');
-
-        // 2. (필요시) 다른 마이그레이션 실행
-        // const otherSql = fs.readFileSync(path.join(__dirname, 'backend/migrations/other_file.sql'), 'utf8');
-        // await client.query(otherSql);
 
     } catch (err) {
         console.error('Migration failed:', err);
@@ -34,3 +30,4 @@ async function runMigration() {
 }
 
 runMigration();
+

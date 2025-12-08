@@ -83,26 +83,29 @@ router.get('/range', async (req, res) => {
     const newVisitorsResult = await db.query(newVisitorsQuery, visitorsParams);
 
     // 5. Revenue and orders (with device filter)
+    // 정상 주문만 집계: paid='T' (입금완료) AND canceled='F' (취소 아님)
     const revenueQuery = device && device !== 'all'
       ? `SELECT
            COALESCE(SUM(c.total_amount), 0) as total_revenue,
-           COALESCE(SUM(CASE WHEN c.final_payment > 0 THEN c.final_payment ELSE c.total_amount END), 0) as final_revenue,
+           COALESCE(SUM(c.final_payment), 0) as final_revenue,
            COALESCE(SUM(c.discount_amount), 0) as total_discount,
            COALESCE(SUM(c.mileage_used), 0) as total_mileage,
            COALESCE(SUM(c.shipping_fee), 0) as total_shipping,
            COUNT(*) as order_count
          FROM conversions c
          JOIN visitors v ON c.visitor_id = v.visitor_id
-         WHERE c.timestamp >= $1 AND c.timestamp <= $2 AND v.device_type = $3`
+         WHERE c.timestamp >= $1 AND c.timestamp <= $2 AND v.device_type = $3
+           AND c.paid = 'T' AND c.canceled = 'F'`
       : `SELECT
            COALESCE(SUM(total_amount), 0) as total_revenue,
-           COALESCE(SUM(CASE WHEN final_payment > 0 THEN final_payment ELSE total_amount END), 0) as final_revenue,
+           COALESCE(SUM(final_payment), 0) as final_revenue,
            COALESCE(SUM(discount_amount), 0) as total_discount,
            COALESCE(SUM(mileage_used), 0) as total_mileage,
            COALESCE(SUM(shipping_fee), 0) as total_shipping,
            COUNT(*) as order_count
          FROM conversions
-         WHERE timestamp >= $1 AND timestamp <= $2`;
+         WHERE timestamp >= $1 AND timestamp <= $2
+           AND paid = 'T' AND canceled = 'F'`;
 
     const revenueResult = await db.query(revenueQuery, visitorsParams);
 
@@ -231,20 +234,23 @@ router.get('/range', async (req, res) => {
 
       const compareVisitorsResult = await db.query(compareVisitorsQuery, compareVisitorsParams);
 
+      // 비교 기간도 정상 주문만 집계
       const compareRevenueQuery = device && device !== 'all'
         ? `SELECT
              COALESCE(SUM(c.total_amount), 0) as total_revenue,
-             COALESCE(SUM(CASE WHEN c.final_payment > 0 THEN c.final_payment ELSE c.total_amount END), 0) as final_revenue,
+             COALESCE(SUM(c.final_payment), 0) as final_revenue,
              COUNT(*) as order_count
            FROM conversions c
            JOIN visitors v ON c.visitor_id = v.visitor_id
-           WHERE c.timestamp >= $1 AND c.timestamp <= $2 AND v.device_type = $3`
+           WHERE c.timestamp >= $1 AND c.timestamp <= $2 AND v.device_type = $3
+             AND c.paid = 'T' AND c.canceled = 'F'`
         : `SELECT
              COALESCE(SUM(total_amount), 0) as total_revenue,
-             COALESCE(SUM(CASE WHEN final_payment > 0 THEN final_payment ELSE total_amount END), 0) as final_revenue,
+             COALESCE(SUM(final_payment), 0) as final_revenue,
              COUNT(*) as order_count
            FROM conversions
-           WHERE timestamp >= $1 AND timestamp <= $2`;
+           WHERE timestamp >= $1 AND timestamp <= $2
+             AND paid = 'T' AND canceled = 'F'`;
 
       const compareRevenueResult = await db.query(compareRevenueQuery, compareVisitorsParams);
 
@@ -353,24 +359,27 @@ router.get('/daily', async (req, res) => {
 
     // 3. Daily revenue and orders (with device filter)
     // NOTE: DB의 timestamp는 KST 값으로 저장됨 - 타임존 변환 불필요
+    // 정상 주문만 집계: paid='T' (입금완료) AND canceled='F' (취소 아님)
     const dailyRevenueQuery = device && device !== 'all'
       ? `SELECT
            DATE(c.timestamp) as date,
            COALESCE(SUM(c.total_amount), 0) as total_revenue,
-           COALESCE(SUM(CASE WHEN c.final_payment > 0 THEN c.final_payment ELSE c.total_amount END), 0) as final_revenue,
+           COALESCE(SUM(c.final_payment), 0) as final_revenue,
            COUNT(*) as orders
          FROM conversions c
          JOIN visitors v ON c.visitor_id = v.visitor_id
          WHERE c.timestamp >= $1 AND c.timestamp <= $2 AND v.device_type = $3
+           AND c.paid = 'T' AND c.canceled = 'F'
          GROUP BY DATE(c.timestamp)
          ORDER BY date`
       : `SELECT
            DATE(timestamp) as date,
            COALESCE(SUM(total_amount), 0) as total_revenue,
-           COALESCE(SUM(CASE WHEN final_payment > 0 THEN final_payment ELSE total_amount END), 0) as final_revenue,
+           COALESCE(SUM(final_payment), 0) as final_revenue,
            COUNT(*) as orders
          FROM conversions
          WHERE timestamp >= $1 AND timestamp <= $2
+           AND paid = 'T' AND canceled = 'F'
          GROUP BY DATE(timestamp)
          ORDER BY date`;
 
