@@ -25,313 +25,24 @@ import {
   getHeightSizeFromPixels,
   WIDGET_TYPES
 } from './constants';
+import {
+  saveToLocalStorage,
+  loadFromLocalStorage,
+  fetchWidgetData,
+  getValueFromData,
+  calculateChange,
+  transformWidgetData,
+  generateDummyData
+} from './utils';
+import {
+  useContainerSize,
+  useWidgetData,
+  useWidgets,
+  useWidgetPersistence
+} from './hooks';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
-
-// ============================================================================
-// localStorage 저장/불러오기
-// ============================================================================
-const STORAGE_KEY = 'moadamda_my_dashboard';
-
-// 위젯 설정 저장 (data 제외, 설정만 저장)
-const saveToLocalStorage = (widgets, globalDateRange) => {
-  try {
-    // data, loading, error는 제외하고 설정만 저장
-    const widgetsToSave = widgets.map(w => ({
-      id: w.id,
-      type: w.type,
-      title: w.title,
-      widthSize: w.widthSize,
-      heightSize: w.heightSize,
-      presetId: w.presetId,
-      category: w.category,
-      apiEndpoint: w.apiEndpoint,
-      dataKey: w.dataKey,
-      suffix: w.suffix,
-      dateRange: w.dateRange,
-      compareEnabled: w.compareEnabled,
-      compareRange: w.compareRange
-    }));
-
-    const dataToSave = {
-      widgets: widgetsToSave,
-      globalDateRange: globalDateRange ? {
-        start: globalDateRange[0].format('YYYY-MM-DD'),
-        end: globalDateRange[1].format('YYYY-MM-DD')
-      } : null,
-      lastUpdated: new Date().toISOString()
-    };
-
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
-    console.log('[Dashboard] Saved to localStorage:', dataToSave.widgets.length, 'widgets');
-  } catch (error) {
-    console.error('[Dashboard] Failed to save to localStorage:', error);
-  }
-};
-
-// 위젯 설정 불러오기
-const loadFromLocalStorage = () => {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return null;
-
-    const parsed = JSON.parse(stored);
-    console.log('[Dashboard] Loaded from localStorage:', parsed.widgets?.length || 0, 'widgets');
-    
-    return {
-      widgets: (parsed.widgets || []).map(w => ({
-        ...w,
-        data: null,
-        loading: !!w.presetId, // API 연결 위젯은 로딩 상태로
-        error: null
-      })),
-      globalDateRange: parsed.globalDateRange ? [
-        dayjs(parsed.globalDateRange.start),
-        dayjs(parsed.globalDateRange.end)
-      ] : null,
-      lastUpdated: parsed.lastUpdated
-    };
-  } catch (error) {
-    console.error('[Dashboard] Failed to load from localStorage:', error);
-    return null;
-  }
-};
-
-// ============================================================================
-// API 호출 유틸리티
-// ============================================================================
-const API_BASE_URL = 'http://localhost:3003';
-
-// 위젯 데이터 fetch 함수
-const fetchWidgetData = async (widget) => {
-  const { presetId, category, apiEndpoint, dataKey, dateRange, compareEnabled, compareRange } = widget;
-  
-  console.log('[fetchWidgetData] Widget config:', {
-    presetId,
-    apiEndpoint,
-    dataKey,
-    dateRange,
-    compareEnabled,
-    compareRange
-  });
-  
-  if (!apiEndpoint || !dateRange) {
-    return { data: null, compareData: null, error: 'Missing configuration' };
-  }
-
-  try {
-    const params = new URLSearchParams({
-      start: dateRange.start,
-      end: dateRange.end
-    });
-
-    // 메인 데이터 fetch
-    const mainUrl = `${API_BASE_URL}${apiEndpoint}?${params.toString()}`;
-    console.log('[fetchWidgetData] Main API URL:', mainUrl);
-    const response = await fetch(mainUrl);
-    if (!response.ok) throw new Error(`API Error: ${response.status}`);
-    const result = await response.json();
-    console.log('[fetchWidgetData] Main API Result:', result);
-
-    // 비교 데이터 fetch (필요 시)
-    let compareResult = null;
-    if (compareEnabled && compareRange) {
-      const compareParams = new URLSearchParams({
-        start: compareRange.start,
-        end: compareRange.end
-      });
-      const compareUrl = `${API_BASE_URL}${apiEndpoint}?${compareParams.toString()}`;
-      console.log('[fetchWidgetData] Compare API URL:', compareUrl);
-      const compareResponse = await fetch(compareUrl);
-      if (compareResponse.ok) {
-        compareResult = await compareResponse.json();
-        console.log('[fetchWidgetData] Compare API Result:', compareResult);
-      } else {
-        console.error('[fetchWidgetData] Compare API Error:', compareResponse.status);
-      }
-    } else {
-      console.log('[fetchWidgetData] Compare skipped - compareEnabled:', compareEnabled, 'compareRange:', compareRange);
-    }
-
-    return { data: result, compareData: compareResult, error: null };
-  } catch (error) {
-    console.error('[Widget Fetch Error]', error);
-    return { data: null, compareData: null, error: error.message };
-  }
-};
-
-// 데이터에서 특정 키 값 추출 (nested key 지원)
-const getValueFromData = (data, dataKey) => {
-  if (!data || !dataKey) return null;
-  const keys = dataKey.split('.');
-  let value = data;
-  for (const key of keys) {
-    if (value === null || value === undefined) return null;
-    value = value[key];
-  }
-  return value;
-};
-
-// 증감률 계산 (이전 값이 0일 때도 처리)
-const calculateChange = (current, previous) => {
-  if (previous === null || previous === undefined) return null;
-  if (previous === 0) {
-    // 이전 값이 0이고 현재 값이 있으면 "신규" 표시를 위해 특수값 반환
-    return current > 0 ? 'new' : '0.0';
-  }
-  return ((current - previous) / previous * 100).toFixed(1);
-};
-
-// 위젯 데이터 변환 함수 (프리셋별 데이터 가공)
-const transformWidgetData = (widget, apiData, compareApiData) => {
-  const { presetId, type, dataKey, suffix, dateRange, compareRange } = widget;
-
-  console.log('[transformWidgetData] Input:', {
-    presetId,
-    type,
-    dataKey,
-    apiData,
-    compareApiData,
-    dateRange,
-    compareRange
-  });
-
-  // KPI 타입
-  if (type === 'kpi') {
-    const value = getValueFromData(apiData, dataKey);
-    const compareValue = compareApiData ? getValueFromData(compareApiData, dataKey) : null;
-    const change = calculateChange(value, compareValue);
-
-    console.log('[transformWidgetData] KPI Result:', 
-      'dataKey:', dataKey,
-      '| value:', value,
-      '| compareValue:', compareValue,
-      '| change:', change
-    );
-
-    return {
-      value: value || 0,
-      compareValue: compareValue,  // 이전 기간 값 추가
-      change: change,
-      prefix: '',
-      suffix: suffix || '',
-      // 날짜 정보 추가
-      dateRange: dateRange,
-      compareRange: compareRange
-    };
-  }
-
-  // Line 차트 (일별 추이)
-  if (type === 'line' && presetId === 'daily_revenue') {
-    const daily = apiData?.daily || [];
-    return daily.map(d => ({
-      date: dayjs(d.date).format('MM/DD'),
-      value: d.revenue || d.final_payment || 0
-    })).slice(-7); // 최근 7일
-  }
-
-  // Bar 차트 (주문경로별)
-  if (type === 'bar' && presetId === 'order_place_revenue') {
-    // orders 배열에서 order_place_name별 집계
-    const orders = apiData?.orders || [];
-    const byPlace = {};
-    orders.forEach(order => {
-      const place = order.order_place_name || '기타';
-      if (!byPlace[place]) {
-        byPlace[place] = 0;
-      }
-      byPlace[place] += order.final_payment || 0;
-    });
-    
-    return Object.entries(byPlace)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 5); // 상위 5개
-  }
-
-  // Table (최근 주문)
-  if (type === 'table' && presetId === 'recent_orders') {
-    const orders = apiData?.orders || [];
-    return orders.slice(0, 10).map(order => ({
-      order_id: order.order_id,
-      product_name: order.product_name || '-',
-      final_payment: order.final_payment || 0,
-      timestamp: order.timestamp,
-      order_place: order.order_place_name || '-'
-    }));
-  }
-
-  // Table (상품별 판매순위)
-  if (type === 'table' && presetId === 'top_products') {
-    const orders = apiData?.orders || [];
-    const byProduct = {};
-    orders.forEach(order => {
-      const name = order.product_name || '기타';
-      if (!byProduct[name]) {
-        byProduct[name] = { count: 0, revenue: 0 };
-      }
-      byProduct[name].count += 1;
-      byProduct[name].revenue += order.final_payment || 0;
-    });
-    
-    return Object.entries(byProduct)
-      .map(([product_name, data]) => ({
-        product_name,
-        order_count: data.count,
-        revenue: data.revenue
-      }))
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 10);
-  }
-
-  // 기본 반환
-  return apiData;
-};
-
-// ============================================================================
-// 더미 데이터 생성 함수
-// ============================================================================
-const generateDummyData = (type) => {
-  switch (type) {
-    case 'kpi':
-      return {
-        value: Math.floor(Math.random() * 100000) + 10000,
-        change: (Math.random() * 40 - 20).toFixed(1),
-        prefix: '',
-        suffix: ''
-      };
-    case 'line':
-      return Array.from({ length: 7 }, (_, i) => ({
-        date: dayjs().subtract(6 - i, 'days').format('MM/DD'),
-        value: Math.floor(Math.random() * 1000) + 500
-      }));
-    case 'bar':
-      return [
-        { name: '네이버', value: Math.floor(Math.random() * 5000) + 1000 },
-        { name: '메타', value: Math.floor(Math.random() * 5000) + 1000 },
-        { name: '구글', value: Math.floor(Math.random() * 5000) + 1000 },
-        { name: '직접유입', value: Math.floor(Math.random() * 5000) + 1000 }
-      ];
-    case 'table':
-      return [
-        { campaign: '봄맞이 세일', visitors: 1234, orders: 56, revenue: 2340000 },
-        { campaign: '신상품 런칭', visitors: 987, orders: 34, revenue: 1560000 },
-        { campaign: '회원가입 이벤트', visitors: 756, orders: 23, revenue: 890000 }
-      ];
-    case 'funnel':
-      return [
-        { stage: '방문', value: 10000, rate: 100 },
-        { stage: '상품조회', value: 6500, rate: 65 },
-        { stage: '장바구니', value: 2100, rate: 21 },
-        { stage: '구매완료', value: 850, rate: 8.5 }
-      ];
-    case 'text':
-      return { title: '섹션 제목', content: '여기에 설명을 입력하세요' };
-    default:
-      return null;
-  }
-};
 
 // ============================================================================
 // 개별 위젯 컴포넌트 (리사이즈 핸들 + 가이드 박스)
@@ -1385,153 +1096,74 @@ const AddWidgetModal = ({ visible, onClose, onAdd, globalDateRange }) => {
 // 메인 대시보드 컴포넌트
 // ============================================================================
 function MyDashboard() {
-  // 컨테이너 너비 측정 (ResizeObserver로 사이드바 변화도 감지)
+  // 컨테이너 너비 측정 (커스텀 훅)
   const containerRef = useRef(null);
-  const [containerWidth, setContainerWidth] = useState(1200);
-  
-  useEffect(() => {
-    const updateWidth = () => {
-      if (containerRef.current) {
-        setContainerWidth(containerRef.current.offsetWidth);
-      }
-    };
-    
-    updateWidth();
-    
-    // ResizeObserver로 컨테이너 크기 변화 감지 (사이드바 접힘 포함)
-    const resizeObserver = new ResizeObserver(() => {
-      updateWidth();
-    });
-    
-    if (containerRef.current) {
-      resizeObserver.observe(containerRef.current);
-    }
-    
-    window.addEventListener('resize', updateWidth);
-    
-    return () => {
-      resizeObserver.disconnect();
-      window.removeEventListener('resize', updateWidth);
-    };
-  }, []);
-  
+  const containerWidth = useContainerSize(containerRef);
+
   // 날짜 필터 state
   const [dateRange, setDateRange] = useState([
     dayjs().subtract(7, 'days'),
     dayjs()
   ]);
 
-  // 초기화 완료 플래그
-  const [initialized, setInitialized] = useState(false);
+  // 위젯 CRUD 훅
+  const {
+    widgets,
+    setWidgets,
+    initialized,
+    setInitialized,
+    addWidget,
+    deleteWidget,
+    editWidget,
+    resizeWidget,
+    updateWidgetData,
+    updateMultipleWidgets,
+    setWidgetsLoading
+  } = useWidgets();
 
-  // 위젯 목록 state - 초기값은 빈 배열, localStorage에서 로드
-  const [widgets, setWidgets] = useState([]);
+  // 위젯 데이터 로딩 훅
+  const { loadWidgetData } = useWidgetData();
+
+  // 위젯 초기화 및 자동 저장 훅
+  const { loadInitialWidgets } = useWidgetPersistence(widgets, dateRange, initialized);
 
   // 초기 로드: localStorage에서 위젯 불러오기
   useEffect(() => {
     const loadInitialData = async () => {
-      const stored = loadFromLocalStorage();
-      
-      if (stored && stored.widgets.length > 0) {
-        // 저장된 위젯이 있으면 불러오기
-        setWidgets(stored.widgets);
-        if (stored.globalDateRange) {
-          setDateRange(stored.globalDateRange);
-        }
-        
-        // API 연결된 위젯들 데이터 로드
-        const apiWidgets = stored.widgets.filter(w => w.presetId && w.apiEndpoint);
-        if (apiWidgets.length > 0) {
-          const loadedWidgets = await Promise.all(
-            apiWidgets.map(async (w) => {
-              try {
-                const { data: apiData, compareData, error } = await fetchWidgetData(w);
-                if (error) {
-                  return { ...w, loading: false, error, data: null };
-                }
-                const transformedData = transformWidgetData(w, apiData, compareData);
-                return { ...w, loading: false, error: null, data: transformedData };
-              } catch (err) {
-                return { ...w, loading: false, error: err.message, data: null };
-              }
-            })
-          );
-          
-          setWidgets(prev => {
-            const loadedMap = new Map(loadedWidgets.map(w => [w.id, w]));
-            return prev.map(w => loadedMap.get(w.id) || w);
-          });
-        }
-      } else {
-        // 저장된 위젯이 없으면 기본 샘플 위젯 표시
-        setWidgets([
-          {
-            id: 'sample-1',
-            type: 'text',
-            title: '시작하기',
-            widthSize: 'large',
-            heightSize: 'short',
-            data: { 
-              title: '👋 나만의 대시보드에 오신 것을 환영합니다!', 
-              content: '위젯 추가 버튼을 클릭하여 원하는 데이터를 추가해보세요.' 
-            }
-          }
-        ]);
+      const { widgets: initialWidgets, dateRange: initialDateRange } = await loadInitialWidgets();
+
+      setWidgets(initialWidgets);
+      if (initialDateRange) {
+        setDateRange(initialDateRange);
       }
-      
+
+      // API 연결된 위젯들 데이터 로드
+      const apiWidgets = initialWidgets.filter(w => w.presetId && w.apiEndpoint);
+      if (apiWidgets.length > 0) {
+        const loadedWidgets = await Promise.all(apiWidgets.map(loadWidgetData));
+        updateMultipleWidgets(loadedWidgets);
+      }
+
       setInitialized(true);
     };
 
     loadInitialData();
   }, []);
 
-  // 위젯 변경 시 자동 저장 (초기화 후에만)
-  useEffect(() => {
-    if (initialized && widgets.length > 0) {
-      // 샘플 위젯만 있는 경우는 저장하지 않음
-      const hasRealWidgets = widgets.some(w => !w.id.startsWith('sample-'));
-      if (hasRealWidgets) {
-        saveToLocalStorage(widgets, dateRange);
-      }
-    }
-  }, [widgets, dateRange, initialized]);
-
   // 모달 state
   const [addModalVisible, setAddModalVisible] = useState(false);
-
-  // 위젯 데이터 로드 함수
-  const loadWidgetData = useCallback(async (widget) => {
-    // API 연결된 위젯만 처리 (presetId가 있는 경우)
-    if (!widget.presetId || !widget.apiEndpoint) {
-      return widget;
-    }
-
-    try {
-      const { data: apiData, compareData: compareApiData, error } = await fetchWidgetData(widget);
-      
-      if (error) {
-        return { ...widget, loading: false, error: error, data: null };
-      }
-
-      const transformedData = transformWidgetData(widget, apiData, compareApiData);
-      return { ...widget, loading: false, error: null, data: transformedData };
-    } catch (err) {
-      console.error('[loadWidgetData Error]', err);
-      return { ...widget, loading: false, error: err.message, data: null };
-    }
-  }, []);
 
   // 위젯 추가 시 데이터 로드
   const handleAddWidget = useCallback(async (newWidget) => {
     // 먼저 로딩 상태로 추가
-    setWidgets(prev => [...prev, newWidget]);
+    addWidget(newWidget);
 
     // API 연결된 위젯이면 데이터 로드
     if (newWidget.presetId && newWidget.apiEndpoint) {
       const loadedWidget = await loadWidgetData(newWidget);
-      setWidgets(prev => prev.map(w => w.id === loadedWidget.id ? loadedWidget : w));
+      updateWidgetData(loadedWidget.id, loadedWidget);
     }
-  }, [loadWidgetData]);
+  }, [addWidget, loadWidgetData, updateWidgetData]);
 
   // 대시보드 날짜 변경 시 모든 위젯 데이터 새로고침
   const refreshAllWidgets = useCallback(async () => {
@@ -1539,47 +1171,14 @@ function MyDashboard() {
     if (widgetsToRefresh.length === 0) return;
 
     // 모든 위젯을 로딩 상태로
-    setWidgets(prev => prev.map(w => 
-      w.presetId && w.apiEndpoint ? { ...w, loading: true } : w
-    ));
+    setWidgetsLoading(true);
 
     // 병렬로 데이터 로드
-    const loadedWidgets = await Promise.all(
-      widgetsToRefresh.map(w => loadWidgetData(w))
-    );
+    const loadedWidgets = await Promise.all(widgetsToRefresh.map(loadWidgetData));
 
     // 결과 업데이트
-    setWidgets(prev => {
-      const loadedMap = new Map(loadedWidgets.map(w => [w.id, w]));
-      return prev.map(w => loadedMap.get(w.id) || w);
-    });
-  }, [widgets, loadWidgetData]);
-
-  // 위젯 삭제
-  const handleDeleteWidget = useCallback((widgetId) => {
-    Modal.confirm({
-      title: '위젯 삭제',
-      content: '이 위젯을 삭제하시겠습니까?',
-      okText: '삭제',
-      cancelText: '취소',
-      okButtonProps: { danger: true },
-      onOk: () => {
-        setWidgets(prev => prev.filter(w => w.id !== widgetId));
-      }
-    });
-  }, []);
-
-  // 위젯 편집
-  const handleEditWidget = useCallback((widget) => {
-    console.log('Edit widget:', widget);
-  }, []);
-
-  // 위젯 크기 변경 (너비 + 높이)
-  const handleResizeWidget = useCallback((widgetId, newWidthSize, newHeightSize) => {
-    setWidgets(prev => prev.map(w => 
-      w.id === widgetId ? { ...w, widthSize: newWidthSize, heightSize: newHeightSize } : w
-    ));
-  }, []);
+    updateMultipleWidgets(loadedWidgets);
+  }, [widgets, loadWidgetData, setWidgetsLoading, updateMultipleWidgets]);
 
   const gap = 16;
   const colWidth = (containerWidth - gap * 2) / 3;
@@ -1657,9 +1256,9 @@ function MyDashboard() {
               <DashboardWidget
                 key={widget.id}
                 widget={widget}
-                onDelete={handleDeleteWidget}
-                onEdit={handleEditWidget}
-                onResize={handleResizeWidget}
+                onDelete={deleteWidget}
+                onEdit={editWidget}
+                onResize={resizeWidget}
                 containerWidth={containerWidth}
                 containerRef={containerRef}
               />
