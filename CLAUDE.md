@@ -2,6 +2,14 @@
 
 이 파일은 Claude Code (claude.ai/code)가 이 저장소에서 작업할 때 참고하는 가이드입니다.
 
+> **🆕 v051 업데이트 하이라이트** (2025-12-04~05)
+> - ✨ 마이 대시보드: 드래그 가능한 위젯 기반 커스텀 대시보드
+> - 📊 네이버 검색광고 API 연동: 자동 성과 데이터 수집
+> - 📱 Meta(Facebook/Instagram) 광고 API 연동: 자동 성과 데이터 수집
+> - ⏰ 광고 데이터 자동 스케줄러: 매일 오전 6시 동기화
+> - 🐛 타임존 버그 수정: UTC→KST 일별 집계 불일치 해결
+> - 💳 주문 분석 UI 개선: 결제완료/입금대기/취소/반품 필터 추가
+
 ## 프로젝트 개요
 
 **Moadamda Analytics**는 GA4를 대체하기 위해 자체 개발한 전자상거래 특화 분석 플랫폼입니다. 방문자 행동, 전자상거래 이벤트를 추적하고, 온라인 쇼핑몰을 위한 고급 마케팅 어트리뷰션 분석을 제공합니다.
@@ -13,7 +21,8 @@
 - **로컬 개발**:
   - 백엔드 API: http://localhost:3003
   - 프론트엔드 대시보드: http://localhost:3030
-- **현재 트래커 버전**: tracker-v044.js
+- **현재 트래커 버전**: tracker-v048.js (배포 버전: v047)
+- **시스템 버전**: v051
 
 ## 시스템 아키텍처
 
@@ -21,34 +30,46 @@
 
 1. **트래커 (클라이언트 사이드 JavaScript)**
    - 소스: `tracker/src/tracker.js`
-   - 빌드: `tracker/build/tracker-v044.js` (배포 버전)
+   - 빌드: `tracker/build/tracker-v048.js` (최신), `tracker-v047.js` (배포 버전)
    - Cafe24 쇼핑몰에 배포되는 순수 JavaScript 추적 스크립트
    - 페이지뷰, 세션, 전자상거래 이벤트(view_product, add_to_cart, checkout, purchase) 추적
    - POST 요청을 통해 백엔드 API로 데이터 전송
+   - **v047 주요 기능**: 인앱 브라우저 감지 및 강화 전송, sendBeacon fallback, 실패 이벤트 재시도
 
 2. **백엔드 (Node.js API)**
    - 위치: `backend/src/`
-   - 기술 스택: Node.js, Express, PostgreSQL
+   - 기술 스택: Node.js, Express, PostgreSQL, node-cron
    - 주요 라우트:
      - `/api/track` - 데이터 수집 엔드포인트 (track.js)
      - `/api/stats/*` - 분석 데이터 엔드포인트 (stats.js)
+       - `/api/stats/today` - 오늘 통계
+       - `/api/stats/range` - 기간별 통계
+       - `/api/stats/utm-performance` - UTM 성과 분석
+       - `/api/stats/orders/*` - 주문 분석
+       - `/api/stats/activity` - 실시간 활동
      - `/api/tables/*` - 원본 데이터 테이블 뷰 (tables.js)
      - `/api/mappings/*` - URL/상품 매핑 관리 (mappings.js)
      - `/api/creative-performance/*` - 광고 소재 분석 (creative-performance.js)
+     - `/api/cafe24/*` - Cafe24 주문 동기화 (cafe24.js)
 
 3. **프론트엔드 (React 대시보드)**
    - 위치: `frontend/src/`
-   - 기술 스택: React, Vite, Ant Design, Recharts, TailwindCSS
+   - 기술 스택: React, Vite, Ant Design, Recharts, TailwindCSS, react-grid-layout
    - 주요 페이지:
-     - `App.jsx` - 메트릭, UTM 성과, 주문 분석이 포함된 메인 대시보드
+     - `App.jsx` / `AppNew.jsx` - 메트릭, UTM 성과, 주문 분석이 포함된 메인 대시보드
+     - `MyDashboard.jsx` - **신규**: 드래그 가능한 위젯 기반 커스텀 대시보드
      - `DataTables.jsx` - 원본 데이터 테이블 뷰
      - `CreativePerformance.jsx` - 광고 소재 모집단 분석
-     - `OrderAnalysis.jsx` - 개별 주문 여정 분석
+     - `OrderAnalysis/` - 개별 주문 여정 분석
+       - `OrderListPage.jsx` - 주문 목록 (결제완료/입금대기/취소/반품 필터)
+       - `OrderDetailPage.jsx` - 개별 주문 상세 여정
      - `PageMapping.jsx` - URL과 상품명 매핑 관리
 
 ### 데이터베이스 스키마 (PostgreSQL)
 
-`backend/migrations/init.sql`의 핵심 테이블:
+`backend/migrations/`의 핵심 테이블:
+
+**핵심 추적 테이블** (init.sql):
 - `visitors` - 디바이스 정보, UTM 파라미터가 포함된 고유 방문자
 - `sessions` - 지속시간, 이탈율, 전환 플래그가 있는 사용자 세션
 - `pageviews` - 타임스탬프가 있는 개별 페이지 뷰
@@ -56,6 +77,22 @@
 - `conversions` - 주문 상세 정보가 있는 구매 트랜잭션
 - `utm_sessions` - 멀티터치 어트리뷰션을 위한 UTM 추적 이력
 - `realtime_visitors` - 현재 활동 중인 방문자
+
+**네이버 검색광고 테이블** (create_naver_ad_tables.sql):
+- `naver_campaigns` - 네이버 캠페인 정보 및 일예산
+- `naver_adgroups` - 네이버 광고그룹 및 입찰가
+- `naver_keywords` - 네이버 키워드 및 상태
+- `naver_ad_stats` - 네이버 일별 성과 데이터 (노출, 클릭, 전환, 비용)
+
+**Meta 광고 테이블** (create_meta_ad_tables.sql):
+- `meta_campaigns` - Meta 캠페인 정보 및 예산
+- `meta_adsets` - Meta 광고세트 및 타겟팅
+- `meta_ads` - Meta 개별 광고 및 소재
+- `meta_ad_stats` - Meta 일별 성과 데이터 (노출, 클릭, 전환, 비용)
+
+**기타 테이블**:
+- `url_mappings` - URL과 상품명 매핑 (수동/자동)
+- `cafe24_tokens` - Cafe24 API 인증 토큰
 
 ## 개발 명령어
 
@@ -229,7 +266,7 @@ curl https://moadamda-analytics.co.kr/health
 
 **매 세션 시작 시 PROJECT_STATUS.md를 먼저 읽어** 현재 단계와 진행 상황을 파악하세요.
 
-현재 단계 컨텍스트 (v047 기준):
+현재 단계 컨텍스트 (v051 기준):
 - Phase 1-3: 핵심 추적, 전자상거래 이벤트, 대시보드 UI ✅ 완료
 - Phase 4: UTM 추적 기반 마케팅 분석 ✅ Phase 4.1-4.3 완료
   - conversions 테이블에 UTM 추적
@@ -238,11 +275,18 @@ curl https://moadamda-analytics.co.kr/health
 - Phase 4.4+: 고급 어트리뷰션 모델 (계획)
 - Phase 5+: 고급 분석 (코호트, 퍼널, A/B 테스팅) (계획)
 
-**최근 주요 기능 (전체 로그는 PROJECT_STATUS.md 참조)**:
+**최근 주요 기능 (v051, 전체 로그는 PROJECT_STATUS.md 참조)**:
+- **신규**: 마이 대시보드 - 드래그 가능한 위젯 기반 커스텀 대시보드 (react-grid-layout)
+- **신규**: 네이버 검색광고 API 연동 - 자동 성과 데이터 수집
+- **신규**: Meta(Facebook/Instagram) 광고 API 연동 - 자동 성과 데이터 수집
+- **신규**: 광고 데이터 자동 스케줄러 - 매일 오전 6시 자동 동기화
 - 복합 URL 조건 페이지 매핑
 - 수동 URL 등록
 - 제품 배지가 있는 주문 여정 분석
 - 광고 소재 성과 분석
+- 주문 분석 UI 개선 (결제완료/입금대기/취소/반품 필터)
+- 구매카드 결제정보 단순화
+- 타임존 버그 수정 (UTC→KST 일별 집계)
 
 ## 주요 기술 패턴
 
@@ -283,6 +327,43 @@ SELECT * FROM step2;
 WHERE time_spent_seconds > 0
   AND time_spent_seconds <= 600  -- 10분 제한
 ```
+
+## 마이 대시보드 (v051 신규)
+
+### 개요
+
+**MyDashboard.jsx**는 사용자가 위젯을 자유롭게 배치하고 크기를 조정할 수 있는 커스터마이징 가능한 대시보드입니다.
+
+### 주요 기능
+
+1. **드래그 앤 드롭 레이아웃**
+   - `react-grid-layout` 라이브러리 사용
+   - 위젯을 드래그하여 위치 변경
+   - 위젯 모서리를 드래그하여 크기 조정
+   - 레이아웃 자동 저장 (localStorage)
+
+2. **다양한 위젯**
+   - 실시간 통계 (방문자, 세션, 구매)
+   - 기간별 통계 (일별, 주별, 월별)
+   - UTM 성과 분석
+   - 광고 소재 성과
+   - 주문 목록
+   - 활동 피드
+
+3. **반응형 디자인**
+   - 브레이크포인트: lg (1200px), md (996px), sm (768px)
+   - 화면 크기에 따라 레이아웃 자동 조정
+
+4. **Cafe24 주문 동기화**
+   - 대시보드에서 직접 Cafe24 주문 수동 동기화 가능
+   - 동기화 상태 실시간 표시
+
+### 개발 시 주의사항
+
+- 위젯 추가/제거 시 레이아웃 정의 수정 필요 (MyDashboard.jsx 상단)
+- 각 위젯은 고유한 `i` 값(key)을 가져야 함
+- 위젯 내부에서 외부 스크롤 방지를 위해 `overflow: auto` 사용
+- 모달 높이는 95vh로 고정하여 스크롤 문제 방지
 
 ## 일반적인 문제와 해결책
 
@@ -386,8 +467,121 @@ CAFE24_API_VERSION=2025-09-01
 - EC_FRONT_EXTERNAL_SCRIPT_VARIABLE_DATA 객체 로드 지연 (30초 타임아웃)
 - JavaScript 에러로 스크립트 실행 실패
 - 광고 차단기 등 브라우저 확장 프로그램
+- 인앱 브라우저에서 페이지 전환 시 데이터 유실 (21.5%~50%)
 
-**해결 방법**: Cafe24 API Sync로 누락된 주문 보충 (현재 구현됨)
+**해결 방법**:
+- Cafe24 API Sync로 누락된 주문 보충 (현재 구현됨)
+- v047: 인앱 브라우저 강화 전송 (sendBeacon + fetch 동시 사용)
+- v047: 실패 이벤트 sessionStorage 저장 및 재시도 (30초 간격)
+
+### 타임존 이슈 (✅ 해결됨)
+
+**문제**: 로컬 개발 환경과 서버 환경에서 날짜 집계 결과가 불일치
+
+**원인**:
+- 데이터베이스에 KST로 저장된 timestamp를 UTC로 해석하여 쿼리
+- Docker 백엔드 컨테이너의 타임존이 UTC로 설정됨
+
+**해결 방법** (v051 적용):
+1. Docker 백엔드에 `TZ=Asia/Seoul` 환경 변수 추가
+2. 날짜 비교 쿼리에서 명시적으로 타임존 처리
+3. JavaScript Date → PostgreSQL 전달 시 `timestamptz` 명시
+4. 일별 집계 쿼리에서 `AT TIME ZONE 'Asia/Seoul'` 추가
+
+## 광고 플랫폼 API 연동 (v051 신규)
+
+### 개요
+
+**Moadamda Analytics v051**부터 네이버 검색광고 및 Meta(Facebook/Instagram) 광고 성과 데이터를 자동으로 수집하여 자체 데이터베이스에 저장합니다.
+
+### 지원 플랫폼
+
+1. **네이버 검색광고 (Naver Search Ads)**
+   - API 문서: https://naver.github.io/searchad-apidoc/
+   - 수집 데이터: 캠페인, 광고그룹, 키워드, 일별 성과 (노출/클릭/전환/비용)
+
+2. **Meta(Facebook/Instagram) 광고**
+   - API 문서: https://developers.facebook.com/docs/marketing-api
+   - 수집 데이터: 캠페인, 광고세트, 광고, 일별 성과 (노출/클릭/전환/비용)
+
+### 자동 스케줄러
+
+**위치**: `backend/src/scripts/adScheduler.js`
+
+**스케줄**:
+- 매일 오전 6시: 네이버 + Meta 광고 데이터 자동 동기화 (최근 7일)
+- 매주 월요일 오전 5시: Meta 액세스 토큰 갱신 확인
+
+**수동 실행**:
+```bash
+# 전체 동기화 즉시 실행
+node backend/src/scripts/adScheduler.js --now
+
+# 네이버만 동기화
+node backend/src/scripts/adScheduler.js --naver
+
+# Meta만 동기화
+node backend/src/scripts/adScheduler.js --meta
+
+# Meta 토큰 갱신
+node backend/src/scripts/adScheduler.js --token
+
+# 스케줄러 시작 (백그라운드)
+node backend/src/scripts/adScheduler.js
+```
+
+### 개별 스크립트
+
+| 스크립트 | 설명 |
+|---------|------|
+| `syncNaverAdInfo.js` | 네이버 캠페인/광고그룹/키워드 정보 동기화 |
+| `syncNaverAdStats.js [days]` | 네이버 성과 데이터 동기화 (기본 7일) |
+| `syncMetaAds.js [days]` | Meta 캠페인/광고세트/광고 + 성과 동기화 |
+| `exchangeMetaToken.js` | Meta 단기 토큰 → 장기 토큰 교환 |
+| `testMetaApi.js` | Meta API 연결 테스트 |
+
+### 환경 변수 (backend/.env)
+
+```env
+# 네이버 검색광고
+NAVER_API_KEY=<네이버 API 키>
+NAVER_SECRET_KEY=<네이버 시크릿 키>
+NAVER_CUSTOMER_ID=<광고주 ID>
+
+# Meta 광고
+META_ACCESS_TOKEN=<Meta 장기 액세스 토큰>
+META_AD_ACCOUNT_ID=act_<광고 계정 ID>
+META_APP_ID=<앱 ID>
+META_APP_SECRET=<앱 시크릿>
+```
+
+### 프로덕션 배포 시 주의사항
+
+1. **환경 변수 확인**: 서버의 `backend/.env` 파일에 모든 API 키가 설정되어 있는지 확인
+2. **스케줄러 시작**: 서버 재시작 시 자동으로 시작되지 않으므로, `pm2` 등으로 adScheduler.js를 별도 프로세스로 실행 필요
+3. **토큰 갱신**: Meta 토큰은 60일마다 갱신 필요. 스케줄러가 자동으로 확인하지만, 수동 갱신도 가능
+
+### 데이터 확인
+
+```bash
+# 네이버 광고 통계 확인
+ssh root@49.50.139.223 'docker exec -i ma-postgres psql -U moadamda -d analytics -c "
+  SELECT date, SUM(cost) as total_cost, SUM(clicks) as total_clicks
+  FROM naver_ad_stats
+  WHERE date >= CURRENT_DATE - INTERVAL '\''7 days'\''
+  GROUP BY date
+  ORDER BY date DESC;
+"'
+
+# Meta 광고 통계 확인
+ssh root@49.50.139.223 'docker exec -i ma-postgres psql -U moadamda -d analytics -c "
+  SELECT date, SUM(spend) as total_spend, SUM(clicks) as total_clicks
+  FROM meta_ad_stats
+  WHERE date >= CURRENT_DATE - INTERVAL '\''7 days'\''
+  GROUP BY date
+  ORDER BY date DESC;
+"'
+```
 
 ## 프로젝트 문서
 
@@ -406,6 +600,41 @@ CAFE24_API_VERSION=2025-09-01
 - URL: https://github.com/hongkimwork/moadamda-analytics
 - 브랜치: main
 - 접근: Private repository
+
+---
+
+## 버전 히스토리
+
+### v051 (2025-12-04~05)
+- **주요 기능**: 광고 플랫폼 API 연동 (네이버, Meta)
+- 마이 대시보드 추가 (react-grid-layout)
+- 광고 데이터 자동 스케줄러 (node-cron)
+- 타임존 버그 수정 (UTC→KST)
+- 주문 분석 UI 개선 (필터 추가)
+- 구매카드 결제정보 단순화
+
+### v047 (2025-12-03)
+- **주요 기능**: 인앱 브라우저 추적 강화
+- sendBeacon + fetch 이중 전송
+- 실패 이벤트 재시도 메커니즘
+- 쿠폰 선택 페이지 추적
+
+### v046 이전
+- Phase 1-3: 핵심 추적, 전자상거래, 대시보드 UI 완료
+- Phase 4.1-4.3: UTM 성과 분석 완료
+- Cafe24 API 연동 완료
+- 광고 소재 성과 분석 완료
+- URL 매핑 관리 완료
+
+---
+
+## 문서 업데이트 로그
+
+| 날짜 | 버전 | 업데이트 내용 |
+|------|------|-------------|
+| 2025-12-08 | v051 | 광고 플랫폼 API 연동, 마이 대시보드, 타임존 수정 반영 |
+| 2025-12-03 | v047 | 인앱 브라우저 추적 강화 반영 |
+| 2025-11-XX | v046 | 초기 CLAUDE.md 작성 |
 
 ---
 
