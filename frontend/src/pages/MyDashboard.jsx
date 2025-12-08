@@ -1,21 +1,12 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Card, Typography, Button, Modal, DatePicker, Space, Dropdown, Empty, Input, Radio, Steps, Checkbox, Spin } from 'antd';
-import { 
-  AppstoreOutlined, 
-  PlusOutlined, 
-  DeleteOutlined, 
+import {
+  AppstoreOutlined,
+  PlusOutlined,
+  DeleteOutlined,
   EditOutlined,
   DragOutlined,
-  LineChartOutlined,
-  BarChartOutlined,
-  TableOutlined,
-  NumberOutlined,
-  FundOutlined,
-  FileTextOutlined,
   MoreOutlined,
-  ShoppingCartOutlined,
-  TeamOutlined,
-  SoundOutlined,
   LockOutlined,
   ArrowLeftOutlined,
   ArrowRightOutlined,
@@ -23,154 +14,20 @@ import {
   LoadingOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import {
+  DATA_SOURCES,
+  WIDGET_PRESETS,
+  DATE_PRESETS,
+  getComparisonPeriod,
+  WIDTH_SIZES,
+  HEIGHT_SIZES,
+  getWidthSizeFromCols,
+  getHeightSizeFromPixels,
+  WIDGET_TYPES
+} from './constants';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
-
-// ============================================================================
-// 데이터 소스 정의 (확장성 고려)
-// ============================================================================
-const DATA_SOURCES = {
-  cafe24: { 
-    id: 'cafe24',
-    name: '주문 / 매출', 
-    icon: <ShoppingCartOutlined style={{ fontSize: 28, color: '#1890ff' }} />,
-    description: '오늘 매출, 주문 건수, 상품별 판매 등',
-    enabled: true 
-  },
-  tracker: { 
-    id: 'tracker',
-    name: '방문자 분석', 
-    icon: <TeamOutlined style={{ fontSize: 28, color: '#52c41a' }} />,
-    description: '방문자수, 페이지뷰, 유입경로 등',
-    enabled: false,
-    comingSoon: true
-  },
-  ad_platforms: { 
-    id: 'ad_platforms',
-    name: '광고 성과', 
-    icon: <SoundOutlined style={{ fontSize: 28, color: '#722ed1' }} />,
-    description: '네이버/메타 광고 성과, ROAS 등',
-    enabled: false,
-    comingSoon: true
-  }
-};
-
-// ============================================================================
-// 위젯 프리셋 정의 (Cafe24 주문/매출)
-// ============================================================================
-const WIDGET_PRESETS = {
-  cafe24: {
-    kpi: [
-      {
-        id: 'total_revenue',
-        label: '총 매출',
-        icon: '💵',
-        description: '선택 기간의 총 매출액',
-        type: 'kpi',
-        apiEndpoint: '/api/stats/range',
-        dataKey: 'revenue.final',
-        suffix: '원',
-        defaultWidth: 'small',
-        defaultHeight: 'short'
-      },
-      {
-        id: 'order_count',
-        label: '주문 건수',
-        icon: '📦',
-        description: '선택 기간의 총 주문 수',
-        type: 'kpi',
-        apiEndpoint: '/api/stats/range',
-        dataKey: 'orders.count',
-        suffix: '건',
-        defaultWidth: 'small',
-        defaultHeight: 'short'
-      },
-      {
-        id: 'aov',
-        label: '평균 주문금액',
-        icon: '💳',
-        description: '주문 1건당 평균 결제 금액',
-        type: 'kpi',
-        apiEndpoint: '/api/stats/range',
-        dataKey: 'orders.final_aov',
-        suffix: '원',
-        defaultWidth: 'small',
-        defaultHeight: 'short'
-      }
-    ],
-    chart: [
-      {
-        id: 'daily_revenue',
-        label: '일별 매출 추이',
-        icon: '📈',
-        description: '날짜별 매출 변화 그래프',
-        type: 'line',
-        apiEndpoint: '/api/stats/daily',
-        dataKey: 'daily',
-        defaultWidth: 'medium',
-        defaultHeight: 'medium'
-      },
-      {
-        id: 'order_place_revenue',
-        label: '주문경로별 매출',
-        icon: '📊',
-        description: '네이버페이, PC쇼핑몰 등 경로별 비교',
-        type: 'bar',
-        apiEndpoint: '/api/stats/orders',
-        dataKey: 'by_order_place',
-        defaultWidth: 'medium',
-        defaultHeight: 'medium'
-      }
-    ],
-    list: [
-      {
-        id: 'recent_orders',
-        label: '최근 주문 목록',
-        icon: '📋',
-        description: '최근 주문 내역 상세 보기',
-        type: 'table',
-        apiEndpoint: '/api/stats/orders',
-        dataKey: 'orders',
-        defaultWidth: 'large',
-        defaultHeight: 'tall'
-      },
-      {
-        id: 'top_products',
-        label: '상품별 판매순위',
-        icon: '🏆',
-        description: '가장 많이 팔린 상품 순위',
-        type: 'table',
-        apiEndpoint: '/api/stats/orders',
-        dataKey: 'by_product',
-        defaultWidth: 'medium',
-        defaultHeight: 'tall'
-      }
-    ]
-  }
-};
-
-// ============================================================================
-// 기간 프리셋 정의
-// ============================================================================
-const DATE_PRESETS = [
-  { key: 'today', label: '오늘', getValue: () => [dayjs(), dayjs()] },
-  { key: 'yesterday', label: '어제', getValue: () => [dayjs().subtract(1, 'day'), dayjs().subtract(1, 'day')] },
-  { key: 'last7days', label: '최근 7일', getValue: () => [dayjs().subtract(6, 'days'), dayjs()] },
-  { key: 'last30days', label: '최근 30일', getValue: () => [dayjs().subtract(29, 'days'), dayjs()] },
-  { key: 'thisMonth', label: '이번 달', getValue: () => [dayjs().startOf('month'), dayjs()] },
-  { key: 'lastMonth', label: '지난 달', getValue: () => [dayjs().subtract(1, 'month').startOf('month'), dayjs().subtract(1, 'month').endOf('month')] },
-  { key: 'custom', label: '직접 선택', getValue: () => null }
-];
-
-// 이전 기간 자동 계산 함수 (같은 일자의 이전 달)
-// 예: 12월 1일 ~ 12월 5일 → 11월 1일 ~ 11월 5일
-const getComparisonPeriod = (startDate, endDate) => {
-  return [
-    startDate.subtract(1, 'month'),
-    endDate.subtract(1, 'month')
-  ];
-};
 
 // ============================================================================
 // localStorage 저장/불러오기
@@ -431,92 +288,6 @@ const transformWidgetData = (widget, apiData, compareApiData) => {
   // 기본 반환
   return apiData;
 };
-
-// ============================================================================
-// 크기 시스템 정의
-// ============================================================================
-
-// 너비 크기 (3단 그리드)
-const WIDTH_SIZES = {
-  small: { cols: 1, label: '1/3' },
-  medium: { cols: 2, label: '2/3' },
-  large: { cols: 3, label: '전체' }
-};
-
-// 높이 크기 (3단계)
-const HEIGHT_SIZES = {
-  short: { height: 150, label: '작음' },
-  medium: { height: 250, label: '중간' },
-  tall: { height: 350, label: '큼' }
-};
-
-// cols에서 width size key 찾기
-const getWidthSizeFromCols = (cols) => {
-  if (cols <= 1) return 'small';
-  if (cols <= 2) return 'medium';
-  return 'large';
-};
-
-// height에서 height size key 찾기
-const getHeightSizeFromPixels = (pixels) => {
-  if (pixels <= 175) return 'short';
-  if (pixels <= 275) return 'medium';
-  return 'tall';
-};
-
-// ============================================================================
-// 위젯 타입 정의 (기본 크기 포함)
-// ============================================================================
-const WIDGET_TYPES = [
-  {
-    key: 'kpi',
-    icon: <NumberOutlined style={{ fontSize: 24, color: '#1890ff' }} />,
-    label: 'KPI 숫자',
-    description: '핵심 지표를 큰 숫자로 표시',
-    defaultWidth: 'small',
-    defaultHeight: 'short'
-  },
-  {
-    key: 'line',
-    icon: <LineChartOutlined style={{ fontSize: 24, color: '#52c41a' }} />,
-    label: '라인 차트',
-    description: '시간에 따른 추이 표시',
-    defaultWidth: 'medium',
-    defaultHeight: 'medium'
-  },
-  {
-    key: 'bar',
-    icon: <BarChartOutlined style={{ fontSize: 24, color: '#722ed1' }} />,
-    label: '바 차트',
-    description: '항목별 비교 분석',
-    defaultWidth: 'medium',
-    defaultHeight: 'medium'
-  },
-  {
-    key: 'table',
-    icon: <TableOutlined style={{ fontSize: 24, color: '#fa8c16' }} />,
-    label: '테이블',
-    description: '상세 데이터 목록',
-    defaultWidth: 'large',
-    defaultHeight: 'tall'
-  },
-  {
-    key: 'funnel',
-    icon: <FundOutlined style={{ fontSize: 24, color: '#eb2f96' }} />,
-    label: '퍼널',
-    description: '단계별 전환율 표시',
-    defaultWidth: 'small',
-    defaultHeight: 'medium'
-  },
-  {
-    key: 'text',
-    icon: <FileTextOutlined style={{ fontSize: 24, color: '#8c8c8c' }} />,
-    label: '텍스트',
-    description: '제목이나 설명 추가',
-    defaultWidth: 'large',
-    defaultHeight: 'short'
-  }
-];
 
 // ============================================================================
 // 더미 데이터 생성 함수
