@@ -107,7 +107,10 @@ router.get('/range', async (req, res) => {
          WHERE timestamp >= $1 AND timestamp <= $2
            AND paid = 'T' AND canceled = 'F'`;
 
+    console.log('[DEBUG] Revenue Query:', revenueQuery.substring(0, 500));
+    console.log('[DEBUG] Params:', visitorsParams);
     const revenueResult = await db.query(revenueQuery, visitorsParams);
+    console.log('[DEBUG] Result count:', revenueResult.rows[0].order_count);
 
     const totalRevenue = parseInt(revenueResult.rows[0].total_revenue);
     const finalRevenue = parseInt(revenueResult.rows[0].final_revenue);
