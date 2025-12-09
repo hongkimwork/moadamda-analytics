@@ -3,6 +3,7 @@
  */
 
 export { default as DashboardWidget } from './DashboardWidget';
+export { default as AddWidgetModal } from './AddWidgetModal';
 export { default as KPIWidget } from './KPIWidget';
 export { default as LineChartWidget } from './LineChartWidget';
 export { default as BarChartWidget } from './BarChartWidget';
