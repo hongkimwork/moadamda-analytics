@@ -509,7 +509,7 @@ router.post('/creative-performance/orders', async (req, res) => {
       });
     }
 
-    // 3. 해당 visitor들의 결제 완료된 주문 조회
+    // 3. 해당 visitor들의 결제 완료된 주문 조회 (선택한 기간의 주문만)
     const ordersQuery = `
       SELECT 
         c.order_id,
@@ -526,10 +526,12 @@ router.post('/creative-performance/orders', async (req, res) => {
         AND c.order_id IS NOT NULL
         AND c.paid = 'T'
         AND c.final_payment > 0
+        AND c.timestamp >= $2
+        AND c.timestamp <= $3
       ORDER BY c.timestamp DESC
     `;
 
-    const ordersResult = await db.query(ordersQuery, [visitorIds]);
+    const ordersResult = await db.query(ordersQuery, [visitorIds, startDate, endDate]);
     const allOrders = ordersResult.rows;
 
     if (allOrders.length === 0) {
@@ -772,7 +774,7 @@ router.post('/creative-performance/analysis', async (req, res) => {
       ORDER BY date ASC
     `;
 
-    // 4. 디바이스별 성과 조회
+    // 4. 디바이스별 성과 조회 (선택한 기간의 주문만)
     const deviceStatsQuery = `
       WITH device_uv AS (
         SELECT 
@@ -799,6 +801,8 @@ router.post('/creative-performance/analysis', async (req, res) => {
           AND c.order_id IS NOT NULL
           AND c.paid = 'T'
           AND c.final_payment > 0
+          AND c.timestamp >= $5
+          AND c.timestamp <= $6
         GROUP BY v.device_type
       )
       SELECT 
@@ -811,7 +815,7 @@ router.post('/creative-performance/analysis', async (req, res) => {
       ORDER BY uv DESC
     `;
 
-    // 5. 상품별 매출 TOP 10 조회
+    // 5. 상품별 매출 TOP 10 조회 (선택한 기간의 주문만)
     const productSalesQuery = `
       SELECT 
         COALESCE(c.product_name, '상품명 없음') as product_name,
@@ -822,6 +826,8 @@ router.post('/creative-performance/analysis', async (req, res) => {
         AND c.order_id IS NOT NULL
         AND c.paid = 'T'
         AND c.final_payment > 0
+        AND c.timestamp >= $2
+        AND c.timestamp <= $3
       GROUP BY c.product_name
       ORDER BY revenue DESC
       LIMIT 10
@@ -840,7 +846,7 @@ router.post('/creative-performance/analysis', async (req, res) => {
     const [dailyTrendResult, deviceStatsResult, productSalesResult, visitorTypeResult] = await Promise.all([
       db.query(dailyTrendQuery, [creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate, visitorIds]),
       db.query(deviceStatsQuery, [creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate, visitorIds]),
-      db.query(productSalesQuery, [visitorIds]),
+      db.query(productSalesQuery, [visitorIds, startDate, endDate]),
       db.query(visitorTypeQuery, [visitorIds])
     ]);
 
@@ -1016,7 +1022,7 @@ router.post('/creative-performance/journey', async (req, res) => {
       });
     }
 
-    // 3. 해당 visitor들의 결제 완료된 주문 조회
+    // 3. 해당 visitor들의 결제 완료된 주문 조회 (선택한 기간의 주문만)
     const purchasesQuery = `
       SELECT 
         c.visitor_id,
@@ -1028,10 +1034,12 @@ router.post('/creative-performance/journey', async (req, res) => {
         AND c.order_id IS NOT NULL
         AND c.paid = 'T'
         AND c.final_payment > 0
+        AND c.timestamp >= $2
+        AND c.timestamp <= $3
       ORDER BY c.timestamp DESC
     `;
 
-    const purchasesResult = await db.query(purchasesQuery, [visitorIds]);
+    const purchasesResult = await db.query(purchasesQuery, [visitorIds, startDate, endDate]);
     const purchases = purchasesResult.rows;
 
     // 구매한 visitor 목록
@@ -1311,7 +1319,7 @@ router.post('/creative-performance/landing-pages', async (req, res) => {
       });
     }
 
-    // 3. 구매자 visitor 목록 조회
+    // 3. 구매자 visitor 목록 조회 (선택한 기간의 주문만)
     const purchaserQuery = `
       SELECT DISTINCT visitor_id
       FROM conversions
@@ -1319,8 +1327,10 @@ router.post('/creative-performance/landing-pages', async (req, res) => {
         AND order_id IS NOT NULL
         AND paid = 'T'
         AND final_payment > 0
+        AND timestamp >= $2
+        AND timestamp <= $3
     `;
-    const purchaserResult = await db.query(purchaserQuery, [visitorIds]);
+    const purchaserResult = await db.query(purchaserQuery, [visitorIds, startDate, endDate]);
     const purchaserIds = purchaserResult.rows.map(r => r.visitor_id);
     const nonPurchaserIds = visitorIds.filter(id => !purchaserIds.includes(id));
 
@@ -1676,7 +1686,7 @@ router.post('/creative-performance/compare', async (req, res) => {
       const bounceResult = await db.query(bounceQuery, [visitorIds, startDate, endDate]);
       const bounceRate = parseFloat(bounceResult.rows[0]?.bounce_rate) || 0;
 
-      // 2-4. 전환 관련 지표 (구매자 및 막타 매출)
+      // 2-4. 전환 관련 지표 (구매자 및 막타 매출) - 선택한 기간의 주문만
       const conversionQuery = `
         SELECT 
           COUNT(DISTINCT c.order_id) as conversion_count,
@@ -1686,14 +1696,16 @@ router.post('/creative-performance/compare', async (req, res) => {
           AND c.order_id IS NOT NULL
           AND c.paid = 'T'
           AND c.final_payment > 0
+          AND c.timestamp >= $2
+          AND c.timestamp <= $3
       `;
-      const conversionResult = await db.query(conversionQuery, [visitorIds]);
+      const conversionResult = await db.query(conversionQuery, [visitorIds, startDate, endDate]);
       const conversionCount = parseInt(conversionResult.rows[0]?.conversion_count) || 0;
       const totalRevenue = parseFloat(conversionResult.rows[0]?.total_revenue) || 0;
       const uv = parseInt(metrics.uv) || 0;
       const conversionRate = uv > 0 ? Math.round(conversionCount / uv * 1000) / 10 : 0;
 
-      // 2-5. 막타 매출 계산 (마지막으로 본 광고가 이 소재인 경우)
+      // 2-5. 막타 매출 계산 (마지막으로 본 광고가 이 소재인 경우) - 선택한 기간의 주문만
       const lastTouchQuery = `
         WITH visitor_journeys AS (
           SELECT 
@@ -1720,13 +1732,15 @@ router.post('/creative-performance/compare', async (req, res) => {
         WHERE c.order_id IS NOT NULL
           AND c.paid = 'T'
           AND c.final_payment > 0
-          AND lt.utm_content = $2
-          AND lt.utm_source = $3
-          AND lt.utm_medium = $4
-          AND lt.utm_campaign = $5
+          AND c.timestamp >= $2
+          AND c.timestamp <= $3
+          AND lt.utm_content = $4
+          AND lt.utm_source = $5
+          AND lt.utm_medium = $6
+          AND lt.utm_campaign = $7
       `;
       const lastTouchResult = await db.query(lastTouchQuery, [
-        visitorIds, creative_name, utm_source, utm_medium, utm_campaign
+        visitorIds, startDate, endDate, creative_name, utm_source, utm_medium, utm_campaign
       ]);
       const lastTouchRevenue = Math.round(parseFloat(lastTouchResult.rows[0]?.last_touch_revenue) || 0);
 
@@ -1793,6 +1807,7 @@ router.post('/creative-performance/compare', async (req, res) => {
       })));
 
       // 2-7. 광고 역할 분포 (구매자 기준)
+      // 선택한 기간의 주문을 한 구매자만 조회
       const purchaserQuery = `
         SELECT DISTINCT visitor_id
         FROM conversions
@@ -1800,8 +1815,10 @@ router.post('/creative-performance/compare', async (req, res) => {
           AND order_id IS NOT NULL
           AND paid = 'T'
           AND final_payment > 0
+          AND timestamp >= $2
+          AND timestamp <= $3
       `;
-      const purchaserResult = await db.query(purchaserQuery, [visitorIds]);
+      const purchaserResult = await db.query(purchaserQuery, [visitorIds, startDate, endDate]);
       const purchaserIds = purchaserResult.rows.map(r => r.visitor_id);
 
       if (purchaserIds.length === 0) {

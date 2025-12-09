@@ -65,6 +65,7 @@ async function calculateCreativeAttribution(creatives, startDate, endDate) {
     return result;
   }
 
+  // 주문 분석 페이지와 동일한 조건으로 구매 조회 (선택한 기간의 주문만)
   const purchaseQuery = `
     SELECT 
       visitor_id,
@@ -76,10 +77,12 @@ async function calculateCreativeAttribution(creatives, startDate, endDate) {
       AND order_id IS NOT NULL
       AND paid = 'T'
       AND final_payment > 0
+      AND timestamp >= $2
+      AND timestamp <= $3
     ORDER BY visitor_id, timestamp
   `;
 
-  const purchaseResult = await db.query(purchaseQuery, [Array.from(allVisitorIds)]);
+  const purchaseResult = await db.query(purchaseQuery, [Array.from(allVisitorIds), startDate, endDate]);
   const purchases = purchaseResult.rows;
 
   if (purchases.length === 0) {

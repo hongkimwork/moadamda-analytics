@@ -17,6 +17,9 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-12-10 | 소재분석 날짜필터 수정 | creativeAttribution.js |
+| 2025-12-09 | 소재분석 초기날짜 오늘로 | CreativePerformance.jsx |
+| 2025-12-09 | 주문분석 초기날짜 오늘로 | useOrderList.js |
 | 2025-12-09 | 방문자분석 제거 완료 | visitors.js |
 | 2025-12-09 | 위젯 모달 UI 개선 | MyDashboard.jsx |
 | 2025-12-09 | 방문자 분석 위젯 추가 | visitors.js |
@@ -29,9 +32,6 @@
 | 2025-12-08 | 대시보드 매출 금액조건 통일 | stats.js |
 | 2025-12-08 | 대시보드 환불주문 제외 적용 | range.js |
 | 2025-12-08 | 서버 12.4 버전 롤백 | range.js, basic.js |
-| 2025-12-08 | 중복 stats 라우터 제거 | stats.js, orders.js |
-| 2025-12-08 | SSH 자동 인증키 설정 | moadamda-key.pem |
-| 2025-12-05 | 매출 계산 오류 수정 | cafe24.js, range.js |
 
 ---
 
