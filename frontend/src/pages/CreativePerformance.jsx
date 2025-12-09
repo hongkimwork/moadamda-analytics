@@ -276,6 +276,12 @@ function CreativePerformance() {
         newFilters.dateRange[0].format ? newFilters.dateRange[0].format('YYYY-MM-DD') : newFilters.dateRange[0],
         newFilters.dateRange[1].format ? newFilters.dateRange[1].format('YYYY-MM-DD') : newFilters.dateRange[1]
       ];
+    } else if (!newFilters.dateRange) {
+      // dateRange가 없으면 오늘 날짜로 기본값 설정
+      formattedFilters.dateRange = [
+        dayjs().format('YYYY-MM-DD'),
+        dayjs().format('YYYY-MM-DD')
+      ];
     }
     setFilters(formattedFilters);
     setCurrentPage(1);

@@ -17,6 +17,8 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-12-09 | 날짜클리어 시 오늘 복원 | SearchFilterBar.jsx |
+| 2025-12-09 | 날짜필터 기본값 오늘 | SearchFilterBar.jsx |
 | 2025-12-10 | 소재분석 날짜필터 수정 | creativeAttribution.js |
 | 2025-12-09 | 소재분석 초기날짜 오늘로 | CreativePerformance.jsx |
 | 2025-12-09 | 주문분석 초기날짜 오늘로 | useOrderList.js |
@@ -30,8 +32,6 @@
 | 2025-12-08 | 차트 Recharts 개선 적용 | MyDashboard.jsx |
 | 2025-12-08 | 일별매출 위젯 데이터키 수정 | MyDashboard.jsx |
 | 2025-12-08 | 대시보드 매출 금액조건 통일 | stats.js |
-| 2025-12-08 | 대시보드 환불주문 제외 적용 | range.js |
-| 2025-12-08 | 서버 12.4 버전 롤백 | range.js, basic.js |
 
 ---
 

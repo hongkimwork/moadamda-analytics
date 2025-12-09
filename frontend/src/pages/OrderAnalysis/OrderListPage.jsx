@@ -86,6 +86,9 @@ export function OrderListPage() {
   const handleFilterChange = (filters) => {
     if (filters.dateRange && filters.dateRange[0] && filters.dateRange[1]) {
       setDateRange(filters.dateRange);
+    } else if (!filters.dateRange) {
+      // dateRange가 없으면 오늘 날짜로 기본값 설정
+      setDateRange([dayjs(), dayjs()]);
     }
     if (filters.device !== undefined) {
       setDeviceFilter(filters.device);

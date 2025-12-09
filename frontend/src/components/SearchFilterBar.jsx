@@ -201,6 +201,23 @@ function SearchFilterBar({
 
   // 날짜 범위 필터 변경
   const handleDateRangeChange = (dates) => {
+    // X 버튼을 누르면 dates가 null이 됨 → 기본값(defaultActiveQuickDate)으로 복원
+    if (!dates || dates.length === 0) {
+      if (defaultActiveQuickDate) {
+        // 기본 퀵 날짜 버튼 클릭한 것과 동일하게 처리
+        handleQuickDateClick(defaultActiveQuickDate);
+      } else {
+        // 기본값이 없으면 그냥 null로 설정
+        const newFilters = { ...filters, dateRange: null };
+        setFilters(newFilters);
+        setActiveQuickDate(null);
+        if (onFilterChange) {
+          onFilterChange(newFilters);
+        }
+      }
+      return;
+    }
+    
     const newFilters = { ...filters, dateRange: dates };
     setFilters(newFilters);
     setActiveQuickDate(null); // 직접 날짜 선택 시 퀵 버튼 선택 해제
