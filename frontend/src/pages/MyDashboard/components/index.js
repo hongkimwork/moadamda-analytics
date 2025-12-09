@@ -1,7 +1,8 @@
 /**
- * MyDashboard 위젯 컴포넌트 통합 export
+ * MyDashboard 컴포넌트 통합 export
  */
 
+export { default as DashboardWidget } from './DashboardWidget';
 export { default as KPIWidget } from './KPIWidget';
 export { default as LineChartWidget } from './LineChartWidget';
 export { default as BarChartWidget } from './BarChartWidget';
