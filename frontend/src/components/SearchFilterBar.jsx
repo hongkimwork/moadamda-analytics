@@ -26,6 +26,7 @@ const { RangePicker } = DatePicker;
  * @param {boolean} props.showPendingFilter - 입금대기 포함 필터 표시 여부
  * @param {boolean} props.includePending - 입금대기 포함 여부 (외부 제어)
  * @param {Function} props.onPendingChange - 입금대기 포함 변경 콜백
+ * @param {string} props.defaultActiveQuickDate - 초기 선택될 퀵 날짜 버튼 ('today', 'yesterday', '7days', '30days')
  * @param {boolean} props.loading - 로딩 상태
  * 
  * Note: UTM 필터는 동적 UTM 필터 컴포넌트 (DynamicUtmFilterBar)를 사용하세요
@@ -48,6 +49,7 @@ function SearchFilterBar({
   showPendingFilter = false,
   includePending = false,
   onPendingChange,
+  defaultActiveQuickDate = null,
   loading = false
 }) {
   // 검색어 state
@@ -65,10 +67,57 @@ function SearchFilterBar({
   });
 
   // 퀵 날짜 버튼 state (선택된 버튼 추적)
-  const [activeQuickDate, setActiveQuickDate] = useState(null);
+  const [activeQuickDate, setActiveQuickDate] = useState(defaultActiveQuickDate);
 
   // 필터 활성화 카운트
   const [activeFilterCount, setActiveFilterCount] = useState(0);
+
+  // 초기화 버튼 표시 여부 (기본값과 다를 때만 표시)
+  const isNotDefaultState = () => {
+    // 검색어가 있으면 기본값이 아님
+    if (searchTerm) return true;
+    // 기본 필터가 아닌 경우
+    if (filters.device !== 'all') return true;
+    if (filters.browser !== 'all') return true;
+    if (filters.os !== 'all') return true;
+    if (filters.event_type !== 'all') return true;
+    if (filters.is_bounced !== 'all') return true;
+    if (filters.is_converted !== 'all') return true;
+    // 날짜가 기본값과 다른 경우
+    if (activeQuickDate !== defaultActiveQuickDate) return true;
+    return false;
+  };
+
+  // 초기 마운트 시 defaultActiveQuickDate에 따라 dateRange 설정
+  useEffect(() => {
+    if (defaultActiveQuickDate) {
+      const now = dayjs();
+      let startDate, endDate;
+      
+      switch (defaultActiveQuickDate) {
+        case 'today':
+          startDate = now.startOf('day');
+          endDate = now.endOf('day');
+          break;
+        case 'yesterday':
+          startDate = now.subtract(1, 'day').startOf('day');
+          endDate = now.subtract(1, 'day').endOf('day');
+          break;
+        case '7days':
+          startDate = now.subtract(6, 'day').startOf('day');
+          endDate = now.endOf('day');
+          break;
+        case '30days':
+          startDate = now.subtract(29, 'day').startOf('day');
+          endDate = now.endOf('day');
+          break;
+        default:
+          return;
+      }
+      
+      setFilters(prev => ({ ...prev, dateRange: [startDate, endDate] }));
+    }
+  }, []); // 최초 마운트 시에만 실행
 
   // 필터 활성화 카운트 계산
   useEffect(() => {
@@ -208,6 +257,38 @@ function SearchFilterBar({
   // 초기화
   const handleReset = () => {
     setSearchTerm('');
+    
+    // 기본 날짜 범위 계산
+    let defaultDateRange = null;
+    if (defaultActiveQuickDate) {
+      const now = dayjs();
+      let startDate, endDate;
+      
+      switch (defaultActiveQuickDate) {
+        case 'today':
+          startDate = now.startOf('day');
+          endDate = now.endOf('day');
+          break;
+        case 'yesterday':
+          startDate = now.subtract(1, 'day').startOf('day');
+          endDate = now.subtract(1, 'day').endOf('day');
+          break;
+        case '7days':
+          startDate = now.subtract(6, 'day').startOf('day');
+          endDate = now.endOf('day');
+          break;
+        case '30days':
+          startDate = now.subtract(29, 'day').startOf('day');
+          endDate = now.endOf('day');
+          break;
+        default:
+          break;
+      }
+      if (startDate && endDate) {
+        defaultDateRange = [startDate, endDate];
+      }
+    }
+    
     const resetFilters = {
       device: 'all',
       browser: 'all',
@@ -215,10 +296,10 @@ function SearchFilterBar({
       event_type: 'all',
       is_bounced: 'all',
       is_converted: 'all',
-      dateRange: null
+      dateRange: defaultDateRange
     };
     setFilters(resetFilters);
-    setActiveQuickDate(null); // 퀵 버튼 선택 해제
+    setActiveQuickDate(defaultActiveQuickDate); // 기본 퀵 버튼으로 복원
     
     // 부모 컴포넌트에도 초기화된 필터 전달
     if (onFilterChange) {
@@ -397,8 +478,8 @@ function SearchFilterBar({
                 />
               )}
               
-              {/* 초기화 버튼 - 두 번째 줄 필터가 없을 때 첫 번째 줄에 표시 */}
-              {!(showBrowserFilter || showOsFilter || showEventTypeFilter || showBouncedFilter || showConvertedFilter) && (searchTerm || activeFilterCount > 0) && (
+              {/* 초기화 버튼 - 두 번째 줄 필터가 없을 때 첫 번째 줄에 표시 (기본값과 다를 때만) */}
+              {!(showBrowserFilter || showOsFilter || showEventTypeFilter || showBouncedFilter || showConvertedFilter) && isNotDefaultState() && (
                 <Button
                   icon={<CloseCircleOutlined />}
                   onClick={handleReset}
@@ -504,8 +585,8 @@ function SearchFilterBar({
                 </Space.Compact>
               )}
 
-              {/* 초기화 버튼 */}
-              {(searchTerm || activeFilterCount > 0) && (
+              {/* 초기화 버튼 (기본값과 다를 때만) */}
+              {isNotDefaultState() && (
                 <Button
                   icon={<CloseCircleOutlined />}
                   onClick={handleReset}

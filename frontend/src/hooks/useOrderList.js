@@ -16,7 +16,7 @@ const API_URL = import.meta.env.VITE_API_URL || '';
 export function useOrderList() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [dateRange, setDateRange] = useState([dayjs().subtract(7, 'day'), dayjs()]);
+  const [dateRange, setDateRange] = useState([dayjs(), dayjs()]);
   const [deviceFilter, setDeviceFilter] = useState('all');
   const [totalOrders, setTotalOrders] = useState(0);
   
@@ -84,7 +84,7 @@ export function useOrderList() {
     setSortField(null);  // 정렬 화살표 미표시 (서버 기본 정렬 사용)
     setSortOrder(null);
     setDeviceFilter('all');
-    setDateRange([dayjs().subtract(7, 'day'), dayjs()]);
+    setDateRange([dayjs(), dayjs()]);
     setIncludeCancelled(false);
     setIncludePending(false);
   }, []);

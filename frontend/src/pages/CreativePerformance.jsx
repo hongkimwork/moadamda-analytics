@@ -71,7 +71,7 @@ function CreativePerformance() {
   const [searchTerm, setSearchTerm] = useState(initialSearchTerm);
   const [filters, setFilters] = useState({
     dateRange: [
-      dayjs().subtract(30, 'days').format('YYYY-MM-DD'),
+      dayjs().format('YYYY-MM-DD'),
       dayjs().format('YYYY-MM-DD')
     ]
   });
@@ -269,7 +269,15 @@ function CreativePerformance() {
 
   // 필터 변경 핸들러
   const handleFilterChange = (newFilters) => {
-    setFilters(newFilters);
+    const formattedFilters = { ...newFilters };
+    // SearchFilterBar에서 전달하는 dateRange는 dayjs 객체이므로 문자열로 변환
+    if (newFilters.dateRange && newFilters.dateRange[0] && newFilters.dateRange[1]) {
+      formattedFilters.dateRange = [
+        newFilters.dateRange[0].format ? newFilters.dateRange[0].format('YYYY-MM-DD') : newFilters.dateRange[0],
+        newFilters.dateRange[1].format ? newFilters.dateRange[1].format('YYYY-MM-DD') : newFilters.dateRange[1]
+      ];
+    }
+    setFilters(formattedFilters);
     setCurrentPage(1);
   };
 
@@ -278,7 +286,7 @@ function CreativePerformance() {
     setSearchTerm('');
     setFilters({
       dateRange: [
-        dayjs().subtract(30, 'days').format('YYYY-MM-DD'),
+        dayjs().format('YYYY-MM-DD'),
         dayjs().format('YYYY-MM-DD')
       ]
     });
@@ -848,6 +856,7 @@ function CreativePerformance() {
         showBouncedFilter={false}
         showConvertedFilter={false}
         showUtmFilter={false}
+        defaultActiveQuickDate="today"
         loading={loading}
       />
 

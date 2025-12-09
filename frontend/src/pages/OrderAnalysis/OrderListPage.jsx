@@ -359,6 +359,7 @@ export function OrderListPage() {
         showPendingFilter={true}
         includePending={includePending}
         onPendingChange={setIncludePending}
+        defaultActiveQuickDate="today"
         loading={loading}
       />
 
