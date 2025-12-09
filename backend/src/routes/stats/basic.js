@@ -77,7 +77,7 @@ router.get('/conversion', async (req, res) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // 1. Total revenue today (정상 주문만: paid='T', canceled='F', order_status='confirmed', 금액 > 0)
+    // 1. Total revenue today (정상 주문만: paid='T', canceled='F')
     const revenueResult = await db.query(`
       SELECT
         COALESCE(SUM(total_amount), 0) as total_revenue,
@@ -85,10 +85,7 @@ router.get('/conversion', async (req, res) => {
         COUNT(*) as order_count
       FROM conversions
       WHERE timestamp >= $1
-        AND paid = 'T' 
-        AND (canceled = 'F' OR canceled IS NULL)
-        AND (order_status = 'confirmed' OR order_status IS NULL)
-        AND (final_payment > 0 OR total_amount > 0)
+        AND paid = 'T' AND canceled = 'F'
     `, [today]);
 
     const totalRevenue = parseInt(revenueResult.rows[0].total_revenue);
@@ -133,10 +130,7 @@ router.get('/conversion', async (req, res) => {
         COUNT(*) as order_count
       FROM conversions
       WHERE timestamp >= $1 AND timestamp < $2
-        AND paid = 'T' 
-        AND (canceled = 'F' OR canceled IS NULL)
-        AND (order_status = 'confirmed' OR order_status IS NULL)
-        AND (final_payment > 0 OR total_amount > 0)
+        AND paid = 'T' AND canceled = 'F'
     `, [yesterday, today]);
 
     const yesterdayRevenue = parseInt(yesterdayRevenueResult.rows[0].final_revenue);

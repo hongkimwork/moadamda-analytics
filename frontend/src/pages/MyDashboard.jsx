@@ -23,6 +23,7 @@ import {
   LoadingOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell, Tooltip, LabelList, PieChart, Pie, LineChart, Line, Legend } from 'recharts';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -37,14 +38,6 @@ const DATA_SOURCES = {
     icon: <ShoppingCartOutlined style={{ fontSize: 28, color: '#1890ff' }} />,
     description: '오늘 매출, 주문 건수, 상품별 판매 등',
     enabled: true 
-  },
-  tracker: { 
-    id: 'tracker',
-    name: '방문자 분석', 
-    icon: <TeamOutlined style={{ fontSize: 28, color: '#52c41a' }} />,
-    description: '방문자수, 페이지뷰, 유입경로 등',
-    enabled: false,
-    comingSoon: true
   },
   ad_platforms: { 
     id: 'ad_platforms',
@@ -101,13 +94,13 @@ const WIDGET_PRESETS = {
     ],
     chart: [
       {
-        id: 'daily_revenue',
-        label: '일별 매출 추이',
-        icon: '📈',
-        description: '날짜별 매출 변화 그래프',
-        type: 'line',
-        apiEndpoint: '/api/stats/daily',
-        dataKey: 'daily',
+        id: 'period_revenue_compare',
+        label: '기간별 매출 비교',
+        icon: '📊',
+        description: '선택 기간 vs 이전 기간 매출 비교',
+        type: 'period_compare',
+        apiEndpoint: '/api/stats/range',
+        dataKey: 'revenue.final',
         defaultWidth: 'medium',
         defaultHeight: 'medium'
       },
@@ -124,17 +117,6 @@ const WIDGET_PRESETS = {
       }
     ],
     list: [
-      {
-        id: 'recent_orders',
-        label: '최근 주문 목록',
-        icon: '📋',
-        description: '최근 주문 내역 상세 보기',
-        type: 'table',
-        apiEndpoint: '/api/stats/orders',
-        dataKey: 'orders',
-        defaultWidth: 'large',
-        defaultHeight: 'tall'
-      },
       {
         id: 'top_products',
         label: '상품별 판매순위',
@@ -194,7 +176,7 @@ const saveToLocalStorage = (widgets, globalDateRange) => {
       suffix: w.suffix,
       dateRange: w.dateRange,
       compareEnabled: w.compareEnabled,
-      compareRange: w.compareRange
+      compareRanges: w.compareRanges || [] // 다중 비교 기간 배열
     }));
 
     const dataToSave = {
@@ -213,7 +195,7 @@ const saveToLocalStorage = (widgets, globalDateRange) => {
   }
 };
 
-// 위젯 설정 불러오기
+// 위젯 설정 불러오기 (레거시 마이그레이션 포함)
 const loadFromLocalStorage = () => {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -222,13 +204,38 @@ const loadFromLocalStorage = () => {
     const parsed = JSON.parse(stored);
     console.log('[Dashboard] Loaded from localStorage:', parsed.widgets?.length || 0, 'widgets');
     
+    // tracker 카테고리 위젯 필터링 (제거된 기능)
+    const filteredWidgets = (parsed.widgets || []).filter(w => {
+      if (w.category === 'tracker') {
+        console.log('[Dashboard] Filtered out tracker widget:', w.id);
+        return false;
+      }
+      return true;
+    });
+    
     return {
-      widgets: (parsed.widgets || []).map(w => ({
-        ...w,
-        data: null,
-        loading: !!w.presetId, // API 연결 위젯은 로딩 상태로
-        error: null
-      })),
+      widgets: filteredWidgets.map(w => {
+        // 레거시 마이그레이션: compareRange → compareRanges
+        let compareRanges = w.compareRanges || [];
+        if (w.compareRange && !w.compareRanges) {
+          // 기존 단일 compareRange를 배열로 변환
+          compareRanges = [{
+            start: w.compareRange.start,
+            end: w.compareRange.end,
+            type: w.compareRange.type || 'auto',
+            monthsAgo: 1
+          }];
+          console.log('[Dashboard] Migrated legacy compareRange to compareRanges:', w.id);
+        }
+        
+        return {
+          ...w,
+          compareRanges,
+          data: null,
+          loading: !!w.presetId, // API 연결 위젯은 로딩 상태로
+          error: null
+        };
+      }),
       globalDateRange: parsed.globalDateRange ? [
         dayjs(parsed.globalDateRange.start),
         dayjs(parsed.globalDateRange.end)
@@ -246,9 +253,9 @@ const loadFromLocalStorage = () => {
 // ============================================================================
 const API_BASE_URL = 'http://localhost:3003';
 
-// 위젯 데이터 fetch 함수
+// 위젯 데이터 fetch 함수 (다중 비교 기간 지원)
 const fetchWidgetData = async (widget) => {
-  const { presetId, category, apiEndpoint, dataKey, dateRange, compareEnabled, compareRange } = widget;
+  const { presetId, category, apiEndpoint, dataKey, dateRange, compareEnabled, compareRanges, compareRange } = widget;
   
   console.log('[fetchWidgetData] Widget config:', {
     presetId,
@@ -256,11 +263,12 @@ const fetchWidgetData = async (widget) => {
     dataKey,
     dateRange,
     compareEnabled,
-    compareRange
+    compareRanges,
+    compareRange // 레거시 호환
   });
   
   if (!apiEndpoint || !dateRange) {
-    return { data: null, compareData: null, error: 'Missing configuration' };
+    return { data: null, compareDataList: [], error: 'Missing configuration' };
   }
 
   try {
@@ -277,30 +285,58 @@ const fetchWidgetData = async (widget) => {
     const result = await response.json();
     console.log('[fetchWidgetData] Main API Result:', result);
 
-    // 비교 데이터 fetch (필요 시)
-    let compareResult = null;
-    if (compareEnabled && compareRange) {
+    // 다중 비교 데이터 병렬 fetch
+    let compareDataList = [];
+    
+    // 새로운 compareRanges 배열 사용
+    if (compareEnabled && compareRanges && compareRanges.length > 0) {
+      console.log('[fetchWidgetData] Fetching multiple compare ranges:', compareRanges.length);
+      
+      const comparePromises = compareRanges.map(async (range) => {
+        const compareParams = new URLSearchParams({
+          start: range.start,
+          end: range.end
+        });
+        const compareUrl = `${API_BASE_URL}${apiEndpoint}?${compareParams.toString()}`;
+        console.log('[fetchWidgetData] Compare API URL:', compareUrl);
+        
+        try {
+          const compareResponse = await fetch(compareUrl);
+          if (compareResponse.ok) {
+            const data = await compareResponse.json();
+            return { ...range, data };
+          }
+          console.error('[fetchWidgetData] Compare API Error:', compareResponse.status);
+          return { ...range, data: null };
+        } catch (err) {
+          console.error('[fetchWidgetData] Compare fetch error:', err);
+          return { ...range, data: null };
+        }
+      });
+      
+      compareDataList = await Promise.all(comparePromises);
+      console.log('[fetchWidgetData] Compare Data List:', compareDataList);
+    } 
+    // 레거시 호환: 기존 단일 compareRange 지원
+    else if (compareEnabled && compareRange) {
       const compareParams = new URLSearchParams({
         start: compareRange.start,
         end: compareRange.end
       });
       const compareUrl = `${API_BASE_URL}${apiEndpoint}?${compareParams.toString()}`;
-      console.log('[fetchWidgetData] Compare API URL:', compareUrl);
       const compareResponse = await fetch(compareUrl);
       if (compareResponse.ok) {
-        compareResult = await compareResponse.json();
-        console.log('[fetchWidgetData] Compare API Result:', compareResult);
-      } else {
-        console.error('[fetchWidgetData] Compare API Error:', compareResponse.status);
+        const data = await compareResponse.json();
+        compareDataList = [{ ...compareRange, data }];
       }
     } else {
-      console.log('[fetchWidgetData] Compare skipped - compareEnabled:', compareEnabled, 'compareRange:', compareRange);
+      console.log('[fetchWidgetData] Compare skipped - compareEnabled:', compareEnabled);
     }
 
-    return { data: result, compareData: compareResult, error: null };
+    return { data: result, compareDataList, error: null };
   } catch (error) {
     console.error('[Widget Fetch Error]', error);
-    return { data: null, compareData: null, error: error.message };
+    return { data: null, compareDataList: [], error: error.message };
   }
 };
 
@@ -326,24 +362,81 @@ const calculateChange = (current, previous) => {
   return ((current - previous) / previous * 100).toFixed(1);
 };
 
-// 위젯 데이터 변환 함수 (프리셋별 데이터 가공)
-const transformWidgetData = (widget, apiData, compareApiData) => {
-  const { presetId, type, dataKey, suffix, dateRange, compareRange } = widget;
+// 위젯 데이터 변환 함수 (프리셋별 데이터 가공) - 다중 비교 기간 지원
+const transformWidgetData = (widget, apiData, compareDataList) => {
+  const { presetId, type, dataKey, suffix, dateRange, compareRanges, compareRange } = widget;
 
   console.log('[transformWidgetData] Input:', {
     presetId,
     type,
     dataKey,
     apiData,
-    compareApiData,
+    compareDataList,
     dateRange,
-    compareRange
+    compareRanges
   });
 
-  // KPI 타입
+  // 날짜 라벨 생성 (YYYY년 MM월 형식 - 년도 포함)
+  const formatPeriodLabel = (range) => {
+    if (!range) return '';
+    const startParts = range.start?.split('-') || [];
+    const endParts = range.end?.split('-') || [];
+    
+    if (startParts.length < 3 || endParts.length < 3) return '';
+    
+    const startYear = startParts[0];
+    const startMonth = parseInt(startParts[1]);
+    const endYear = endParts[0];
+    const endMonth = parseInt(endParts[1]);
+    
+    // 같은 년도, 같은 월
+    if (startYear === endYear && startMonth === endMonth) {
+      return `${startYear}년 ${startMonth}월`;
+    }
+    
+    // 같은 년도, 다른 월
+    if (startYear === endYear) {
+      return `${startYear}년 ${startMonth}~${endMonth}월`;
+    }
+    
+    // 다른 년도
+    return `${startYear}년 ${startMonth}월~${endYear}년 ${endMonth}월`;
+  };
+  
+  // 상세 날짜 정보 (간결한 형식: 2024.11.01 ~ 30)
+  const formatDetailedPeriod = (range) => {
+    if (!range) return '';
+    const startParts = range.start?.split('-') || [];
+    const endParts = range.end?.split('-') || [];
+    
+    if (startParts.length < 3 || endParts.length < 3) return '';
+    
+    const startYear = startParts[0];
+    const startMonth = startParts[1];
+    const startDay = startParts[2];
+    const endYear = endParts[0];
+    const endMonth = endParts[1];
+    const endDay = endParts[2];
+    
+    // 같은 년도, 같은 월: 2024.11.01 ~ 30
+    if (startYear === endYear && startMonth === endMonth) {
+      return `${startYear}.${startMonth}.${startDay} ~ ${endDay}`;
+    }
+    
+    // 같은 년도, 다른 월: 2024.11.01 ~ 12.31
+    if (startYear === endYear) {
+      return `${startYear}.${startMonth}.${startDay} ~ ${endMonth}.${endDay}`;
+    }
+    
+    // 다른 년도: 2024.12.01 ~ 2025.01.31
+    return `${startYear}.${startMonth}.${startDay} ~ ${endYear}.${endMonth}.${endDay}`;
+  };
+
+  // KPI 타입 - 첫 번째 비교 기간만 사용 (기존 호환)
   if (type === 'kpi') {
     const value = getValueFromData(apiData, dataKey);
-    const compareValue = compareApiData ? getValueFromData(compareApiData, dataKey) : null;
+    const firstCompare = compareDataList && compareDataList.length > 0 ? compareDataList[0] : null;
+    const compareValue = firstCompare?.data ? getValueFromData(firstCompare.data, dataKey) : null;
     const change = calculateChange(value, compareValue);
 
     console.log('[transformWidgetData] KPI Result:', 
@@ -355,23 +448,69 @@ const transformWidgetData = (widget, apiData, compareApiData) => {
 
     return {
       value: value || 0,
-      compareValue: compareValue,  // 이전 기간 값 추가
+      compareValue: compareValue,
       change: change,
       prefix: '',
       suffix: suffix || '',
-      // 날짜 정보 추가
       dateRange: dateRange,
-      compareRange: compareRange
+      compareRange: firstCompare || compareRange
     };
   }
 
-  // Line 차트 (일별 추이)
+  // 기간별 매출 비교 차트 - 다중 비교 기간 지원
+  if (type === 'period_compare' && presetId === 'period_revenue_compare') {
+    const currentValue = getValueFromData(apiData, dataKey) || 0;
+    const currentLabel = formatPeriodLabel(dateRange);
+    
+    // 차트 데이터 구성: 현재 기간 + 모든 비교 기간
+    const chartData = [
+      { name: currentLabel || '현재 기간', value: currentValue, period: 'current', detailed: formatDetailedPeriod(dateRange) }
+    ];
+    
+    // 비교 기간 데이터 추가
+    const compareValues = [];
+    if (compareDataList && compareDataList.length > 0) {
+      compareDataList.forEach((compareItem, index) => {
+        const value = compareItem.data ? getValueFromData(compareItem.data, dataKey) : 0;
+        const label = formatPeriodLabel(compareItem);
+        chartData.push({
+          name: label || `비교 ${index + 1}`,
+          value: value || 0,
+          period: `compare-${index}`,
+          detailed: formatDetailedPeriod(compareItem)
+        });
+        compareValues.push({
+          value: value || 0,
+          change: calculateChange(currentValue, value || 0),
+          label: label
+        });
+      });
+    }
+    
+    // 상세 날짜 정보 (다중)
+    const detailedDates = {
+      current: formatDetailedPeriod(dateRange),
+      compares: compareDataList ? compareDataList.map(item => formatDetailedPeriod(item)) : []
+    };
+    
+    return {
+      chartData,
+      currentValue,
+      compareValues, // 여러 비교 값 배열
+      // 첫 번째 비교 기간과의 증감률 (레거시 호환)
+      compareValue: compareValues.length > 0 ? compareValues[0].value : 0,
+      change: compareValues.length > 0 ? compareValues[0].change : null,
+      detailedDates
+    };
+  }
+
+  // Line 차트 (일별 추이) - 레거시 지원
   if (type === 'line' && presetId === 'daily_revenue') {
-    const daily = apiData?.daily || [];
+    const daily = apiData?.daily_data || [];
     return daily.map(d => ({
       date: dayjs(d.date).format('MM/DD'),
       value: d.revenue || d.final_payment || 0
-    })).slice(-7); // 최근 7일
+    }));
   }
 
   // Bar 차트 (주문경로별)
@@ -391,18 +530,6 @@ const transformWidgetData = (widget, apiData, compareApiData) => {
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 5); // 상위 5개
-  }
-
-  // Table (최근 주문)
-  if (type === 'table' && presetId === 'recent_orders') {
-    const orders = apiData?.orders || [];
-    return orders.slice(0, 10).map(order => ({
-      order_id: order.order_id,
-      product_name: order.product_name || '-',
-      final_payment: order.final_payment || 0,
-      timestamp: order.timestamp,
-      order_place: order.order_place_name || '-'
-    }));
   }
 
   // Table (상품별 판매순위)
@@ -426,6 +553,78 @@ const transformWidgetData = (widget, apiData, compareApiData) => {
       }))
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 10);
+  }
+
+  // ============================================================================
+  // 방문자 분석 차트 변환
+  // ============================================================================
+
+  // 파이 차트 (디바이스별 방문자)
+  if (type === 'pie' && presetId === 'device_breakdown') {
+    const device = apiData?.device || {};
+    const chartData = [
+      { name: 'PC', value: device.pc?.count || 0, rate: device.pc?.rate || 0, fill: '#1890ff' },
+      { name: '모바일', value: device.mobile?.count || 0, rate: device.mobile?.rate || 0, fill: '#52c41a' },
+      { name: '태블릿', value: device.tablet?.count || 0, rate: device.tablet?.rate || 0, fill: '#faad14' }
+    ].filter(item => item.value > 0);
+    
+    return { chartData, total: chartData.reduce((sum, item) => sum + item.value, 0) };
+  }
+
+  // 24시간 바 차트 (시간대별 방문자)
+  if (type === 'hourly_bar' && presetId === 'hourly_visitors') {
+    const hourly = apiData?.hourly || [];
+    return {
+      chartData: hourly.map(h => ({
+        hour: h.hour,
+        label: h.label,
+        uv: h.uv,
+        pv: h.pv
+      })),
+      maxValue: Math.max(...hourly.map(h => h.uv), 1)
+    };
+  }
+
+  // 라인 차트 (일별 방문 추이)
+  if (type === 'visitor_line' && presetId === 'daily_trend') {
+    const daily = apiData?.daily || [];
+    return {
+      chartData: daily.map(d => ({
+        date: dayjs(d.date).format('MM/DD'),
+        fullDate: d.date,
+        uv: d.uv,
+        pv: d.pv
+      })),
+      totalUv: daily.reduce((sum, d) => sum + d.uv, 0),
+      totalPv: daily.reduce((sum, d) => sum + d.pv, 0)
+    };
+  }
+
+  // 비교 바 차트 (신규 vs 재방문)
+  if (type === 'compare_bar' && presetId === 'new_vs_returning') {
+    const newVsReturning = apiData?.newVsReturning || {};
+    return {
+      chartData: [
+        { name: '신규', value: newVsReturning.new?.count || 0, rate: newVsReturning.new?.rate || 0, fill: '#52c41a' },
+        { name: '재방문', value: newVsReturning.returning?.count || 0, rate: newVsReturning.returning?.rate || 0, fill: '#1890ff' }
+      ],
+      total: (newVsReturning.new?.count || 0) + (newVsReturning.returning?.count || 0)
+    };
+  }
+
+  // Table (인기 페이지)
+  if (type === 'table' && presetId === 'top_pages') {
+    return apiData?.pages || [];
+  }
+
+  // Table (유입 경로)
+  if (type === 'table' && presetId === 'referrer_sources') {
+    return apiData?.referrers || [];
+  }
+
+  // Table (UTM 캠페인)
+  if (type === 'table' && presetId === 'utm_campaigns') {
+    return apiData?.campaigns || [];
   }
 
   // 기본 반환
@@ -467,6 +666,10 @@ const getHeightSizeFromPixels = (pixels) => {
 // ============================================================================
 // 위젯 타입 정의 (기본 크기 포함)
 // ============================================================================
+
+// 비교 기능을 지원하지 않는 타입 (목록형, 텍스트형)
+const TYPES_WITHOUT_COMPARE = ['table', 'text'];
+
 const WIDGET_TYPES = [
   {
     key: 'kpi',
@@ -475,6 +678,14 @@ const WIDGET_TYPES = [
     description: '핵심 지표를 큰 숫자로 표시',
     defaultWidth: 'small',
     defaultHeight: 'short'
+  },
+  {
+    key: 'period_compare',
+    icon: <BarChartOutlined style={{ fontSize: 24, color: '#7C3AED' }} />,
+    label: '기간 비교',
+    description: '두 기간의 매출을 비교',
+    defaultWidth: 'medium',
+    defaultHeight: 'medium'
   },
   {
     key: 'line',
@@ -721,22 +932,44 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, containerWidth, c
         const isNewData = changeValue === 'new';  // 이전 데이터 없음 (신규)
         const numericChange = isNewData ? 0 : (parseFloat(changeValue) || 0);
         
-        // 날짜 포맷팅 (MM/DD 형식)
+        // 날짜 포맷팅 (YYYY.MM.DD ~ DD 형식)
         const formatDateRange = (range) => {
           if (!range) return '';
           const start = range.start || '';
           const end = range.end || '';
-          // YYYY-MM-DD → MM/DD 변환
-          const formatDate = (dateStr) => {
-            if (!dateStr) return '';
-            const parts = dateStr.split('-');
-            return parts.length >= 3 ? `${parts[1]}/${parts[2]}` : dateStr;
-          };
-          return `${formatDate(start)}~${formatDate(end)}`;
+          
+          const startParts = start.split('-');
+          const endParts = end.split('-');
+          
+          if (startParts.length < 3 || endParts.length < 3) return '';
+          
+          const startYear = startParts[0];
+          const startMonth = startParts[1];
+          const startDay = startParts[2];
+          const endYear = endParts[0];
+          const endMonth = endParts[1];
+          const endDay = endParts[2];
+          
+          // 같은 년도, 같은 월: 2025.11.01 ~ 30
+          if (startYear === endYear && startMonth === endMonth) {
+            return `${startYear}.${startMonth}.${startDay} ~ ${endDay}`;
+          }
+          
+          // 같은 년도, 다른 월: 2025.11.01 ~ 12.31
+          if (startYear === endYear) {
+            return `${startYear}.${startMonth}.${startDay} ~ ${endMonth}.${endDay}`;
+          }
+          
+          // 다른 년도: 2024.12.25 ~ 2025.01.05
+          return `${startYear}.${startMonth}.${startDay} ~ ${endYear}.${endMonth}.${endDay}`;
         };
         
         const currentDateLabel = widget.dateRange ? formatDateRange(widget.dateRange) : '이번 기간';
-        const compareDateLabel = widget.compareRange ? formatDateRange(widget.compareRange) : '이전 기간';
+        // 비교 기간 계산: compareRange 또는 compareRanges[0] 또는 data.compareRange 사용
+        const compareRangeForLabel = widget.compareRange || 
+                                     widget.data?.compareRange || 
+                                     (widget.compareRanges && widget.compareRanges.length > 0 ? widget.compareRanges[0] : null);
+        const compareDateLabel = compareRangeForLabel ? formatDateRange(compareRangeForLabel) : '';
         
         return (
           <div style={{ 
@@ -759,7 +992,7 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, containerWidth, c
                 }}>
                   {/* 현재 기간 */}
                   <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: 11, color: '#1890ff', marginBottom: 4, fontWeight: 500 }}>{currentDateLabel}</div>
+                    <div style={{ fontSize: 12, color: '#1890ff', marginBottom: 4, fontWeight: 500 }}>{currentDateLabel}</div>
                     <div style={{ fontSize: 26, fontWeight: 700, color: '#1890ff' }}>
                       {widget.data.prefix}{(widget.data.value || 0).toLocaleString()}<span style={{ fontSize: 13 }}>{widget.data.suffix}</span>
                     </div>
@@ -774,7 +1007,7 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, containerWidth, c
                   
                   {/* 이전 기간 */}
                   <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 4, fontWeight: 500 }}>{compareDateLabel}</div>
+                    <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 4, fontWeight: 500 }}>{compareDateLabel}</div>
                     <div style={{ fontSize: 26, fontWeight: 700, color: '#8c8c8c' }}>
                       {widget.data.prefix}{(widget.data.compareValue || 0).toLocaleString()}<span style={{ fontSize: 13 }}>{widget.data.suffix}</span>
                     </div>
@@ -794,15 +1027,18 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, containerWidth, c
                     '🆕 신규 (이전 데이터 없음)'
                   ) : (
                     <>
-                      {numericChange >= 0 ? '▲' : '▼'} {Math.abs(numericChange)}%
+                      {numericChange >= 0 ? '▲' : '▼'} {Math.abs(numericChange)}% {numericChange >= 0 ? '증가' : '감소'}
                     </>
                   )}
                 </div>
               </>
             ) : (
-              /* 비교 없음: 기존 단일 값 표시 */
-              <div style={{ fontSize: 36, fontWeight: 700, color: '#1890ff' }}>
-                {widget.data.prefix}{(widget.data.value || 0).toLocaleString()}{widget.data.suffix}
+              /* 비교 없음: 날짜 + 단일 값 표시 */
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 12, color: '#1890ff', marginBottom: 4, fontWeight: 500 }}>{currentDateLabel}</div>
+                <div style={{ fontSize: 36, fontWeight: 700, color: '#1890ff' }}>
+                  {widget.data.prefix}{(widget.data.value || 0).toLocaleString()}<span style={{ fontSize: 16 }}>{widget.data.suffix}</span>
+                </div>
               </div>
             )}
           </div>
@@ -830,61 +1066,192 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, containerWidth, c
           </div>
         );
       
-      case 'bar':
-        return (
-          <div style={{ height: contentHeight, overflow: 'auto', padding: '10px 0' }}>
-            {widget.data.map((d, i) => (
-              <div key={i} style={{ marginBottom: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span style={{ fontSize: 13, color: '#262626' }}>{d.name}</span>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>{d.value.toLocaleString()}</span>
-                </div>
-                <div style={{ height: 8, background: '#f0f0f0', borderRadius: 4 }}>
-                  <div 
-                    style={{ 
-                      height: '100%', 
-                      width: `${(d.value / 6000) * 100}%`,
-                      background: ['#1890ff', '#52c41a', '#722ed1', '#fa8c16'][i],
-                      borderRadius: 4
-                    }} 
-                  />
+      // 기간별 매출 비교 차트 (수평 막대 2개)
+      case 'period_compare':
+        const periodData = widget.data;
+        if (!periodData?.chartData) {
+          return <div style={{ height: contentHeight, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8c8c8c' }}>데이터가 없습니다</div>;
+        }
+
+        // 다중 비교 기간 색상 배열 (현재: 보라색, 비교: 회색 계열)
+        const periodColors = ['#7C3AED', '#94A3B8', '#CBD5E1', '#E2E8F0', '#F1F5F9'];
+        const maxPeriodValue = Math.max(...periodData.chartData.map(d => d.value));
+        
+        // 증감률 렌더링 (2개일 때만 표시, 3개 이상은 표시하지 않음)
+        const renderChangeIndicator = () => {
+          // 3개 이상이면 표시하지 않음
+          if (barCount > 2) return null;
+          
+          const compareValues = periodData.compareValues || [];
+          if (compareValues.length === 0) return null;
+          
+          // 2개일 때: 첫 번째 비교값만 이전 스타일로 표시
+          const firstCompare = compareValues[0];
+          const changeValue = firstCompare.change;
+          const isNew = changeValue === 'new';
+          const numericChange = isNew ? 0 : (parseFloat(changeValue) || 0);
+
+          return (
+            <div style={{
+              textAlign: 'center',
+              padding: '8px 0 4px',
+              borderTop: '1px solid #f0f0f0'
+            }}>
+              <span style={{
+                fontSize: 13,
+                padding: '4px 12px',
+                borderRadius: 12,
+                background: isNew ? '#e6f7ff' : (numericChange >= 0 ? '#f6ffed' : '#fff2f0'),
+                color: isNew ? '#1890ff' : (numericChange >= 0 ? '#52c41a' : '#ff4d4f')
+              }}>
+                {isNew ? '신규 (이전 데이터 없음)' : (
+                  <>
+                    {numericChange >= 0 ? '▲' : '▼'} {Math.abs(numericChange)}% {numericChange >= 0 ? '증가' : '감소'}
+                  </>
+                )}
+              </span>
+            </div>
+          );
+        };
+
+        // 동적 막대 높이 계산 (기간 개수에 따라)
+        const barCount = periodData.chartData.length;
+        const dynamicBarSize = barCount <= 2 ? 28 : (barCount <= 3 ? 24 : (barCount <= 4 ? 20 : 16));
+
+        // 커스텀 Tooltip 렌더링 (상세 날짜 표시)
+        const PeriodTooltip = ({ active, payload }) => {
+          if (active && payload && payload.length) {
+            const data = payload[0].payload;
+            return (
+              <div style={{
+                background: 'white',
+                border: '1px solid #e8e8e8',
+                borderRadius: 8,
+                padding: '8px 12px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+              }}>
+                <div style={{ fontWeight: 600, marginBottom: 4 }}>{data.name}</div>
+                {data.detailed && (
+                  <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 4 }}>
+                    {data.detailed}
+                  </div>
+                )}
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#1890ff' }}>
+                  {data.value.toLocaleString()}원
                 </div>
               </div>
-            ))}
+            );
+          }
+          return null;
+        };
+
+        return (
+          <div style={{ height: contentHeight, padding: '12px 0', display: 'flex', flexDirection: 'column' }}>
+            {/* 차트 영역 */}
+            <div style={{ flex: 1, minHeight: 0 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={periodData.chartData}
+                  layout="vertical"
+                  margin={{ top: 5, right: 80, left: 10, bottom: 5 }}
+                  barSize={dynamicBarSize}
+                >
+                  <XAxis type="number" hide domain={[0, maxPeriodValue * 1.1]} />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: barCount > 3 ? 11 : 13, fill: '#262626', fontWeight: 500 }}
+                    width={120}
+                  />
+                  {/* 3개 이상일 때만 Tooltip 표시 */}
+                  {barCount > 2 && (
+                    <Tooltip content={<PeriodTooltip />} cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
+                  )}
+                  <Bar
+                    dataKey="value"
+                    radius={[0, 6, 6, 0]}
+                    background={{ fill: '#f5f5f5', radius: [0, 6, 6, 0] }}
+                  >
+                    {periodData.chartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={periodColors[index] || periodColors[periodColors.length - 1]} />
+                    ))}
+                    <LabelList
+                      dataKey="value"
+                      position="right"
+                      formatter={(value) => `${value.toLocaleString()}원`}
+                      style={{ fontSize: barCount > 3 ? 11 : 13, fontWeight: 600, fill: '#262626' }}
+                    />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* 증감률 표시 (2개일 때만) */}
+            {renderChangeIndicator()}
+          </div>
+        );
+      
+      case 'bar':
+        // 카드 너비에 따라 표시할 항목 수 결정
+        const widthSize = widget.widthSize || 'medium';
+        const maxItems = widthSize === 'small' ? 3 : (widthSize === 'medium' ? 5 : 7);
+        const barData = (widget.data || []).slice(0, maxItems);
+        
+        if (barData.length === 0) {
+          return <div style={{ height: contentHeight, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8c8c8c' }}>데이터가 없습니다</div>;
+        }
+        
+        // 항목별 다른 색상 (Mixpanel 스타일)
+        const barColors = ['#3B82F6', '#EF4444', '#F59E0B', '#10B981', '#8B5CF6', '#EC4899', '#06B6D4'];
+        const maxBarValue = Math.max(...barData.map(d => d.value));
+        
+        return (
+          <div style={{ height: contentHeight, padding: '8px 0' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={barData}
+                layout="vertical"
+                margin={{ top: 5, right: 90, left: 10, bottom: 5 }}
+                barSize={22}
+              >
+                <XAxis type="number" hide domain={[0, maxBarValue * 1.15]} />
+                <YAxis 
+                  type="category" 
+                  dataKey="name" 
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 12, fill: '#262626' }}
+                  width={80}
+                  tickFormatter={(value) => value.length > 8 ? value.slice(0, 8) + '...' : value}
+                />
+                <Tooltip 
+                  formatter={(value) => [`${value.toLocaleString()}원`, '매출']}
+                  contentStyle={{ borderRadius: 8, border: '1px solid #e8e8e8' }}
+                />
+                <Bar 
+                  dataKey="value" 
+                  radius={[0, 6, 6, 0]}
+                  background={{ fill: '#f5f5f5', radius: [0, 6, 6, 0] }}
+                >
+                  {barData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={barColors[index % barColors.length]} />
+                  ))}
+                  <LabelList 
+                    dataKey="value" 
+                    position="right" 
+                    formatter={(value) => `${value.toLocaleString()}원`}
+                    style={{ fontSize: 11, fill: '#595959' }}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         );
       
       case 'table':
         // 프리셋별 테이블 렌더링
-        if (widget.presetId === 'recent_orders') {
-          return (
-            <div style={{ height: contentHeight, overflow: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid #f0f0f0' }}>
-                    <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 600, position: 'sticky', top: 0, background: 'white' }}>주문번호</th>
-                    <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 600, position: 'sticky', top: 0, background: 'white' }}>상품명</th>
-                    <th style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, position: 'sticky', top: 0, background: 'white' }}>금액</th>
-                    <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 600, position: 'sticky', top: 0, background: 'white' }}>경로</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(Array.isArray(widget.data) ? widget.data : []).map((row, i) => (
-                    <tr key={i} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                      <td style={{ padding: '6px 8px', fontSize: 11 }}>{row.order_id}</td>
-                      <td style={{ padding: '6px 8px', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.product_name}</td>
-                      <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: '#1890ff' }}>
-                        {(row.final_payment || 0).toLocaleString()}원
-                      </td>
-                      <td style={{ padding: '6px 8px', fontSize: 11, color: '#8c8c8c' }}>{row.order_place}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          );
-        }
-        
         if (widget.presetId === 'top_products') {
           return (
             <div style={{ height: contentHeight, overflow: 'auto' }}>
@@ -905,6 +1272,106 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, containerWidth, c
                       <td style={{ padding: '6px 8px', textAlign: 'right' }}>{row.order_count}건</td>
                       <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: '#1890ff' }}>
                         {(row.revenue || 0).toLocaleString()}원
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        }
+
+        // 인기 페이지 테이블
+        if (widget.presetId === 'top_pages') {
+          return (
+            <div style={{ height: contentHeight, overflow: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #f0f0f0' }}>
+                    <th style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 600, position: 'sticky', top: 0, background: 'white', width: 30 }}>#</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 600, position: 'sticky', top: 0, background: 'white' }}>페이지</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, position: 'sticky', top: 0, background: 'white' }}>PV</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, position: 'sticky', top: 0, background: 'white' }}>UV</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(Array.isArray(widget.data) ? widget.data : []).map((row, i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                      <td style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 600, color: i < 3 ? '#52c41a' : '#8c8c8c' }}>{row.rank || i + 1}</td>
+                      <td style={{ padding: '6px 8px', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.url}>
+                        {row.title || row.url}
+                      </td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: '#1890ff' }}>
+                        {(row.pv || 0).toLocaleString()}
+                      </td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                        {(row.uv || 0).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        }
+
+        // 유입 경로 테이블
+        if (widget.presetId === 'referrer_sources') {
+          return (
+            <div style={{ height: contentHeight, overflow: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #f0f0f0' }}>
+                    <th style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 600, position: 'sticky', top: 0, background: 'white', width: 30 }}>#</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 600, position: 'sticky', top: 0, background: 'white' }}>유입 경로</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, position: 'sticky', top: 0, background: 'white' }}>방문자</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, position: 'sticky', top: 0, background: 'white' }}>비율</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(Array.isArray(widget.data) ? widget.data : []).map((row, i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                      <td style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 600, color: i < 3 ? '#52c41a' : '#8c8c8c' }}>{row.rank || i + 1}</td>
+                      <td style={{ padding: '6px 8px' }}>{row.source}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: '#1890ff' }}>
+                        {(row.uv || 0).toLocaleString()}명
+                      </td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                        {row.rate || 0}%
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        }
+
+        // UTM 캠페인 테이블
+        if (widget.presetId === 'utm_campaigns') {
+          return (
+            <div style={{ height: contentHeight, overflow: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #f0f0f0' }}>
+                    <th style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 600, position: 'sticky', top: 0, background: 'white', width: 30 }}>#</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 600, position: 'sticky', top: 0, background: 'white' }}>소스</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 600, position: 'sticky', top: 0, background: 'white' }}>캠페인</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, position: 'sticky', top: 0, background: 'white' }}>방문자</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(Array.isArray(widget.data) ? widget.data : []).map((row, i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                      <td style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 600, color: i < 3 ? '#52c41a' : '#8c8c8c' }}>{row.rank || i + 1}</td>
+                      <td style={{ padding: '6px 8px', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {row.source} / {row.medium}
+                      </td>
+                      <td style={{ padding: '6px 8px', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.campaign}>
+                        {row.campaign}
+                      </td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: '#1890ff' }}>
+                        {(row.uv || 0).toLocaleString()}명
                       </td>
                     </tr>
                   ))}
@@ -981,6 +1448,231 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, containerWidth, c
             </div>
           </div>
         );
+
+      // ============================================================================
+      // 방문자 분석 차트 렌더링
+      // ============================================================================
+
+      // 파이 차트 (디바이스별 방문자)
+      case 'pie':
+        const pieData = widget.data;
+        if (!pieData?.chartData || pieData.chartData.length === 0) {
+          return <div style={{ height: contentHeight, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8c8c8c' }}>데이터가 없습니다</div>;
+        }
+
+        const RADIAN = Math.PI / 180;
+        const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, name }) => {
+          const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+          const x = cx + radius * Math.cos(-midAngle * RADIAN);
+          const y = cy + radius * Math.sin(-midAngle * RADIAN);
+          
+          if (percent < 0.05) return null; // 5% 미만은 라벨 생략
+          
+          return (
+            <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight={600}>
+              {`${(percent * 100).toFixed(0)}%`}
+            </text>
+          );
+        };
+
+        return (
+          <div style={{ height: contentHeight, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={pieData.chartData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={renderCustomizedLabel}
+                  outerRadius={Math.min(contentHeight, 200) / 2 - 20}
+                  dataKey="value"
+                >
+                  {pieData.chartData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                  ))}
+                </Pie>
+                <Tooltip 
+                  formatter={(value, name, props) => [`${value.toLocaleString()}명 (${props.payload.rate}%)`, name]}
+                  contentStyle={{ borderRadius: 8, border: '1px solid #e8e8e8' }}
+                />
+                <Legend 
+                  verticalAlign="bottom" 
+                  height={36}
+                  formatter={(value, entry) => (
+                    <span style={{ color: '#262626', fontSize: 12 }}>
+                      {value} ({entry.payload.rate}%)
+                    </span>
+                  )}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        );
+
+      // 24시간 바 차트 (시간대별 방문자)
+      case 'hourly_bar':
+        const hourlyData = widget.data;
+        if (!hourlyData?.chartData || hourlyData.chartData.length === 0) {
+          return <div style={{ height: contentHeight, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8c8c8c' }}>데이터가 없습니다</div>;
+        }
+
+        // 피크 시간 찾기
+        const peakHour = hourlyData.chartData.reduce((max, item) => item.uv > max.uv ? item : max, hourlyData.chartData[0]);
+
+        return (
+          <div style={{ height: contentHeight, padding: '8px 0' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={hourlyData.chartData}
+                margin={{ top: 10, right: 10, left: -20, bottom: 20 }}
+              >
+                <XAxis 
+                  dataKey="hour" 
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 10, fill: '#8c8c8c' }}
+                  tickFormatter={(hour) => hour % 6 === 0 ? `${hour}시` : ''}
+                  interval={0}
+                />
+                <YAxis hide domain={[0, hourlyData.maxValue * 1.2]} />
+                <Tooltip 
+                  formatter={(value) => [`${value.toLocaleString()}명`, '방문자']}
+                  labelFormatter={(hour) => `${hour}시`}
+                  contentStyle={{ borderRadius: 8, border: '1px solid #e8e8e8' }}
+                />
+                <Bar 
+                  dataKey="uv" 
+                  radius={[2, 2, 0, 0]}
+                >
+                  {hourlyData.chartData.map((entry, index) => (
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={entry.hour === peakHour.hour ? '#52c41a' : '#d9d9d9'} 
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        );
+
+      // 라인 차트 (일별 방문 추이)
+      case 'visitor_line':
+        const dailyData = widget.data;
+        if (!dailyData?.chartData || dailyData.chartData.length === 0) {
+          return <div style={{ height: contentHeight, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8c8c8c' }}>데이터가 없습니다</div>;
+        }
+
+        return (
+          <div style={{ height: contentHeight, padding: '8px 0' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart
+                data={dailyData.chartData}
+                margin={{ top: 10, right: 30, left: -10, bottom: 5 }}
+              >
+                <XAxis 
+                  dataKey="date" 
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 11, fill: '#8c8c8c' }}
+                />
+                <YAxis 
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 11, fill: '#8c8c8c' }}
+                  tickFormatter={(value) => value.toLocaleString()}
+                />
+                <Tooltip 
+                  formatter={(value, name) => [
+                    `${value.toLocaleString()}${name === 'uv' ? '명' : '회'}`, 
+                    name === 'uv' ? '방문자' : '페이지뷰'
+                  ]}
+                  labelFormatter={(label) => `${label}`}
+                  contentStyle={{ borderRadius: 8, border: '1px solid #e8e8e8' }}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="uv" 
+                  stroke="#52c41a" 
+                  strokeWidth={2}
+                  dot={{ r: 3, fill: '#52c41a' }}
+                  activeDot={{ r: 5 }}
+                  name="uv"
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="pv" 
+                  stroke="#1890ff" 
+                  strokeWidth={2}
+                  dot={{ r: 3, fill: '#1890ff' }}
+                  activeDot={{ r: 5 }}
+                  name="pv"
+                />
+                <Legend 
+                  verticalAlign="top"
+                  height={30}
+                  formatter={(value) => (
+                    <span style={{ color: '#262626', fontSize: 12 }}>
+                      {value === 'uv' ? '방문자(UV)' : '페이지뷰(PV)'}
+                    </span>
+                  )}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        );
+
+      // 비교 바 차트 (신규 vs 재방문)
+      case 'compare_bar':
+        const compareData = widget.data;
+        if (!compareData?.chartData || compareData.chartData.length === 0) {
+          return <div style={{ height: contentHeight, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8c8c8c' }}>데이터가 없습니다</div>;
+        }
+
+        const maxCompareValue = Math.max(...compareData.chartData.map(d => d.value));
+
+        return (
+          <div style={{ height: contentHeight, padding: '12px 0' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={compareData.chartData}
+                layout="vertical"
+                margin={{ top: 5, right: 80, left: 10, bottom: 5 }}
+                barSize={32}
+              >
+                <XAxis type="number" hide domain={[0, maxCompareValue * 1.2]} />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 13, fill: '#262626', fontWeight: 500 }}
+                  width={60}
+                />
+                <Tooltip 
+                  formatter={(value, name, props) => [`${value.toLocaleString()}명 (${props.payload.rate}%)`, props.payload.name]}
+                  contentStyle={{ borderRadius: 8, border: '1px solid #e8e8e8' }}
+                />
+                <Bar
+                  dataKey="value"
+                  radius={[0, 6, 6, 0]}
+                  background={{ fill: '#f5f5f5', radius: [0, 6, 6, 0] }}
+                >
+                  {compareData.chartData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                  ))}
+                  <LabelList
+                    dataKey="value"
+                    position="right"
+                    formatter={(value) => `${value.toLocaleString()}명`}
+                    style={{ fontSize: 12, fontWeight: 600, fill: '#262626' }}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        );
       
       default:
         return <div>알 수 없는 위젯 타입</div>;
@@ -1042,9 +1734,100 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, containerWidth, c
           overflow: 'hidden'
         }}
         title={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <DragOutlined style={{ color: '#bfbfbf', cursor: 'grab' }} />
-            <span style={{ fontSize: 14, fontWeight: 600 }}>{widget.title}</span>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+            {/* 왼쪽 그룹: 제목 + 날짜 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <DragOutlined style={{ color: '#bfbfbf', cursor: 'grab' }} />
+              <span style={{ fontSize: 14, fontWeight: 600 }}>{widget.title}</span>
+              
+              {/* period_compare 타입일 때 날짜 정보 표시 (2개일 때만 vs 형태로 표시, 3개 이상은 Tooltip으로) */}
+              {widget.type === 'period_compare' && widget.data?.detailedDates && (
+                <>
+                  {/* 2개일 때만 헤더에 표시 */}
+                  {widget.data.chartData?.length === 2 && (
+                    <>
+                      <span style={{ color: '#e0e0e0', margin: '0 8px' }}>|</span>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        fontSize: 11,
+                        color: '#595959'
+                      }}>
+                        {widget.data.detailedDates.current && (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                            <span style={{ color: '#7C3AED', fontSize: 12 }}>●</span>
+                            {widget.data.detailedDates.current}
+                          </span>
+                        )}
+                        {widget.data.detailedDates.compares?.[0] && (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                            <span style={{ color: '#8c8c8c', fontSize: 10 }}>vs</span>
+                            <span style={{ color: '#94A3B8', fontSize: 12 }}>●</span>
+                            {widget.data.detailedDates.compares[0]}
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  )}
+                  {/* 3개 이상일 때는 안내 문구만 표시 */}
+                  {widget.data.chartData?.length > 2 && (
+                    <>
+                      <span style={{ color: '#e0e0e0', margin: '0 8px' }}>|</span>
+                      <span style={{ fontSize: 11, color: '#8c8c8c' }}>
+                        {widget.data.chartData.length}개 기간 비교 (막대에 마우스를 올리면 상세 날짜 표시)
+                      </span>
+                    </>
+                  )}
+                </>
+              )}
+              
+              {/* 다른 타입(bar, table 등)일 때 날짜 정보 표시 (단일 기간) */}
+              {/* KPI, period_compare, text 타입은 제외 */}
+              {widget.type !== 'period_compare' && widget.type !== 'text' && widget.type !== 'kpi' && widget.dateRange && (
+                <>
+                  <span style={{ color: '#e0e0e0', margin: '0 8px' }}>|</span>
+                  <span style={{ 
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    fontSize: 12,
+                    color: '#595959'
+                  }}>
+                    <span style={{ color: '#8c8c8c' }}>조회기간 :</span>
+                    {(() => {
+                      const { start, end } = widget.dateRange;
+                      if (!start || !end) return '';
+                      
+                      const startParts = start.split('-');
+                      const endParts = end.split('-');
+                      
+                      if (startParts.length < 3 || endParts.length < 3) return '';
+                      
+                      const startYear = startParts[0];
+                      const startMonth = startParts[1];
+                      const startDay = startParts[2];
+                      const endYear = endParts[0];
+                      const endMonth = endParts[1];
+                      const endDay = endParts[2];
+                      
+                      // 같은 년도, 같은 월
+                      if (startYear === endYear && startMonth === endMonth) {
+                        return `${startYear}.${startMonth}.${startDay} ~ ${endDay}`;
+                      }
+                      
+                      // 같은 년도, 다른 월
+                      if (startYear === endYear) {
+                        return `${startYear}.${startMonth}.${startDay} ~ ${endMonth}.${endDay}`;
+                      }
+                      
+                      // 다른 년도
+                      return `${startYear}.${startMonth}.${startDay} ~ ${endYear}.${endMonth}.${endDay}`;
+                    })()}
+                  </span>
+                </>
+              )}
+            </div>
           </div>
         }
         extra={
@@ -1178,8 +1961,10 @@ const AddWidgetModal = ({ visible, onClose, onAdd, globalDateRange }) => {
   const [datePresetKey, setDatePresetKey] = useState('last7days');
   const [customDateRange, setCustomDateRange] = useState([dayjs().subtract(6, 'days'), dayjs()]);
   const [compareEnabled, setCompareEnabled] = useState(true);
-  const [compareType, setCompareType] = useState('auto'); // 'auto' or 'custom'
-  const [customCompareRange, setCustomCompareRange] = useState(null);
+  // 다중 비교 기간 (최대 4개)
+  const [compareRanges, setCompareRanges] = useState([
+    { id: 1, type: 'auto', monthsAgo: 1, customRange: null }
+  ]);
 
   // 초기화
   const resetModal = () => {
@@ -1189,9 +1974,21 @@ const AddWidgetModal = ({ visible, onClose, onAdd, globalDateRange }) => {
     setDatePresetKey('last7days');
     setCustomDateRange([dayjs().subtract(6, 'days'), dayjs()]);
     setCompareEnabled(true);
-    setCompareType('auto');
-    setCustomCompareRange(null);
+    setCompareRanges([{ id: 1, type: 'auto', monthsAgo: 1, customRange: null }]);
   };
+
+  // Step 2에서 지표 선택 시 비교 기능 자동 설정
+  useEffect(() => {
+    if (selectedPreset) {
+      // table/text 타입이면 비교 기능 자동 OFF
+      if (TYPES_WITHOUT_COMPARE.includes(selectedPreset.type)) {
+        setCompareEnabled(false);
+      } else {
+        // 다른 타입은 기본값 true (사용자가 선택 가능)
+        setCompareEnabled(true);
+      }
+    }
+  }, [selectedPreset]);
 
   // 모달 닫기
   const handleClose = () => {
@@ -1208,14 +2005,71 @@ const AddWidgetModal = ({ visible, onClose, onAdd, globalDateRange }) => {
     return preset ? preset.getValue() : [dayjs().subtract(6, 'days'), dayjs()];
   };
 
-  // 비교 기간 계산
-  const getCompareDateRange = () => {
-    if (!compareEnabled) return null;
+  // 다중 비교 기간 계산
+  const getCompareRangesForSave = () => {
+    if (!compareEnabled || compareRanges.length === 0) return [];
     const [start, end] = getCurrentDateRange();
-    if (compareType === 'custom' && customCompareRange) {
-      return customCompareRange;
+    
+    return compareRanges.map(range => {
+      if (range.type === 'custom' && range.customRange) {
+        return {
+          start: range.customRange[0].format('YYYY-MM-DD'),
+          end: range.customRange[1].format('YYYY-MM-DD'),
+          type: 'custom',
+          monthsAgo: range.monthsAgo
+        };
+      }
+      // 자동 계산: N달 전
+      const compareStart = start.subtract(range.monthsAgo, 'month');
+      const compareEnd = end.subtract(range.monthsAgo, 'month');
+      return {
+        start: compareStart.format('YYYY-MM-DD'),
+        end: compareEnd.format('YYYY-MM-DD'),
+        type: 'auto',
+        monthsAgo: range.monthsAgo
+      };
+    });
+  };
+
+  // 특정 비교 기간의 날짜 범위 계산 (UI 표시용)
+  const getCompareRangeDates = (range) => {
+    const [start, end] = getCurrentDateRange();
+    if (range.type === 'custom' && range.customRange) {
+      return range.customRange;
     }
-    return getComparisonPeriod(start, end);
+    return [start.subtract(range.monthsAgo, 'month'), end.subtract(range.monthsAgo, 'month')];
+  };
+
+  // 비교 기간 추가
+  const handleAddCompareRange = () => {
+    if (compareRanges.length >= 4) return;
+    const nextMonthsAgo = compareRanges.length + 1;
+    setCompareRanges([...compareRanges, {
+      id: Date.now(),
+      type: 'auto',
+      monthsAgo: nextMonthsAgo,
+      customRange: null
+    }]);
+  };
+
+  // 비교 기간 삭제
+  const handleRemoveCompareRange = (id) => {
+    if (compareRanges.length <= 1) return;
+    setCompareRanges(compareRanges.filter(r => r.id !== id));
+  };
+
+  // 비교 기간 타입 변경
+  const handleCompareRangeTypeChange = (id, newType) => {
+    setCompareRanges(compareRanges.map(r => 
+      r.id === id ? { ...r, type: newType } : r
+    ));
+  };
+
+  // 비교 기간 커스텀 날짜 변경
+  const handleCompareRangeCustomChange = (id, dates) => {
+    setCompareRanges(compareRanges.map(r => 
+      r.id === id ? { ...r, customRange: dates } : r
+    ));
   };
 
   // 완료 처리
@@ -1223,7 +2077,16 @@ const AddWidgetModal = ({ visible, onClose, onAdd, globalDateRange }) => {
     if (!selectedPreset) return;
     
     const [startDate, endDate] = getCurrentDateRange();
-    const compareRange = getCompareDateRange();
+    const compareRangesForSave = getCompareRangesForSave();
+    
+    // 비교 기능을 지원하지 않는 타입이면 강제로 false/빈 배열
+    const finalCompareEnabled = TYPES_WITHOUT_COMPARE.includes(selectedPreset.type) 
+      ? false 
+      : compareEnabled;
+    
+    const finalCompareRanges = TYPES_WITHOUT_COMPARE.includes(selectedPreset.type)
+      ? []
+      : compareRangesForSave;
     
     onAdd({
       id: `widget-${Date.now()}`,
@@ -1243,12 +2106,8 @@ const AddWidgetModal = ({ visible, onClose, onAdd, globalDateRange }) => {
         end: endDate.format('YYYY-MM-DD'),
         presetKey: datePresetKey
       },
-      compareEnabled,
-      compareRange: compareRange ? {
-        start: compareRange[0].format('YYYY-MM-DD'),
-        end: compareRange[1].format('YYYY-MM-DD'),
-        type: compareType
-      } : null,
+      compareEnabled: finalCompareEnabled,
+      compareRanges: finalCompareRanges,
       // 초기 데이터 (로딩 상태)
       data: null,
       loading: true
@@ -1376,6 +2235,7 @@ const AddWidgetModal = ({ visible, onClose, onAdd, globalDateRange }) => {
         <Text style={{ display: 'block', marginBottom: 16, fontSize: 15 }}>
           어떤 정보를 볼까요?
         </Text>
+        <div style={{ maxHeight: 400, overflowY: 'auto', paddingRight: 8 }}>
         {sections.map(section => (
           section.items.length > 0 && (
             <div key={section.key} style={{ marginBottom: 20 }}>
@@ -1416,6 +2276,7 @@ const AddWidgetModal = ({ visible, onClose, onAdd, globalDateRange }) => {
             </div>
           )
         ))}
+        </div>
       </div>
     );
   };
@@ -1423,7 +2284,10 @@ const AddWidgetModal = ({ visible, onClose, onAdd, globalDateRange }) => {
   // Step 3: 기간 설정 렌더링
   const renderStep3 = () => {
     const [currentStart, currentEnd] = getCurrentDateRange();
-    const compareRange = getCompareDateRange();
+    
+    // 선택된 지표가 비교 기능을 지원하는지 확인
+    const shouldShowCompare = selectedPreset && 
+      !TYPES_WITHOUT_COMPARE.includes(selectedPreset.type);
 
     return (
       <div>
@@ -1439,7 +2303,20 @@ const AddWidgetModal = ({ visible, onClose, onAdd, globalDateRange }) => {
           marginBottom: 16,
           background: '#fafafa'
         }}>
-          <div style={{ fontWeight: 600, marginBottom: 12 }}>기간 선택</div>
+          <div style={{ 
+            fontWeight: 600, 
+            marginBottom: 12, 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 16
+          }}>
+            <span>기간 선택</span>
+            {datePresetKey !== 'custom' && currentStart && (
+              <span style={{ fontSize: 13, color: '#1890ff', fontWeight: 600 }}>
+                {currentStart.format('YYYY-MM-DD')} ~ {currentEnd.format('YYYY-MM-DD')}
+              </span>
+            )}
+          </div>
           <Radio.Group 
             value={datePresetKey} 
             onChange={e => setDatePresetKey(e.target.value)}
@@ -1466,66 +2343,233 @@ const AddWidgetModal = ({ visible, onClose, onAdd, globalDateRange }) => {
               />
             </div>
           )}
-          
-          {datePresetKey !== 'custom' && currentStart && (
-            <div style={{ marginTop: 10, fontSize: 13, color: '#1890ff' }}>
-              → {currentStart.format('YYYY-MM-DD')} ~ {currentEnd.format('YYYY-MM-DD')}
-            </div>
-          )}
         </div>
 
-        {/* 비교 기간 */}
-        <div style={{ 
-          padding: 20, 
-          border: '1px solid #e8e8e8', 
-          borderRadius: 12,
-          background: compareEnabled ? '#f6ffed' : '#fafafa'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
-            <Checkbox 
-              checked={compareEnabled} 
-              onChange={e => setCompareEnabled(e.target.checked)}
-            >
-              <span style={{ fontWeight: 600 }}>📊 이전 기간과 비교하기</span>
-            </Checkbox>
-          </div>
-          
-          {compareEnabled && (
-            <>
-              <Radio.Group 
-                value={compareType} 
-                onChange={e => setCompareType(e.target.value)}
-                style={{ display: 'flex', flexDirection: 'column', gap: 8, marginLeft: 24 }}
+        {/* 비교 기간 - 지원하는 타입에만 표시 */}
+        {shouldShowCompare && (
+          <div style={{ 
+            padding: 16, 
+            border: '1px solid #e8e8e8', 
+            borderRadius: 12,
+            background: compareEnabled ? '#f6ffed' : '#fafafa'
+          }}>
+            {/* 비교하기 체크박스 */}
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: 16,
+              marginBottom: compareEnabled ? 12 : 0 
+            }}>
+              <Checkbox 
+                checked={compareEnabled} 
+                onChange={e => setCompareEnabled(e.target.checked)}
               >
-                <Radio value="auto">
-                  <span>같은 일자의 이전 달 (자동 계산)</span>
-                </Radio>
-                <Radio value="custom">
-                  <span>직접 선택</span>
-                </Radio>
-              </Radio.Group>
-              
-              {compareType === 'custom' && (
-                <div style={{ marginTop: 12, marginLeft: 24 }}>
-                  <RangePicker
-                    value={customCompareRange}
-                    onChange={setCustomCompareRange}
-                    format="YYYY-MM-DD"
-                    style={{ width: '100%' }}
-                  />
-                </div>
+                <span style={{ fontWeight: 600 }}>이전 기간과 비교하기</span>
+              </Checkbox>
+              {/* 자동 계산된 날짜 표시 (모든 지표 공통) */}
+              {compareEnabled && compareRanges[0]?.type === 'auto' && (
+                (() => {
+                  const [compareStart, compareEnd] = getCompareRangeDates(compareRanges[0]);
+                  return (
+                    <span style={{ fontSize: 13, color: '#52c41a', fontWeight: 600 }}>
+                      {compareStart.format('YYYY-MM-DD')} ~ {compareEnd.format('YYYY-MM-DD')} 와 비교
+                    </span>
+                  );
+                })()
               )}
-              
-              {compareType === 'auto' && compareRange && (
-                <div style={{ marginTop: 10, marginLeft: 24, fontSize: 13, color: '#52c41a' }}>
-                  → {compareRange[0].format('YYYY-MM-DD')} ~ {compareRange[1].format('YYYY-MM-DD')} 와 비교
-                </div>
-              )}
-            </>
-          )}
-        </div>
+            </div>
+            
+            {compareEnabled && (
+              <>
+                {/* 기간별 매출 비교일 때: 첫 번째는 일반 UI + 추가 기간들 */}
+                {selectedPreset?.id === 'period_revenue_compare' ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {/* 첫 번째 비교 기간: 일반 UI 스타일 */}
+                    {compareRanges.length > 0 && (() => {
+                      const firstRange = compareRanges[0];
+                      return (
+                        <div key={firstRange.id} style={{ marginLeft: 24 }}>
+                          {/* 라디오 그룹 */}
+                          <Radio.Group 
+                            value={firstRange.type} 
+                            onChange={e => handleCompareRangeTypeChange(firstRange.id, e.target.value)}
+                            style={{ display: 'flex', flexDirection: 'row', gap: 16 }}
+                          >
+                            <Radio value="auto">
+                              <span>같은 일자의 이전 달 (자동 계산)</span>
+                            </Radio>
+                            <Radio value="custom">
+                              <span>직접 선택</span>
+                            </Radio>
+                          </Radio.Group>
+                          
+                          {/* 직접 선택 시 날짜 선택기 */}
+                          {firstRange.type === 'custom' && (
+                            <div style={{ marginTop: 12 }}>
+                              <RangePicker
+                                value={firstRange.customRange}
+                                onChange={(dates) => handleCompareRangeCustomChange(firstRange.id, dates)}
+                                format="YYYY-MM-DD"
+                                style={{ width: '100%' }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                    
+                    {/* 2번째 이후 추가 비교 기간들 */}
+                    {compareRanges.slice(1).map((range, index) => {
+                      const [compareStart, compareEnd] = getCompareRangeDates(range);
+                      const actualIndex = index + 1; // 실제 인덱스 (0-based에서 1을 더함)
+                      return (
+                        <div 
+                          key={range.id}
+                          style={{ 
+                            padding: 12, 
+                            background: 'white', 
+                            borderRadius: 8,
+                            border: '1px solid #e8e8e8',
+                            marginLeft: 24
+                          }}
+                        >
+                          {/* 비교 기간 헤더 */}
+                          <div style={{ 
+                            display: 'flex', 
+                            justifyContent: 'space-between', 
+                            alignItems: 'center',
+                            marginBottom: 8
+                          }}>
+                            <span style={{ 
+                              fontSize: 13, 
+                              fontWeight: 600, 
+                              color: '#595959',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 8
+                            }}>
+                              <span style={{ 
+                                width: 20, 
+                                height: 20, 
+                                borderRadius: '50%', 
+                                background: '#d9d9d9',
+                                color: 'white',
+                                fontSize: 11,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                              }}>
+                                {actualIndex + 1}
+                              </span>
+                              비교 {actualIndex + 1}
+                              {range.type === 'auto' && (
+                                <span style={{ color: '#52c41a', fontWeight: 500, fontSize: 12 }}>
+                                  {compareStart.format('YYYY-MM-DD')} ~ {compareEnd.format('YYYY-MM-DD')}
+                                </span>
+                              )}
+                            </span>
+                            {/* 삭제 버튼 */}
+                            <Button 
+                              type="text" 
+                              size="small"
+                              icon={<DeleteOutlined />}
+                              onClick={() => handleRemoveCompareRange(range.id)}
+                              style={{ color: '#ff4d4f' }}
+                            />
+                          </div>
+                          
+                          {/* 비교 기간 타입 선택 */}
+                          <Radio.Group 
+                            value={range.type} 
+                            onChange={e => handleCompareRangeTypeChange(range.id, e.target.value)}
+                            style={{ display: 'flex', gap: 16 }}
+                            size="small"
+                          >
+                            <Radio value="auto">
+                              {range.monthsAgo === 1 ? '이전 달 (자동)' : `${range.monthsAgo}달 전 (자동)`}
+                            </Radio>
+                            <Radio value="custom">직접 선택</Radio>
+                          </Radio.Group>
+                          
+                          {/* 직접 선택 시 날짜 선택기 */}
+                          {range.type === 'custom' && (
+                            <div style={{ marginTop: 8 }}>
+                              <RangePicker
+                                value={range.customRange}
+                                onChange={(dates) => handleCompareRangeCustomChange(range.id, dates)}
+                                format="YYYY-MM-DD"
+                                style={{ width: '100%' }}
+                                size="small"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    
+                    {/* 비교할 기간 추가 버튼 (점선) */}
+                    {compareRanges.length < 4 && (
+                      <div 
+                        onClick={handleAddCompareRange}
+                        style={{
+                          border: '2px dashed #d9d9d9',
+                          borderRadius: 8,
+                          padding: '12px 16px',
+                          textAlign: 'center',
+                          cursor: 'pointer',
+                          color: '#8c8c8c',
+                          background: 'white',
+                          transition: 'all 0.2s ease',
+                          marginLeft: 24
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.borderColor = '#1890ff';
+                          e.currentTarget.style.color = '#1890ff';
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.borderColor = '#d9d9d9';
+                          e.currentTarget.style.color = '#8c8c8c';
+                        }}
+                      >
+                        <PlusOutlined style={{ marginRight: 8 }} />
+                        비교할 기간 추가 (최대 4개)
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* 그 외 지표: 단일 비교 기간 UI (이전 스타일) */
+                  <div style={{ marginLeft: 24 }}>
+                    <Radio.Group 
+                      value={compareRanges[0]?.type || 'auto'} 
+                      onChange={e => handleCompareRangeTypeChange(compareRanges[0]?.id, e.target.value)}
+                      style={{ display: 'flex', flexDirection: 'row', gap: 16 }}
+                    >
+                      <Radio value="auto">
+                        <span>같은 일자의 이전 달 (자동 계산)</span>
+                      </Radio>
+                      <Radio value="custom">
+                        <span>직접 선택</span>
+                      </Radio>
+                    </Radio.Group>
+                    
+                    {compareRanges[0]?.type === 'custom' && (
+                      <div style={{ marginTop: 12 }}>
+                        <RangePicker
+                          value={compareRanges[0]?.customRange}
+                          onChange={(dates) => handleCompareRangeCustomChange(compareRanges[0]?.id, dates)}
+                          format="YYYY-MM-DD"
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
 
-        {/* 도움말 */}
+        {/* 도움말 - 타입에 따라 다른 메시지 */}
         <div style={{ 
           marginTop: 16, 
           padding: 12, 
@@ -1534,7 +2578,13 @@ const AddWidgetModal = ({ visible, onClose, onAdd, globalDateRange }) => {
           fontSize: 13,
           color: '#ad8b00'
         }}>
-          💡 Tip: 비교 기간을 설정하면 증감률(%)을 함께 볼 수 있어요
+          {selectedPreset?.id === 'period_revenue_compare' ? (
+            <>💡 Tip: 여러 기간을 추가하면 월별 추이를 한눈에 비교할 수 있어요</>
+          ) : shouldShowCompare ? (
+            <>💡 Tip: 비교 기간을 설정하면 증감률(%)을 함께 볼 수 있어요</>
+          ) : (
+            <>💡 Tip: 선택한 기간의 상세 목록을 볼 수 있어요</>
+          )}
         </div>
       </div>
     );
@@ -1557,6 +2607,7 @@ const AddWidgetModal = ({ visible, onClose, onAdd, globalDateRange }) => {
       open={visible}
       onCancel={handleClose}
       width={640}
+      style={{ top: 20 }}
       footer={
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <Button 
@@ -1674,11 +2725,11 @@ function MyDashboard() {
           const loadedWidgets = await Promise.all(
             apiWidgets.map(async (w) => {
               try {
-                const { data: apiData, compareData, error } = await fetchWidgetData(w);
+                const { data: apiData, compareDataList, error } = await fetchWidgetData(w);
                 if (error) {
                   return { ...w, loading: false, error, data: null };
                 }
-                const transformedData = transformWidgetData(w, apiData, compareData);
+                const transformedData = transformWidgetData(w, apiData, compareDataList);
                 return { ...w, loading: false, error: null, data: transformedData };
               } catch (err) {
                 return { ...w, loading: false, error: err.message, data: null };
@@ -1736,13 +2787,13 @@ function MyDashboard() {
     }
 
     try {
-      const { data: apiData, compareData: compareApiData, error } = await fetchWidgetData(widget);
-      
+      const { data: apiData, compareDataList, error } = await fetchWidgetData(widget);
+
       if (error) {
         return { ...widget, loading: false, error: error, data: null };
       }
 
-      const transformedData = transformWidgetData(widget, apiData, compareApiData);
+      const transformedData = transformWidgetData(widget, apiData, compareDataList);
       return { ...widget, loading: false, error: null, data: transformedData };
     } catch (err) {
       console.error('[loadWidgetData Error]', err);

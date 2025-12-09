@@ -83,7 +83,7 @@ router.get('/range', async (req, res) => {
     const newVisitorsResult = await db.query(newVisitorsQuery, visitorsParams);
 
     // 5. Revenue and orders (with device filter)
-    // 정상 주문만 집계: paid='T' (입금완료) AND canceled='F' (취소 아님) AND order_status='confirmed' (환불 제외)
+    // 정상 주문만 집계: paid='T' AND canceled='F' AND order_status='confirmed' AND 금액 > 0
     const revenueQuery = device && device !== 'all'
       ? `SELECT
            COALESCE(SUM(c.total_amount), 0) as total_revenue,
@@ -96,7 +96,8 @@ router.get('/range', async (req, res) => {
          JOIN visitors v ON c.visitor_id = v.visitor_id
          WHERE c.timestamp >= $1 AND c.timestamp <= $2 AND v.device_type = $3
            AND c.paid = 'T' AND (c.canceled = 'F' OR c.canceled IS NULL)
-           AND (c.order_status = 'confirmed' OR c.order_status IS NULL)`
+           AND (c.order_status = 'confirmed' OR c.order_status IS NULL)
+           AND (c.final_payment > 0 OR c.total_amount > 0)`
       : `SELECT
            COALESCE(SUM(total_amount), 0) as total_revenue,
            COALESCE(SUM(final_payment), 0) as final_revenue,
@@ -107,7 +108,8 @@ router.get('/range', async (req, res) => {
          FROM conversions
          WHERE timestamp >= $1 AND timestamp <= $2
            AND paid = 'T' AND (canceled = 'F' OR canceled IS NULL)
-           AND (order_status = 'confirmed' OR order_status IS NULL)`;
+           AND (order_status = 'confirmed' OR order_status IS NULL)
+           AND (final_payment > 0 OR total_amount > 0)`;
 
     const revenueResult = await db.query(revenueQuery, visitorsParams);
 
@@ -236,7 +238,7 @@ router.get('/range', async (req, res) => {
 
       const compareVisitorsResult = await db.query(compareVisitorsQuery, compareVisitorsParams);
 
-      // 비교 기간도 정상 주문만 집계 (환불 제외)
+      // 비교 기간도 정상 주문만 집계 (환불 제외, 금액 > 0)
       const compareRevenueQuery = device && device !== 'all'
         ? `SELECT
              COALESCE(SUM(c.total_amount), 0) as total_revenue,
@@ -246,7 +248,8 @@ router.get('/range', async (req, res) => {
            JOIN visitors v ON c.visitor_id = v.visitor_id
            WHERE c.timestamp >= $1 AND c.timestamp <= $2 AND v.device_type = $3
              AND c.paid = 'T' AND (c.canceled = 'F' OR c.canceled IS NULL)
-             AND (c.order_status = 'confirmed' OR c.order_status IS NULL)`
+             AND (c.order_status = 'confirmed' OR c.order_status IS NULL)
+             AND (c.final_payment > 0 OR c.total_amount > 0)`
         : `SELECT
              COALESCE(SUM(total_amount), 0) as total_revenue,
              COALESCE(SUM(final_payment), 0) as final_revenue,
@@ -254,7 +257,8 @@ router.get('/range', async (req, res) => {
            FROM conversions
            WHERE timestamp >= $1 AND timestamp <= $2
              AND paid = 'T' AND (canceled = 'F' OR canceled IS NULL)
-             AND (order_status = 'confirmed' OR order_status IS NULL)`;
+             AND (order_status = 'confirmed' OR order_status IS NULL)
+             AND (final_payment > 0 OR total_amount > 0)`;
 
       const compareRevenueResult = await db.query(compareRevenueQuery, compareVisitorsParams);
 
@@ -363,7 +367,7 @@ router.get('/daily', async (req, res) => {
 
     // 3. Daily revenue and orders (with device filter)
     // NOTE: DB의 timestamp는 KST 값으로 저장됨 - 타임존 변환 불필요
-    // 정상 주문만 집계: paid='T' (입금완료) AND canceled='F' (취소 아님) AND order_status='confirmed' (환불 제외)
+    // 정상 주문만 집계: paid='T' AND canceled='F' AND order_status='confirmed' AND 금액 > 0
     const dailyRevenueQuery = device && device !== 'all'
       ? `SELECT
            DATE(c.timestamp) as date,
@@ -375,6 +379,7 @@ router.get('/daily', async (req, res) => {
          WHERE c.timestamp >= $1 AND c.timestamp <= $2 AND v.device_type = $3
            AND c.paid = 'T' AND (c.canceled = 'F' OR c.canceled IS NULL)
            AND (c.order_status = 'confirmed' OR c.order_status IS NULL)
+           AND (c.final_payment > 0 OR c.total_amount > 0)
          GROUP BY DATE(c.timestamp)
          ORDER BY date`
       : `SELECT
@@ -386,6 +391,7 @@ router.get('/daily', async (req, res) => {
          WHERE timestamp >= $1 AND timestamp <= $2
            AND paid = 'T' AND (canceled = 'F' OR canceled IS NULL)
            AND (order_status = 'confirmed' OR order_status IS NULL)
+           AND (final_payment > 0 OR total_amount > 0)
          GROUP BY DATE(timestamp)
          ORDER BY date`;
 
