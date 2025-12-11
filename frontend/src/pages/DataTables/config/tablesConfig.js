@@ -1,20 +1,13 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useParams } from 'react-router-dom';
-import { Card, Table, Tag, Typography, Space, Button, Alert, Tooltip, message, Divider } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
-import axios from 'axios';
+import React from 'react';
+import { Tag } from 'antd';
 import dayjs from 'dayjs';
-import SearchFilterBar from '../components/SearchFilterBar';
-import DynamicUtmFilterBar from '../components/DynamicUtmFilterBar';
-import { ShortId, ShortIp, ShortUrl, EllipsisText, DeviceText } from '../components/tables';
-
-const { Title } = Typography;
-const API_URL = import.meta.env.VITE_API_URL || '';
+import { ShortId, ShortIp, ShortUrl, EllipsisText, DeviceText } from '../../../components/tables';
+import { safeDecodeURI } from '../utils/helpers';
 
 // ============================================================================
 // 테이블별 설정
 // ============================================================================
-const TABLE_CONFIGS = {
+export const TABLE_CONFIGS = {
   visitors: {
     title: '👤 방문자',
     description: '방문자 정보 테이블',
@@ -921,323 +914,82 @@ const TABLE_CONFIGS = {
   }
 };
 
-// ============================================================================
-// DataTables 컴포넌트
-// ============================================================================
-function DataTables() {
-  const { tableName } = useParams();
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [total, setTotal] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(50);
-  const [error, setError] = useState(null);
-  
-  // 검색 및 필터 state
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filters, setFilters] = useState({
-    device: 'all',
-    browser: 'all',
-    os: 'all',
-    is_bounced: 'all',
-    is_converted: 'all',
-    utm_source: 'all',
-    utm_medium: 'all',
-    utm_campaign: 'all',
-    dateRange: null
-  });
+/**
+ * 테이블별 검색 placeholder 텍스트
+ */
+export const SEARCH_PLACEHOLDERS = {
+  visitors: '쿠키 ID, IP 주소 검색',
+  sessions: '세션 ID, 쿠키 ID, IP 주소, 진입/이탈 페이지 검색',
+  pageviews: '쿠키 ID, 세션 ID, 페이지 URL, 페이지 제목 검색',
+  events: '쿠키 ID, 세션 ID, 상품 ID, 상품명 검색',
+  conversions: '쿠키 ID, 세션 ID, 주문번호, IP 주소 검색',
+  'utm-sessions': '쿠키 ID, 세션 ID, 페이지 URL 검색',
+  'realtime-visitors': '쿠키 ID 검색'
+};
 
-  // 동적 UTM 필터 state
-  const [activeUtmFilters, setActiveUtmFilters] = useState([]);
+/**
+ * 동적 UTM 필터가 지원되는 테이블 목록
+ */
+export const UTM_FILTER_ENABLED_TABLES = ['visitors', 'conversions', 'utm-sessions'];
 
-  const tableConfig = TABLE_CONFIGS[tableName];
-
-  // 동적 컬럼을 useMemo로 메모이제이션하여 불필요한 재생성 방지
-  const tableColumns = useMemo(() => {
-    if (!tableConfig || !tableConfig.columns) return [];
-    
-    const baseColumns = tableConfig.columns;
-    
-    // UTM 필터가 없거나 비어있으면 원본 컬럼 반환
-    if (!activeUtmFilters || activeUtmFilters.length === 0) {
-      return baseColumns;
-    }
-    
-    // 기본 UTM 컬럼 위치 찾기 (utm_source, utm_medium, utm_campaign)
-    const utmSourceIndex = baseColumns.findIndex(col => col.key === 'utm_source');
-    const utmMediumIndex = baseColumns.findIndex(col => col.key === 'utm_medium');
-    const utmCampaignIndex = baseColumns.findIndex(col => col.key === 'utm_campaign');
-    
-    // 가장 마지막 기본 UTM 컬럼 위치 찾기
-    const lastUtmIndex = Math.max(utmSourceIndex, utmMediumIndex, utmCampaignIndex);
-    
-    // UTM 컬럼이 없으면 원본 반환
-    if (lastUtmIndex === -1) {
-      return baseColumns;
-    }
-    
-    // 컬럼 복사 (원본 변경 방지)
-    const columns = [...baseColumns];
-    
-    // 추가 UTM 컬럼 생성 (기본 3개 제외)
-    const additionalUtmColumns = activeUtmFilters
-      .filter(filter => !['utm_source', 'utm_medium', 'utm_campaign'].includes(filter.key))
-      .map(filter => ({
-        title: filter.key.replace('utm_', '').replace(/_/g, ' ').toUpperCase(),
-        dataIndex: ['utm_params', filter.key],
-        key: `dynamic_${filter.key}`,
-        width: 120,
-        render: (value, record) => {
-          // JSONB 데이터 확인
-          if (record.utm_params && record.utm_params[filter.key]) {
-            return <Tag color="purple">{record.utm_params[filter.key]}</Tag>;
-          }
-          return '-';
-        }
-      }));
-    
-    // 기본 UTM 컬럼 뒤에 동적 컬럼 삽입
-    columns.splice(lastUtmIndex + 1, 0, ...additionalUtmColumns);
-    
-    return columns;
-  }, [tableName, activeUtmFilters]);
-
-  useEffect(() => {
-    if (tableConfig) {
-      fetchData();
-    }
-  }, [tableName, currentPage, pageSize, searchTerm, filters, activeUtmFilters]);
-
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      setData([]); // 로딩 시작 시 데이터 초기화
-      
-      const offset = (currentPage - 1) * pageSize;
-      
-      // API 파라미터 구성
-      const params = {
-        limit: pageSize,
-        offset: offset
-      };
-      
-      // 검색어 추가
-      if (searchTerm) {
-        params.search = searchTerm;
-      }
-      
-      // 디바이스 필터 추가
-      if (filters.device && filters.device !== 'all') {
-        params.device_type = filters.device;
-      }
-      
-      // 브라우저 필터 추가
-      if (filters.browser && filters.browser !== 'all') {
-        params.browser = filters.browser;
-      }
-      
-      // OS 필터 추가
-      if (filters.os && filters.os !== 'all') {
-        params.os = filters.os;
-      }
-      
-      // 이벤트 타입 필터 추가
-      if (filters.event_type && filters.event_type !== 'all') {
-        params.event_type = filters.event_type;
-      }
-      
-      // 즉시 이탈 여부 필터 추가
-      if (filters.is_bounced && filters.is_bounced !== 'all') {
-        params.is_bounced = filters.is_bounced === 'true';
-      }
-      
-      // 구매 여부 필터 추가
-      if (filters.is_converted && filters.is_converted !== 'all') {
-        params.is_converted = filters.is_converted === 'true';
-      }
-      
-      // 동적 UTM 필터 추가 (Phase 3: Dynamic UTM Filter)
-      if (activeUtmFilters && activeUtmFilters.length > 0) {
-        params.utm_filters = JSON.stringify(activeUtmFilters);
-      }
-      
-      // 날짜 범위 필터 추가
-      if (filters.dateRange && filters.dateRange[0] && filters.dateRange[1]) {
-        params.start_date = filters.dateRange[0].format('YYYY-MM-DD');
-        params.end_date = filters.dateRange[1].format('YYYY-MM-DD');
-      }
-      
-      const response = await axios.get(`${API_URL}/api/tables/${tableName}`, { params });
-
-      // 안전한 데이터 처리
-      const fetchedData = response.data?.data || [];
-      const filteredData = fetchedData.filter(item => item && Object.keys(item).length > 0);
-      
-      setData(filteredData);
-      setTotal(parseInt(response.data?.total || 0));
-      setLoading(false);
-    } catch (err) {
-      console.error('테이블 데이터 조회 실패:', err);
-      setError(err.response?.data?.error || '데이터를 불러올 수 없습니다.');
-      setData([]); // 에러 시에도 빈 배열로 초기화
-      setLoading(false);
-    }
-  };
-
-  // 검색 핸들러
-  const handleSearch = (term) => {
-    setSearchTerm(term);
-    setCurrentPage(1); // 검색 시 첫 페이지로 이동
-  };
-
-  // 필터 변경 핸들러
-  const handleFilterChange = (newFilters) => {
-    setFilters(newFilters);
-    setCurrentPage(1); // 필터 변경 시 첫 페이지로 이동
-  };
-
-  // 초기화 핸들러
-  const handleReset = () => {
-    setSearchTerm('');
-    setFilters({
-      device: 'all',
-      browser: 'all',
-      os: 'all',
-      is_bounced: 'all',
-      is_converted: 'all',
-      utm_source: 'all',
-      utm_medium: 'all',
-      utm_campaign: 'all',
-      dateRange: null
-    });
-    setCurrentPage(1);
-  };
-
-  if (!tableConfig) {
-    return (
-      <div style={{ padding: '24px' }}>
-        <Alert
-          message="잘못된 테이블 이름"
-          description={`'${tableName}' 테이블을 찾을 수 없습니다.`}
-          type="error"
-          showIcon
-        />
-      </div>
-    );
+/**
+ * 테이블별 필터 표시 여부 설정
+ */
+export const FILTER_VISIBILITY = {
+  visitors: {
+    showDeviceFilter: true,
+    showBrowserFilter: true,
+    showOsFilter: true,
+    showEventTypeFilter: false,
+    showBouncedFilter: false,
+    showConvertedFilter: false
+  },
+  sessions: {
+    showDeviceFilter: true,
+    showBrowserFilter: true,
+    showOsFilter: true,
+    showEventTypeFilter: false,
+    showBouncedFilter: true,
+    showConvertedFilter: true
+  },
+  pageviews: {
+    showDeviceFilter: true,
+    showBrowserFilter: true,
+    showOsFilter: false,
+    showEventTypeFilter: false,
+    showBouncedFilter: false,
+    showConvertedFilter: false
+  },
+  events: {
+    showDeviceFilter: true,
+    showBrowserFilter: true,
+    showOsFilter: false,
+    showEventTypeFilter: true,
+    showBouncedFilter: false,
+    showConvertedFilter: false
+  },
+  conversions: {
+    showDeviceFilter: true,
+    showBrowserFilter: true,
+    showOsFilter: true,
+    showEventTypeFilter: false,
+    showBouncedFilter: false,
+    showConvertedFilter: false
+  },
+  'utm-sessions': {
+    showDeviceFilter: true,
+    showBrowserFilter: true,
+    showOsFilter: false,
+    showEventTypeFilter: false,
+    showBouncedFilter: false,
+    showConvertedFilter: false
+  },
+  'realtime-visitors': {
+    showDeviceFilter: false,
+    showBrowserFilter: false,
+    showOsFilter: false,
+    showEventTypeFilter: false,
+    showBouncedFilter: false,
+    showConvertedFilter: false
   }
-
-  return (
-    <div style={{ padding: '24px', background: '#f0f2f5', minHeight: '100vh' }}>
-      {/* 헤더 */}
-      <Card style={{ marginBottom: '16px' }}>
-        <Space direction="vertical" size="small" style={{ width: '100%' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <Title level={2} style={{ margin: 0 }}>
-                {tableConfig.title}
-              </Title>
-              <div style={{ color: '#999', fontSize: '14px', marginTop: '4px' }}>
-                {tableConfig.description}
-              </div>
-            </div>
-            <Button 
-              icon={<ReloadOutlined />} 
-              onClick={fetchData}
-              loading={loading}
-            >
-              새로고침
-            </Button>
-          </div>
-          <Tag color="blue">총 {total.toLocaleString()}건</Tag>
-        </Space>
-      </Card>
-
-      {/* 검색 및 필터 */}
-      <SearchFilterBar
-        searchPlaceholder={
-          tableName === 'sessions' 
-            ? `세션 ID, 쿠키 ID, IP 주소, 진입/이탈 페이지 검색`
-            : tableName === 'pageviews'
-              ? `쿠키 ID, 세션 ID, 페이지 URL, 페이지 제목 검색`
-              : tableName === 'events'
-                ? `쿠키 ID, 세션 ID, 상품 ID, 상품명 검색`
-                : tableName === 'conversions'
-                  ? `쿠키 ID, 세션 ID, 주문번호, IP 주소 검색`
-                  : tableName === 'utm-sessions'
-                    ? `쿠키 ID, 세션 ID, 페이지 URL 검색`
-                    : `쿠키 ID, IP 주소 검색`
-        }
-        onSearch={handleSearch}
-        onFilterChange={handleFilterChange}
-        onReset={handleReset}
-        showDeviceFilter={tableName === 'visitors' || tableName === 'sessions' || tableName === 'pageviews' || tableName === 'events' || tableName === 'conversions' || tableName === 'utm-sessions'}
-        showBrowserFilter={tableName === 'visitors' || tableName === 'sessions' || tableName === 'pageviews' || tableName === 'events' || tableName === 'conversions' || tableName === 'utm-sessions'}
-        showOsFilter={tableName === 'visitors' || tableName === 'sessions' || tableName === 'conversions'}
-        showEventTypeFilter={tableName === 'events'}
-        showBouncedFilter={tableName === 'sessions'}
-        showConvertedFilter={tableName === 'sessions'}
-        showDateFilter={true}
-        loading={loading}
-      />
-
-      {/* 동적 UTM 필터 (Phase 3) - visitors, conversions, utm-sessions 테이블만 */}
-      {(tableName === 'visitors' || tableName === 'conversions' || tableName === 'utm-sessions') && (
-        <Card size="small" style={{ marginBottom: '16px' }}>
-          <div style={{ marginBottom: '8px', fontSize: '13px', color: '#666', fontWeight: 500 }}>
-            🔍 UTM 필터
-          </div>
-          <DynamicUtmFilterBar
-            tableName={tableName}
-            onFilterChange={setActiveUtmFilters}
-            loading={loading}
-          />
-        </Card>
-      )}
-
-      {/* 에러 표시 */}
-      {error && (
-        <Alert
-          message="데이터 조회 실패"
-          description={error}
-          type="error"
-          showIcon
-          closable
-          onClose={() => setError(null)}
-          style={{ marginBottom: '16px' }}
-        />
-      )}
-
-      {/* 테이블 */}
-      <Card>
-        <Table
-          columns={tableColumns}
-          dataSource={data}
-          rowKey={(record) => record.id || record.visitor_id || record.session_id}
-          loading={loading}
-          pagination={{
-            current: currentPage,
-            pageSize: pageSize,
-            total: total,
-            showTotal: (total) => `총 ${total.toLocaleString()}건`,
-            showSizeChanger: true,
-            pageSizeOptions: ['20', '50', '100', '200'],
-            onChange: (page, size) => {
-              setCurrentPage(page);
-              setPageSize(size);
-            }
-          }}
-          scroll={{ x: 'max-content' }}
-          size="small"
-        />
-      </Card>
-
-      {/* 푸터 */}
-      <div style={{ marginTop: '16px', textAlign: 'center', color: '#999' }}>
-        마지막 갱신: {dayjs().format('YYYY-MM-DD HH:mm:ss')}
-      </div>
-    </div>
-  );
-}
-
-export default DataTables;
+};

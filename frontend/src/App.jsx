@@ -28,8 +28,8 @@ const OrderDetailPage = lazy(() =>
 );
 const DataTables = lazy(() => import('./pages/DataTables'));
 const PageMapping = lazy(() => import('./pages/PageMapping'));
-const CreativePerformance = lazy(() => import('./pages/CreativePerformance'));
-const MyDashboard = lazy(() => import('./pages/MyDashboard'));
+const CreativePerformance = lazy(() => import('./pages/CreativePerformance/index'));
+const MyDashboard = lazy(() => import('./pages/MyDashboard/index'));
 
 const { Sider, Content } = Layout;
 

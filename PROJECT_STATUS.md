@@ -1,6 +1,6 @@
 # 🎯 Moadamda Analytics - 프로젝트 현황
 
-**마지막 업데이트**: 2025-12-10
+**마지막 업데이트**: 2025-12-11
 
 ---
 
@@ -17,21 +17,21 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-12-11 | 백업 파일 정리 | App.jsx |
+| 2025-12-11 | AppNew 리팩토링 | AppNew/ |
+| 2025-12-11 | 소재분석 페이지 리팩토링 | CreativePerformance/ |
+| 2025-12-11 | 페이지매핑 리팩토링 | PageMapping/ |
+| 2025-12-11 | 데이터테이블 리팩토링 | DataTables/ |
+| 2025-12-11 | 대시보드 리팩토링 완료 | MyDashboard/ |
+| 2025-12-11 | 테이블API 서비스분리 | tablesService.js |
+| 2025-12-11 | 소재분석 POST리팩토링 | detailService.js |
+| 2025-12-11 | 소재분석 서비스분리 | creativeService.js |
+| 2025-12-11 | 주문 라우터 서비스분리 | ordersService.js |
+| 2025-12-11 | cafe24 모듈화 완료 | cafe24/index.js |
+| 2025-12-11 | track.js 리팩토링 완료 | track.js |
 | 2025-12-10 | 퍼널 결제시도 누락 처리 | funnel.js |
 | 2025-12-10 | stats.js 모듈화 리팩토링 | stats/*.js |
 | 2025-12-10 | 전환 퍼널 위젯 추가 | MyDashboard.jsx |
-| 2025-12-09 | 날짜클리어 시 오늘 복원 | SearchFilterBar.jsx |
-| 2025-12-09 | 날짜필터 기본값 오늘 | SearchFilterBar.jsx |
-| 2025-12-10 | 소재분석 날짜필터 수정 | creativeAttribution.js |
-| 2025-12-09 | 소재분석 초기날짜 오늘로 | CreativePerformance.jsx |
-| 2025-12-09 | 주문분석 초기날짜 오늘로 | useOrderList.js |
-| 2025-12-09 | 방문자분석 제거 완료 | visitors.js |
-| 2025-12-09 | 위젯 모달 UI 개선 | MyDashboard.jsx |
-| 2025-12-09 | 방문자 분석 위젯 추가 | visitors.js |
-| 2025-12-09 | 다중비교 기간별매출만 적용 | MyDashboard.jsx |
-| 2025-12-09 | 위젯 기간 인라인 표시 | MyDashboard.jsx |
-| 2025-12-09 | 위젯 날짜 형식 개선 완료 | MyDashboard.jsx |
-| 2025-12-09 | 목록형 위젯 비교 기능 제거 | MyDashboard.jsx |
 
 ---
 

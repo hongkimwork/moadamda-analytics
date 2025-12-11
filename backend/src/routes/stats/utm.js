@@ -306,7 +306,7 @@ router.get('/utm-keys', async (req, res) => {
     res.json({ 
       table: normalizedTable,
       keys,
-      count: keys.length
+      total: keys.length
     });
   } catch (error) {
     // utm_params 컬럼이 없는 테이블의 경우 빈 배열 반환 (graceful degradation)
@@ -317,7 +317,7 @@ router.get('/utm-keys', async (req, res) => {
       return res.json({ 
         table: req.query.table ? req.query.table.replace(/-/g, '_') : 'visitors',
         keys: [],
-        count: 0
+        total: 0
       });
     }
     

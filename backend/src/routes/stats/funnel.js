@@ -11,25 +11,24 @@ router.get('/conversion', async (req, res) => {
       return res.status(400).json({ error: 'start and end dates are required (YYYY-MM-DD format)' });
     }
 
-    const startDate = new Date(start);
-    startDate.setHours(0, 0, 0, 0);
-
-    const endDate = new Date(end);
-    endDate.setHours(23, 59, 59, 999);
+    // 날짜 문자열을 그대로 전달 (orders.js와 동일한 방식)
+    // DB의 timestamp는 KST 값으로 저장되므로 SQL에서 ::date 캐스팅으로 날짜 경계 처리
 
     // 방문자 기반 퍼널 쿼리
     const funnelQuery = `
       WITH period_visitors AS (
         SELECT DISTINCT visitor_id
         FROM pageviews
-        WHERE timestamp >= $1 AND timestamp <= $2
+        WHERE timestamp >= $1::date 
+          AND timestamp < ($2::date + INTERVAL '1 day')
           AND visitor_id IS NOT NULL
       ),
       cart_visitors AS (
         SELECT DISTINCT visitor_id
         FROM events
         WHERE event_type = 'add_to_cart'
-          AND timestamp >= $1 AND timestamp <= $2
+          AND timestamp >= $1::date 
+          AND timestamp < ($2::date + INTERVAL '1 day')
           AND visitor_id IS NOT NULL
           AND visitor_id IN (SELECT visitor_id FROM period_visitors)
       ),
@@ -37,14 +36,16 @@ router.get('/conversion', async (req, res) => {
         SELECT DISTINCT visitor_id
         FROM events
         WHERE event_type = 'checkout_attempt'
-          AND timestamp >= $1 AND timestamp <= $2
+          AND timestamp >= $1::date 
+          AND timestamp < ($2::date + INTERVAL '1 day')
           AND visitor_id IS NOT NULL
           AND visitor_id IN (SELECT visitor_id FROM period_visitors)
       ),
       purchase_visitors AS (
         SELECT DISTINCT visitor_id
         FROM conversions
-        WHERE timestamp >= $1 AND timestamp <= $2
+        WHERE timestamp >= $1::date 
+          AND timestamp < ($2::date + INTERVAL '1 day')
           AND order_status = 'confirmed'
           AND visitor_id IS NOT NULL
           AND visitor_id IN (SELECT visitor_id FROM period_visitors)
@@ -56,7 +57,7 @@ router.get('/conversion', async (req, res) => {
         (SELECT COUNT(*) FROM purchase_visitors) as purchase_count
     `;
 
-    const result = await db.query(funnelQuery, [startDate, endDate]);
+    const result = await db.query(funnelQuery, [start, end]);
     const row = result.rows[0];
 
     const totalVisitors = parseInt(row.total_visitors) || 0;
