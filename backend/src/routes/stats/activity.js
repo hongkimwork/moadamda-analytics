@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../../utils/database');
 
-// GET /api/stats/recent-activity - Recent activity (orders, views, cart)
+// GET /api/stats/recent-activity - Recent activity feed
 router.get('/recent-activity', async (req, res) => {
   try {
     const { limit = 10 } = req.query;
@@ -242,4 +242,3 @@ router.get('/segments', async (req, res) => {
 });
 
 module.exports = router;
-

@@ -1,20 +1,19 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../../utils/database');
-const { cleanUrl } = require('../../utils/urlCleaner');
 
 // GET /api/stats/range - Statistics for a date range with comparison
 router.get('/range', async (req, res) => {
   try {
     const { start, end, compare, device } = req.query;
-
+    
     if (!start || !end) {
       return res.status(400).json({ error: 'start and end dates are required (YYYY-MM-DD format)' });
     }
 
     const startDate = new Date(start);
     startDate.setHours(0, 0, 0, 0);
-
+    
     const endDate = new Date(end);
     endDate.setHours(23, 59, 59, 999);
 
@@ -35,11 +34,11 @@ router.get('/range', async (req, res) => {
       : `SELECT COUNT(DISTINCT visitor_id) as count
          FROM pageviews
          WHERE timestamp >= $1 AND timestamp <= $2`;
-
-    const visitorsParams = device && device !== 'all'
+    
+    const visitorsParams = device && device !== 'all' 
       ? [startDate, endDate, device]
       : [startDate, endDate];
-
+    
     const visitorsResult = await db.query(visitorsQuery, visitorsParams);
 
     // 2. Total pageviews in range (with device filter)
@@ -51,7 +50,7 @@ router.get('/range', async (req, res) => {
       : `SELECT COUNT(*) as count
          FROM pageviews
          WHERE timestamp >= $1 AND timestamp <= $2`;
-
+    
     const pageviewsResult = await db.query(pageviewsQuery, visitorsParams);
 
     // 3. Device breakdown (always show, regardless of filter)
@@ -79,13 +78,13 @@ router.get('/range', async (req, res) => {
       : `SELECT COUNT(*) as count
          FROM visitors
          WHERE first_visit >= $1 AND first_visit <= $2 AND visit_count = 1`;
-
+    
     const newVisitorsResult = await db.query(newVisitorsQuery, visitorsParams);
 
     // 5. Revenue and orders (with device filter)
     // 정상 주문만 집계: paid='T' AND canceled='F' AND order_status='confirmed' AND 금액 > 0
     const revenueQuery = device && device !== 'all'
-      ? `SELECT
+      ? `SELECT 
            COALESCE(SUM(c.total_amount), 0) as total_revenue,
            COALESCE(SUM(c.final_payment), 0) as final_revenue,
            COALESCE(SUM(c.discount_amount), 0) as total_discount,
@@ -98,7 +97,7 @@ router.get('/range', async (req, res) => {
            AND c.paid = 'T' AND (c.canceled = 'F' OR c.canceled IS NULL)
            AND (c.order_status = 'confirmed' OR c.order_status IS NULL)
            AND (c.final_payment > 0 OR c.total_amount > 0)`
-      : `SELECT
+      : `SELECT 
            COALESCE(SUM(total_amount), 0) as total_revenue,
            COALESCE(SUM(final_payment), 0) as final_revenue,
            COALESCE(SUM(discount_amount), 0) as total_discount,
@@ -110,7 +109,7 @@ router.get('/range', async (req, res) => {
            AND paid = 'T' AND (canceled = 'F' OR canceled IS NULL)
            AND (order_status = 'confirmed' OR order_status IS NULL)
            AND (final_payment > 0 OR total_amount > 0)`;
-
+    
     const revenueResult = await db.query(revenueQuery, visitorsParams);
 
     const totalRevenue = parseInt(revenueResult.rows[0].total_revenue);
@@ -126,7 +125,7 @@ router.get('/range', async (req, res) => {
 
     // 7. Conversion rate
     const totalVisitors = parseInt(visitorsResult.rows[0].count);
-    const conversionRate = totalVisitors > 0
+    const conversionRate = totalVisitors > 0 
       ? ((orderCount / totalVisitors) * 100).toFixed(2)
       : '0.00';
 
@@ -139,7 +138,7 @@ router.get('/range', async (req, res) => {
       : `SELECT COUNT(DISTINCT session_id) as count
          FROM events
          WHERE event_type = 'add_to_cart' AND timestamp >= $1 AND timestamp <= $2`;
-
+    
     const cartAddResult = await db.query(cartAddQuery, visitorsParams);
 
     const cartAdded = parseInt(cartAddResult.rows[0].count);
@@ -149,7 +148,7 @@ router.get('/range', async (req, res) => {
 
     // 9. Top products (with device filter)
     const productsQuery = device && device !== 'all'
-      ? `SELECT
+      ? `SELECT 
            e.product_id,
            e.product_name,
            COUNT(CASE WHEN e.event_type = 'view_product' THEN 1 END) as views,
@@ -161,7 +160,7 @@ router.get('/range', async (req, res) => {
          GROUP BY e.product_id, e.product_name
          ORDER BY views DESC
          LIMIT 10`
-      : `SELECT
+      : `SELECT 
            product_id,
            product_name,
            COUNT(CASE WHEN event_type = 'view_product' THEN 1 END) as views,
@@ -172,7 +171,7 @@ router.get('/range', async (req, res) => {
          GROUP BY product_id, product_name
          ORDER BY views DESC
          LIMIT 10`;
-
+    
     const productsResult = await db.query(productsQuery, visitorsParams);
 
     const products = productsResult.rows.map(row => ({
@@ -231,16 +230,16 @@ router.get('/range', async (req, res) => {
         : `SELECT COUNT(DISTINCT visitor_id) as count
            FROM pageviews
            WHERE timestamp >= $1 AND timestamp <= $2`;
-
-      const compareVisitorsParams = device && device !== 'all'
+      
+      const compareVisitorsParams = device && device !== 'all' 
         ? [compareStartDate, compareEndDate, device]
         : [compareStartDate, compareEndDate];
-
+      
       const compareVisitorsResult = await db.query(compareVisitorsQuery, compareVisitorsParams);
 
       // 비교 기간도 정상 주문만 집계 (환불 제외, 금액 > 0)
       const compareRevenueQuery = device && device !== 'all'
-        ? `SELECT
+        ? `SELECT 
              COALESCE(SUM(c.total_amount), 0) as total_revenue,
              COALESCE(SUM(c.final_payment), 0) as final_revenue,
              COUNT(*) as order_count
@@ -250,7 +249,7 @@ router.get('/range', async (req, res) => {
              AND c.paid = 'T' AND (c.canceled = 'F' OR c.canceled IS NULL)
              AND (c.order_status = 'confirmed' OR c.order_status IS NULL)
              AND (c.final_payment > 0 OR c.total_amount > 0)`
-        : `SELECT
+        : `SELECT 
              COALESCE(SUM(total_amount), 0) as total_revenue,
              COALESCE(SUM(final_payment), 0) as final_revenue,
              COUNT(*) as order_count
@@ -259,7 +258,7 @@ router.get('/range', async (req, res) => {
              AND paid = 'T' AND (canceled = 'F' OR canceled IS NULL)
              AND (order_status = 'confirmed' OR order_status IS NULL)
              AND (final_payment > 0 OR total_amount > 0)`;
-
+      
       const compareRevenueResult = await db.query(compareRevenueQuery, compareVisitorsParams);
 
       const compareVisitors = parseInt(compareVisitorsResult.rows[0].count);
@@ -308,21 +307,21 @@ router.get('/range', async (req, res) => {
 router.get('/daily', async (req, res) => {
   try {
     const { start, end, device } = req.query;
-
+    
     if (!start || !end) {
       return res.status(400).json({ error: 'start and end dates are required (YYYY-MM-DD format)' });
     }
 
     const startDate = new Date(start);
     startDate.setHours(0, 0, 0, 0);
-
+    
     const endDate = new Date(end);
     endDate.setHours(23, 59, 59, 999);
 
     // 1. Daily visitors (with device filter)
     // NOTE: DB의 timestamp는 KST 값으로 저장됨 - 타임존 변환 불필요
     const dailyVisitorsQuery = device && device !== 'all'
-      ? `SELECT
+      ? `SELECT 
            DATE(p.timestamp) as date,
            COUNT(DISTINCT p.visitor_id) as visitors
          FROM pageviews p
@@ -330,24 +329,24 @@ router.get('/daily', async (req, res) => {
          WHERE p.timestamp >= $1 AND p.timestamp <= $2 AND v.device_type = $3
          GROUP BY DATE(p.timestamp)
          ORDER BY date`
-      : `SELECT
+      : `SELECT 
            DATE(timestamp) as date,
            COUNT(DISTINCT visitor_id) as visitors
          FROM pageviews
          WHERE timestamp >= $1 AND timestamp <= $2
          GROUP BY DATE(timestamp)
          ORDER BY date`;
-
-    const dailyParams = device && device !== 'all'
+    
+    const dailyParams = device && device !== 'all' 
       ? [startDate, endDate, device]
       : [startDate, endDate];
-
+    
     const dailyVisitorsResult = await db.query(dailyVisitorsQuery, dailyParams);
 
     // 2. Daily pageviews (with device filter)
     // NOTE: DB의 timestamp는 KST 값으로 저장됨 - 타임존 변환 불필요
     const dailyPageviewsQuery = device && device !== 'all'
-      ? `SELECT
+      ? `SELECT 
            DATE(p.timestamp) as date,
            COUNT(*) as pageviews
          FROM pageviews p
@@ -355,21 +354,21 @@ router.get('/daily', async (req, res) => {
          WHERE p.timestamp >= $1 AND p.timestamp <= $2 AND v.device_type = $3
          GROUP BY DATE(p.timestamp)
          ORDER BY date`
-      : `SELECT
+      : `SELECT 
            DATE(timestamp) as date,
            COUNT(*) as pageviews
          FROM pageviews
          WHERE timestamp >= $1 AND timestamp <= $2
          GROUP BY DATE(timestamp)
          ORDER BY date`;
-
+    
     const dailyPageviewsResult = await db.query(dailyPageviewsQuery, dailyParams);
 
     // 3. Daily revenue and orders (with device filter)
     // NOTE: DB의 timestamp는 KST 값으로 저장됨 - 타임존 변환 불필요
     // 정상 주문만 집계: paid='T' AND canceled='F' AND order_status='confirmed' AND 금액 > 0
     const dailyRevenueQuery = device && device !== 'all'
-      ? `SELECT
+      ? `SELECT 
            DATE(c.timestamp) as date,
            COALESCE(SUM(c.total_amount), 0) as total_revenue,
            COALESCE(SUM(c.final_payment), 0) as final_revenue,
@@ -382,7 +381,7 @@ router.get('/daily', async (req, res) => {
            AND (c.final_payment > 0 OR c.total_amount > 0)
          GROUP BY DATE(c.timestamp)
          ORDER BY date`
-      : `SELECT
+      : `SELECT 
            DATE(timestamp) as date,
            COALESCE(SUM(total_amount), 0) as total_revenue,
            COALESCE(SUM(final_payment), 0) as final_revenue,
@@ -394,12 +393,12 @@ router.get('/daily', async (req, res) => {
            AND (final_payment > 0 OR total_amount > 0)
          GROUP BY DATE(timestamp)
          ORDER BY date`;
-
+    
     const dailyRevenueResult = await db.query(dailyRevenueQuery, dailyParams);
 
     // Merge data by date
     const dailyData = {};
-
+    
     // Initialize with revenue data (most important)
     dailyRevenueResult.rows.forEach(row => {
       const dateStr = row.date.toISOString().split('T')[0];
@@ -445,7 +444,7 @@ router.get('/daily', async (req, res) => {
     // Convert to array and fill missing dates
     const result = [];
     const currentDate = new Date(startDate);
-
+    
     while (currentDate <= endDate) {
       const dateStr = currentDate.toISOString().split('T')[0];
       result.push(dailyData[dateStr] || {

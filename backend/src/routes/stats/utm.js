@@ -377,19 +377,19 @@ router.get('/utm-values', async (req, res) => {
       table: normalizedTable,
       key,
       values,
-      count: values.length
+      total: values.length
     });
   } catch (error) {
     // utm_params 컬럼이 없는 테이블의 경우 빈 배열 반환 (graceful degradation)
-    console.error('[UTM-VALUES] 조회 실패 (테이블: ' + (req.query.table || 'visitors') + ', 키: ' + (req.query.key || 'N/A') + '):', error.message);
+    console.error('[UTM-VALUES] 조회 실패 (테이블: ' + (req.query.table || 'visitors') + ', 키: ' + req.query.key + '):', error.message);
     
     // 컬럼 없음 에러인 경우 빈 배열 반환
     if (error.message && error.message.includes('utm_params')) {
       return res.json({ 
         table: req.query.table ? req.query.table.replace(/-/g, '_') : 'visitors',
-        key: req.query.key || '',
+        key: req.query.key,
         values: [],
-        count: 0
+        total: 0
       });
     }
     
@@ -399,4 +399,3 @@ router.get('/utm-values', async (req, res) => {
 });
 
 module.exports = router;
-

@@ -1,6 +1,6 @@
 # 🎯 Moadamda Analytics - 프로젝트 현황
 
-**마지막 업데이트**: 2025-12-09
+**마지막 업데이트**: 2025-12-10
 
 ---
 
@@ -17,6 +17,9 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-12-10 | 퍼널 결제시도 누락 처리 | funnel.js |
+| 2025-12-10 | stats.js 모듈화 리팩토링 | stats/*.js |
+| 2025-12-10 | 전환 퍼널 위젯 추가 | MyDashboard.jsx |
 | 2025-12-09 | 날짜클리어 시 오늘 복원 | SearchFilterBar.jsx |
 | 2025-12-09 | 날짜필터 기본값 오늘 | SearchFilterBar.jsx |
 | 2025-12-10 | 소재분석 날짜필터 수정 | creativeAttribution.js |
@@ -29,9 +32,6 @@
 | 2025-12-09 | 위젯 기간 인라인 표시 | MyDashboard.jsx |
 | 2025-12-09 | 위젯 날짜 형식 개선 완료 | MyDashboard.jsx |
 | 2025-12-09 | 목록형 위젯 비교 기능 제거 | MyDashboard.jsx |
-| 2025-12-08 | 차트 Recharts 개선 적용 | MyDashboard.jsx |
-| 2025-12-08 | 일별매출 위젯 데이터키 수정 | MyDashboard.jsx |
-| 2025-12-08 | 대시보드 매출 금액조건 통일 | stats.js |
 
 ---
 

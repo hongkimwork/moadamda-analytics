@@ -6,21 +6,31 @@ const { cleanUrl } = require('../../utils/urlCleaner');
 // GET /api/stats/orders - Get paginated orders list
 router.get('/orders', async (req, res) => {
   try {
-    const { start, end, device = 'all', limit = 100, offset = 0 } = req.query;
+    const { 
+      start, 
+      end, 
+      device = 'all', 
+      limit = 100, 
+      offset = 0,
+      search = '',
+      sort_by = 'timestamp',
+      sort_order = 'desc',
+      include_cancelled = 'false',  // 취소/반품 주문 포함 여부
+      include_pending = 'false'     // 입금대기 주문 포함 여부
+    } = req.query;
 
     if (!start || !end) {
       return res.status(400).json({ error: 'start and end dates are required (YYYY-MM-DD)' });
     }
 
-    // Parse dates
-    const startDate = new Date(start);
-    startDate.setHours(0, 0, 0, 0);
-    const endDate = new Date(end);
-    endDate.setHours(23, 59, 59, 999);
+    // 날짜 문자열을 그대로 전달 (SQL에서 KST→UTC 변환 처리)
+    // KST 기준 날짜를 UTC 범위로 변환하여 검색
 
     // Build device filter
     let deviceFilter = '';
-    let queryParams = [startDate, endDate];
+    let searchFilter = '';
+    let cancelledFilter = '';
+    let queryParams = [start, end];
     let paramIndex = 3;
 
     if (device !== 'all') {
@@ -29,19 +39,72 @@ router.get('/orders', async (req, res) => {
       paramIndex++;
     }
 
+    // 검색 필터 (주문번호 또는 상품명)
+    if (search && search.trim()) {
+      const searchTerm = `%${search.trim()}%`;
+      searchFilter = `AND (
+        c.order_id ILIKE $${paramIndex} 
+        OR COALESCE(c.product_name, '') ILIKE $${paramIndex}
+      )`;
+      queryParams.push(searchTerm);
+      paramIndex++;
+    }
+
+    // 입금대기 주문 필터
+    // - 입금대기 미포함 시: paid = 'T' (입금완료만)
+    // - 입금대기 포함 시: paid 조건 없음 (전체)
+    let paidFilter = '';
+    if (include_pending !== 'true') {
+      paidFilter = `AND c.paid = 'T'`;
+    }
+
+    // 취소/반품 주문 필터 및 금액 조건
+    // - 취소 미포함 시: 정상 주문만 + 금액 > 0 조건
+    // - 취소 포함 시: 모든 주문 (취소 주문은 금액이 0일 수 있음)
+    let amountFilter = '';
+    if (include_cancelled !== 'true') {
+      cancelledFilter = `AND (c.canceled = 'F' OR c.canceled IS NULL) AND (c.order_status = 'confirmed' OR c.order_status IS NULL)`;
+      amountFilter = `AND (c.final_payment > 0 OR c.total_amount > 0)`;
+    }
+
+    // 정렬 필드 매핑 (SQL injection 방지)
+    const sortFieldMap = {
+      'order_id': 'c.order_id',
+      'timestamp': 'c.timestamp',
+      'final_payment': 'c.final_payment',
+      'total_amount': 'c.total_amount',
+      'product_name': 'c.product_name',
+      'product_count': 'c.product_count',
+      'device_type': 'v.device_type',
+      'is_repurchase': 'is_repurchase',
+      'utm_source': 'utm_source'
+    };
+    const sortColumn = sortFieldMap[sort_by] || 'c.timestamp';
+    const sortDirection = sort_order === 'asc' ? 'ASC' : 'DESC';
+
     queryParams.push(parseInt(limit), parseInt(offset));
 
     // Main query: Get orders with all necessary info
-    // timestamp를 KST(+9시간)로 변환하여 반환 (서버 타임존 무관하게 일관된 시간 표시)
+    // NOTE: DB의 timestamp 컬럼은 KST 값으로 저장됨 (timestamp without time zone + TZ=Asia/Seoul)
+    // 따라서 타임존 변환 없이 직접 날짜 비교 수행
     const ordersQuery = `
       SELECT 
         c.order_id,
-        TO_CHAR(c.timestamp + INTERVAL '9 hours', 'YYYY-MM-DD HH24:MI:SS') as timestamp,
+        TO_CHAR(c.timestamp, 'YYYY-MM-DD HH24:MI:SS') as timestamp,
+        c.timestamp as raw_timestamp,
         c.final_payment,
         c.total_amount,
         c.product_count,
         c.visitor_id,
         c.session_id,
+        c.points_spent,
+        c.credits_spent,
+        c.order_place_name,
+        c.payment_method_name,
+        c.order_status,
+        c.canceled,
+        c.paid,
+        s.ip_address,
         v.device_type,
         -- UTM 데이터: utm_sessions 우선, 없으면 visitors 테이블 사용
         COALESCE(
@@ -77,35 +140,76 @@ router.get('/orders', async (req, res) => {
             WHERE c2.visitor_id = c.visitor_id 
               AND c2.timestamp < c.timestamp
               AND c2.paid = 'T'
-              AND c2.final_payment > 0
+              AND (c2.final_payment > 0 OR c2.total_amount > 0)
           ) THEN true
           ELSE false
         END as is_repurchase
       FROM conversions c
       LEFT JOIN sessions s ON c.session_id = s.session_id
       LEFT JOIN visitors v ON c.visitor_id = v.visitor_id
-      WHERE c.timestamp BETWEEN $1 AND $2
-        AND c.paid = 'T'
-        AND c.final_payment > 0
+      WHERE c.timestamp >= $1::date
+        AND c.timestamp < ($2::date + INTERVAL '1 day')
+        ${paidFilter}
+        AND c.order_id IS NOT NULL
+        ${amountFilter}
+        ${cancelledFilter}
         ${deviceFilter}
-      ORDER BY c.timestamp DESC
+        ${searchFilter}
+      ORDER BY ${sortColumn} ${sortDirection}
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `;
 
     const ordersResult = await db.query(ordersQuery, queryParams);
 
     // Count total orders for pagination
+    let countParams = [start, end];
+    let countParamIndex = 3;
+    let countDeviceFilter = '';
+    let countSearchFilter = '';
+    let countCancelledFilter = '';
+
+    if (device !== 'all') {
+      countDeviceFilter = `AND v.device_type = $${countParamIndex}`;
+      countParams.push(device);
+      countParamIndex++;
+    }
+
+    if (search && search.trim()) {
+      const searchTerm = `%${search.trim()}%`;
+      countSearchFilter = `AND (
+        c.order_id ILIKE $${countParamIndex} 
+        OR COALESCE(c.product_name, '') ILIKE $${countParamIndex}
+      )`;
+      countParams.push(searchTerm);
+    }
+
+    // 입금대기 필터 (카운트용)
+    let countPaidFilter = '';
+    if (include_pending !== 'true') {
+      countPaidFilter = `AND c.paid = 'T'`;
+    }
+
+    // 취소 필터 및 금액 조건 (카운트용)
+    let countAmountFilter = '';
+    if (include_cancelled !== 'true') {
+      countCancelledFilter = `AND (c.canceled = 'F' OR c.canceled IS NULL) AND (c.order_status = 'confirmed' OR c.order_status IS NULL)`;
+      countAmountFilter = `AND (c.final_payment > 0 OR c.total_amount > 0)`;
+    }
+
+    // NOTE: DB의 timestamp 컬럼은 KST 값으로 저장됨
     const countQuery = `
       SELECT COUNT(*) as total
       FROM conversions c
       LEFT JOIN visitors v ON c.visitor_id = v.visitor_id
-      WHERE c.timestamp BETWEEN $1 AND $2
-        AND c.paid = 'T'
-        AND c.final_payment > 0
-        ${deviceFilter}
+      WHERE c.timestamp >= $1::date
+        AND c.timestamp < ($2::date + INTERVAL '1 day')
+        ${countPaidFilter}
+        AND c.order_id IS NOT NULL
+        ${countAmountFilter}
+        ${countCancelledFilter}
+        ${countDeviceFilter}
+        ${countSearchFilter}
     `;
-
-    const countParams = device !== 'all' ? [startDate, endDate, device] : [startDate, endDate];
     const countResult = await db.query(countQuery, countParams);
 
     // 기본 주문 데이터 매핑
@@ -118,19 +222,27 @@ router.get('/orders', async (req, res) => {
       product_name: row.product_name || null,
       visitor_id: row.visitor_id,
       session_id: row.session_id,
+      ip_address: row.ip_address || null,
       device_type: row.device_type || null,
       utm_source: row.utm_source || null,
       utm_campaign: row.utm_campaign || null,
-      // 재구매 여부 (null: 알 수 없음, true: 재구매, false: 신규)
       is_repurchase: row.is_repurchase,
-      // Cafe24 API sync 주문 여부 표시 (visitor_id 없거나 빈 문자열)
-      is_cafe24_only: !row.visitor_id || row.visitor_id === ''
+      is_cafe24_only: !row.visitor_id || row.visitor_id === '',
+      // 새 필드들
+      points_spent: parseInt(row.points_spent) || 0,
+      credits_spent: parseInt(row.credits_spent) || 0,
+      order_place_name: row.order_place_name || null,
+      payment_method_name: row.payment_method_name || null,
+      order_status: row.order_status || 'confirmed',
+      canceled: row.canceled || 'F',
+      paid: row.paid || 'T'
     }));
     
-    // 최종 매핑 (상품명/디바이스 기본값 설정)
+    // 최종 매핑 (상품명/IP/디바이스 기본값 설정)
     orders = orders.map(order => ({
       ...order,
       product_name: order.product_name || '상품명 없음',
+      ip_address: order.ip_address || (order.is_cafe24_only ? 'API 동기화' : 'unknown'),
       device_type: order.device_type || (order.is_cafe24_only ? 'API 동기화' : 'unknown')
     }));
 
@@ -160,17 +272,26 @@ router.get('/order-detail/:orderId', async (req, res) => {
   try {
     const { orderId } = req.params;
 
-    // 1. 주문 기본 정보
-    // timestamp를 KST(+9시간)로 변환
+    // 1. 주문 기본 정보 (결제 상세 정보 포함)
     const orderQuery = `
       SELECT
         c.order_id,
-        TO_CHAR(c.timestamp + INTERVAL '9 hours', 'YYYY-MM-DD HH24:MI:SS') as timestamp,
+        c.timestamp,
         c.final_payment,
         c.total_amount,
         c.product_count,
         c.visitor_id,
         c.session_id,
+        c.discount_amount,
+        c.mileage_used,
+        c.points_spent,
+        c.credits_spent,
+        c.shipping_fee,
+        c.payment_method_name,
+        c.order_place_name,
+        c.order_status,
+        c.paid,
+        c.product_name as db_product_name,
         s.ip_address,
         s.entry_url,
         v.device_type,
@@ -179,7 +300,7 @@ router.get('/order-detail/:orderId', async (req, res) => {
         v.utm_source,
         v.utm_medium,
         v.utm_campaign,
-        TO_CHAR(v.first_visit + INTERVAL '9 hours', 'YYYY-MM-DD HH24:MI:SS') as first_visit,
+        v.first_visit,
         (
           SELECT e.product_name
           FROM events e
@@ -188,7 +309,7 @@ router.get('/order-detail/:orderId', async (req, res) => {
             AND e.timestamp <= c.timestamp
           ORDER BY e.timestamp DESC
           LIMIT 1
-        ) as product_name
+        ) as event_product_name
       FROM conversions c
       LEFT JOIN sessions s ON c.session_id = s.session_id
       LEFT JOIN visitors v ON c.visitor_id = v.visitor_id
@@ -203,13 +324,15 @@ router.get('/order-detail/:orderId', async (req, res) => {
     const order = orderResult.rows[0];
     
     // Cafe24 API sync 주문 (visitor_id 없거나 빈 문자열) 처리
-    if (!order.visitor_id || order.visitor_id === '') {
+    const isExternalPayment = !order.visitor_id || order.visitor_id === '';
+    
+    if (isExternalPayment) {
       // Cafe24 API에서 주문 상세 정보 가져오기
       let cafe24Order = null;
       if (process.env.CAFE24_AUTH_KEY) {
         try {
-          const cafe24 = require('../../utils/cafe24');
-          const detail = await cafe24.getOrderDetail(orderId);
+          const cafe24Client = require('../../utils/cafe24');
+          const detail = await cafe24Client.getOrderDetail(orderId);
           cafe24Order = detail.order;
         } catch (e) {
           console.error('[Order Detail] Cafe24 API error:', e.message);
@@ -229,13 +352,12 @@ router.get('/order-detail/:orderId', async (req, res) => {
           browser: '-',
           os: '-',
           ip_address: '-',
-          // Cafe24 API에서 가져온 추가 정보
           billing_name: cafe24Order?.billing_name || '-',
           payment_method: cafe24Order?.payment_method_name || '-',
           order_items: cafe24Order?.items?.map(item => ({
             product_name: item.product_name,
-            product_price: item.product_price,
-            quantity: item.quantity,
+            product_price: parseInt(item.product_sale_price) || parseInt(item.product_price) || 0,
+            quantity: parseInt(item.quantity) || 1,
             option_value: item.option_value
           })) || []
         },
@@ -249,31 +371,67 @@ router.get('/order-detail/:orderId', async (req, res) => {
       });
     }
 
-    // 2-1. 구매 직전 경로 (마지막 UTM 접촉 이후 ~ 구매까지)
-    // 광고 효과 측정에 사용되는 핵심 경로
+    // Cafe24 API에서 다중 상품 정보 가져오기 (visitor_id가 있는 일반 주문)
+    let orderItems = [];
+    if (process.env.CAFE24_AUTH_KEY) {
+      try {
+        const cafe24Client = require('../../utils/cafe24');
+        const detail = await cafe24Client.getOrderDetail(orderId);
+        if (detail.order?.items) {
+          orderItems = detail.order.items.map(item => ({
+            product_name: item.product_name,
+            product_price: parseInt(item.product_sale_price) || parseInt(item.product_price) || 0,
+            quantity: parseInt(item.quantity) || 1,
+            option_value: item.option_value || null
+          }));
+        }
+      } catch (e) {
+        console.error('[Order Detail] Cafe24 API error (items):', e.message);
+        // API 실패 시 DB 저장 정보로 폴백
+        if (order.db_product_name || order.event_product_name) {
+          orderItems = [{
+            product_name: order.db_product_name || order.event_product_name || '상품명 없음',
+            product_price: parseInt(order.total_amount) || 0,
+            quantity: parseInt(order.product_count) || 1,
+            option_value: null
+          }];
+        }
+      }
+    } else {
+      // Cafe24 미연동 시 DB 정보로 대체
+      if (order.db_product_name || order.event_product_name) {
+        orderItems = [{
+          product_name: order.db_product_name || order.event_product_name || '상품명 없음',
+          product_price: parseInt(order.total_amount) || 0,
+          quantity: parseInt(order.product_count) || 1,
+          option_value: null
+        }];
+      }
+    }
+
+    // 2-1. 구매 당일 전체 경로 (구매 당일의 모든 페이지뷰)
+    // UTM 기준 제거 - 직접 방문 포함 모든 페이지 이동 표시
+    // FIX (2025-12-03): 타임존 비교 버그 수정
+    // 핵심: p.timestamp는 KST로 저장됨 (timestamp without time zone)
+    //       $2는 JS Date → timestamptz (UTC)
+    // 해결: $2를 KST로 변환하여 p.timestamp(KST)와 동일 기준으로 비교
     const purchaseJourneyQuery = `
-      WITH last_utm_contact AS (
-        SELECT MAX(entry_timestamp) as utm_timestamp
-        FROM utm_sessions
-        WHERE visitor_id = $1
-      ),
-      purchase_journey_pages AS (
+      WITH purchase_journey_pages AS (
         SELECT
           p.page_url,
           p.page_title,
           p.timestamp,
           LEAD(p.timestamp) OVER (ORDER BY p.timestamp) as next_timestamp
         FROM pageviews p
-        CROSS JOIN last_utm_contact
         WHERE p.visitor_id = $1
-          AND p.timestamp >= COALESCE(last_utm_contact.utm_timestamp, p.timestamp)
-          AND p.timestamp <= $2
+          AND DATE(p.timestamp) = DATE(($2::timestamptz) AT TIME ZONE 'Asia/Seoul')
+          AND p.timestamp <= (($2::timestamptz) AT TIME ZONE 'Asia/Seoul')
         ORDER BY p.timestamp ASC
       )
       SELECT
         page_url,
         page_title,
-        TO_CHAR(timestamp + INTERVAL '9 hours', 'YYYY-MM-DD HH24:MI:SS') as timestamp,
+        timestamp,
         CASE
           WHEN next_timestamp IS NOT NULL THEN
             LEAST(
@@ -286,32 +444,29 @@ router.get('/order-detail/:orderId', async (req, res) => {
     `;
     const purchaseJourneyResult = await db.query(purchaseJourneyQuery, [order.visitor_id, order.timestamp]);
 
-    // 2-2. 과거 방문 이력 (마지막 UTM 접촉 이전)
-    // 고객이 이전에 어떤 페이지를 봤는지 참고용
+    // 2-2. 과거 방문 이력 (구매 당일 이전의 모든 방문)
+    // UTM 기준 제거 - 구매 당일 이전의 모든 페이지 이동 표시
+    // FIX (2025-12-03): 타임존 비교 버그 수정
+    // 핵심: p.timestamp는 KST로 저장됨 (timestamp without time zone)
+    //       $2는 JS Date → timestamptz (UTC)
+    // 해결: $2를 KST로 변환하여 p.timestamp(KST)와 동일 기준으로 비교
     const previousVisitsQuery = `
-      WITH last_utm_contact AS (
-        SELECT MAX(entry_timestamp) as utm_timestamp
-        FROM utm_sessions
-        WHERE visitor_id = $1
-      ),
-      previous_pageviews AS (
+      WITH previous_pageviews AS (
         SELECT
           p.page_url,
           p.page_title,
           p.timestamp,
-          DATE(p.timestamp + INTERVAL '9 hours') as visit_date,
+          DATE(p.timestamp) as visit_date,
           LEAD(p.timestamp) OVER (PARTITION BY DATE(p.timestamp) ORDER BY p.timestamp) as next_timestamp
         FROM pageviews p
-        CROSS JOIN last_utm_contact
         WHERE p.visitor_id = $1
-          AND p.timestamp < COALESCE(last_utm_contact.utm_timestamp, $2::timestamp)
-          AND DATE(p.timestamp) < DATE($2)
+          AND DATE(p.timestamp) < DATE(($2::timestamptz) AT TIME ZONE 'Asia/Seoul')
       )
       SELECT
-        TO_CHAR(visit_date, 'YYYY-MM-DD') as visit_date,
+        visit_date,
         page_url,
         page_title,
-        TO_CHAR(timestamp + INTERVAL '9 hours', 'YYYY-MM-DD HH24:MI:SS') as timestamp,
+        timestamp,
         CASE
           WHEN next_timestamp IS NOT NULL THEN
             LEAST(
@@ -395,7 +550,7 @@ router.get('/order-detail/:orderId', async (req, res) => {
         utm_medium,
         utm_campaign,
         utm_content,
-        TO_CHAR(entry_timestamp + INTERVAL '9 hours', 'YYYY-MM-DD HH24:MI:SS') as entry_timestamp,
+        entry_timestamp,
         total_duration_seconds as duration_seconds
       FROM merged_sessions
       ORDER BY entry_timestamp ASC
@@ -408,7 +563,7 @@ router.get('/order-detail/:orderId', async (req, res) => {
       const sameIpQuery = `
         SELECT
           s.session_id,
-          TO_CHAR(s.start_time + INTERVAL '9 hours', 'YYYY-MM-DD HH24:MI:SS') as start_time,
+          s.start_time,
           s.entry_url,
           s.pageview_count,
           v.visitor_id,
@@ -437,7 +592,7 @@ router.get('/order-detail/:orderId', async (req, res) => {
     const pastPurchasesQuery = `
       SELECT
         c.order_id,
-        TO_CHAR(c.timestamp + INTERVAL '9 hours', 'YYYY-MM-DD HH24:MI:SS') as timestamp,
+        c.timestamp,
         c.final_payment,
         c.product_count,
         (
@@ -460,7 +615,7 @@ router.get('/order-detail/:orderId', async (req, res) => {
     // 과거 방문을 날짜별로 그룹화
     const previousVisitsByDate = {};
     previousVisitsResult.rows.forEach(row => {
-      const date = row.visit_date; // 이미 YYYY-MM-DD 문자열 (KST 기준)
+      const date = row.visit_date.toISOString().split('T')[0]; // YYYY-MM-DD
       if (!previousVisitsByDate[date]) {
         previousVisitsByDate[date] = [];
       }
@@ -478,10 +633,10 @@ router.get('/order-detail/:orderId', async (req, res) => {
       order: {
         order_id: order.order_id,
         timestamp: order.timestamp,
-        final_payment: order.final_payment,
-        total_amount: order.total_amount,
-        product_count: order.product_count,
-        product_name: order.product_name,
+        final_payment: parseInt(order.final_payment) || 0,
+        total_amount: parseInt(order.total_amount) || 0,
+        product_count: parseInt(order.product_count) || 1,
+        product_name: order.db_product_name || order.event_product_name || '상품명 없음',
         visitor_id: order.visitor_id,
         session_id: order.session_id,
         ip_address: order.ip_address || 'unknown',
@@ -492,7 +647,21 @@ router.get('/order-detail/:orderId', async (req, res) => {
         utm_medium: order.utm_medium || null,
         utm_campaign: order.utm_campaign || null,
         first_visit: order.first_visit,
-        entry_url: order.entry_url || null
+        entry_url: order.entry_url || null,
+        // 결제 상세 정보
+        payment_details: {
+          discount_amount: parseInt(order.discount_amount) || 0,
+          mileage_used: parseInt(order.mileage_used) || 0,
+          points_spent: parseInt(order.points_spent) || 0,
+          credits_spent: parseInt(order.credits_spent) || 0,
+          shipping_fee: parseInt(order.shipping_fee) || 0,
+          payment_method: order.payment_method_name || null,
+          order_place: order.order_place_name || null,
+          order_status: order.order_status || 'confirmed',
+          paid: order.paid || 'T'
+        },
+        // 구매 상품 목록
+        order_items: orderItems
       },
       // 구매 직전 경로 (광고 클릭 후)
       purchase_journey: {
@@ -556,4 +725,3 @@ router.get('/order-detail/:orderId', async (req, res) => {
 });
 
 module.exports = router;
-

@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../../utils/database');
-const { cleanUrl } = require('../../utils/urlCleaner');
 
 // GET /api/stats/today - Today's basic statistics
 router.get('/today', async (req, res) => {
@@ -77,15 +76,14 @@ router.get('/conversion', async (req, res) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // 1. Total revenue today (정상 주문만: paid='T', canceled='F')
+    // 1. Total revenue today
     const revenueResult = await db.query(`
-      SELECT
+      SELECT 
         COALESCE(SUM(total_amount), 0) as total_revenue,
-        COALESCE(SUM(final_payment), 0) as final_revenue,
+        COALESCE(SUM(CASE WHEN final_payment > 0 THEN final_payment ELSE total_amount END), 0) as final_revenue,
         COUNT(*) as order_count
       FROM conversions
       WHERE timestamp >= $1
-        AND paid = 'T' AND canceled = 'F'
     `, [today]);
 
     const totalRevenue = parseInt(revenueResult.rows[0].total_revenue);
@@ -103,7 +101,7 @@ router.get('/conversion', async (req, res) => {
     `, [today]);
 
     const totalVisitors = parseInt(visitorsResult.rows[0].count);
-    const conversionRate = totalVisitors > 0
+    const conversionRate = totalVisitors > 0 
       ? ((orderCount / totalVisitors) * 100).toFixed(2)
       : '0.00';
 
@@ -124,13 +122,12 @@ router.get('/conversion', async (req, res) => {
     yesterday.setDate(yesterday.getDate() - 1);
 
     const yesterdayRevenueResult = await db.query(`
-      SELECT
+      SELECT 
         COALESCE(SUM(total_amount), 0) as total_revenue,
-        COALESCE(SUM(final_payment), 0) as final_revenue,
+        COALESCE(SUM(CASE WHEN final_payment > 0 THEN final_payment ELSE total_amount END), 0) as final_revenue,
         COUNT(*) as order_count
       FROM conversions
       WHERE timestamp >= $1 AND timestamp < $2
-        AND paid = 'T' AND canceled = 'F'
     `, [yesterday, today]);
 
     const yesterdayRevenue = parseInt(yesterdayRevenueResult.rows[0].final_revenue);
@@ -166,7 +163,7 @@ router.get('/products', async (req, res) => {
 
     // Top products by views
     const productsResult = await db.query(`
-      SELECT
+      SELECT 
         product_id,
         product_name,
         COUNT(CASE WHEN event_type = 'view_product' THEN 1 END) as views,

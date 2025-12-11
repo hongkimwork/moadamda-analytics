@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Card, Typography, Button, Modal, DatePicker, Space, Dropdown, Empty, Input, Radio, Steps, Checkbox, Spin } from 'antd';
+import { Card, Typography, Button, Modal, DatePicker, Space, Dropdown, Empty, Input, Radio, Steps, Checkbox, Spin, Tooltip as AntTooltip } from 'antd';
 import { 
   AppstoreOutlined, 
   PlusOutlined, 
@@ -20,7 +20,8 @@ import {
   ArrowLeftOutlined,
   ArrowRightOutlined,
   CheckOutlined,
-  LoadingOutlined
+  LoadingOutlined,
+  FunnelPlotOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell, Tooltip, LabelList, PieChart, Pie, LineChart, Line, Legend } from 'recharts';
@@ -39,10 +40,25 @@ const DATA_SOURCES = {
     description: '오늘 매출, 주문 건수, 상품별 판매 등',
     enabled: true 
   },
+  funnel: {
+    id: 'funnel',
+    name: '전환 퍼널 분석',
+    icon: <FunnelPlotOutlined style={{ fontSize: 28, color: '#52c41a' }} />,
+    description: '어디서 고객이 이탈하는지 분석',
+    enabled: true
+  },
+  customer_type: {
+    id: 'customer_type',
+    name: '고객 유형 분석',
+    icon: <TeamOutlined style={{ fontSize: 28, color: '#722ed1' }} />,
+    description: '신규 vs 재구매 고객 비교',
+    enabled: false,
+    comingSoon: true
+  },
   ad_platforms: { 
     id: 'ad_platforms',
     name: '광고 성과', 
-    icon: <SoundOutlined style={{ fontSize: 28, color: '#722ed1' }} />,
+    icon: <SoundOutlined style={{ fontSize: 28, color: '#faad14' }} />,
     description: '네이버/메타 광고 성과, ROAS 등',
     enabled: false,
     comingSoon: true
@@ -125,6 +141,21 @@ const WIDGET_PRESETS = {
         type: 'table',
         apiEndpoint: '/api/stats/orders',
         dataKey: 'by_product',
+        defaultWidth: 'medium',
+        defaultHeight: 'tall'
+      }
+    ]
+  },
+  funnel: {
+    chart: [
+      {
+        id: 'conversion_funnel',
+        label: '전환 퍼널 차트',
+        icon: '📊',
+        description: '방문→장바구니→결제→구매 4단계 시각화',
+        type: 'conversion_funnel',
+        apiEndpoint: '/api/stats/funnel/conversion',
+        dataKey: 'funnel',
         defaultWidth: 'medium',
         defaultHeight: 'tall'
       }
@@ -625,6 +656,52 @@ const transformWidgetData = (widget, apiData, compareDataList) => {
   // Table (UTM 캠페인)
   if (type === 'table' && presetId === 'utm_campaigns') {
     return apiData?.campaigns || [];
+  }
+
+  // 전환 퍼널 차트 (비교 기간 지원)
+  if (type === 'conversion_funnel' && presetId === 'conversion_funnel') {
+    const currentFunnel = apiData?.funnel || [];
+    const currentInsight = apiData?.insight || '';
+    const currentConversion = apiData?.overallConversion || 0;
+    const checkoutDataMissing = apiData?.checkoutDataMissing || false;
+    const checkoutDataMissingMessage = apiData?.checkoutDataMissingMessage || null;
+    
+    // 비교 데이터 처리
+    let compareFunnel = null;
+    let compareConversion = null;
+    let conversionChange = null;
+    let compareCheckoutDataMissing = false;
+    let compareCheckoutDataMissingMessage = null;
+    
+    if (compareDataList && compareDataList.length > 0 && compareDataList[0]?.data) {
+      const compareData = compareDataList[0].data;
+      compareFunnel = compareData.funnel || [];
+      compareConversion = compareData.overallConversion || 0;
+      compareCheckoutDataMissing = compareData.checkoutDataMissing || false;
+      compareCheckoutDataMissingMessage = compareData.checkoutDataMissingMessage || null;
+      
+      // 전환율 변화 계산
+      if (compareConversion > 0) {
+        conversionChange = ((currentConversion - compareConversion) / compareConversion * 100).toFixed(1);
+      } else if (currentConversion > 0) {
+        conversionChange = 'new';
+      }
+    }
+    
+    return {
+      funnel: currentFunnel,
+      compareFunnel,
+      insight: currentInsight,
+      overallConversion: currentConversion,
+      compareConversion,
+      conversionChange,
+      period: apiData?.period,
+      comparePeriod: compareDataList?.[0],
+      checkoutDataMissing,
+      checkoutDataMissingMessage,
+      compareCheckoutDataMissing,
+      compareCheckoutDataMissingMessage
+    };
   }
 
   // 기본 반환
@@ -1674,6 +1751,234 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, containerWidth, c
           </div>
         );
       
+      case 'conversion_funnel':
+        const funnelData = widget.data;
+        if (!funnelData?.funnel) {
+          return <div style={{ height: contentHeight, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8c8c8c' }}>데이터가 없습니다</div>;
+        }
+
+        const funnelColors = ['#1890ff', '#52c41a', '#faad14', '#f5222d'];
+        const funnelSteps = funnelData.funnel;
+        const compareFunnel = funnelData.compareFunnel;
+        const hasCompareData = widget.compareEnabled && compareFunnel && compareFunnel.length > 0;
+        const stepCount = funnelSteps.length;
+        
+        // 비교용 차트 데이터 생성 (현재 + 이전)
+        const funnelChartData = funnelSteps.map((step, index) => {
+          const compareStep = hasCompareData ? compareFunnel[index] : null;
+          return {
+            name: step.step,
+            current: step.count,
+            currentRate: step.rate,
+            compare: compareStep?.count || 0,
+            compareRate: compareStep?.rate || 0,
+            dropRate: step.dropRate,
+            fill: funnelColors[index],
+            // 증감률 계산
+            change: compareStep?.count > 0 
+              ? ((step.count - compareStep.count) / compareStep.count * 100).toFixed(1)
+              : (step.count > 0 ? 'new' : '0')
+          };
+        });
+        
+        // 최대값 (현재와 이전 중 큰 값 기준)
+        const maxFunnelValue = Math.max(
+          funnelChartData[0]?.current || 1,
+          hasCompareData ? (funnelChartData[0]?.compare || 0) : 0
+        );
+        
+        // 동적 막대 크기 (비교 모드일 때 더 작게)
+        const funnelBarSize = hasCompareData 
+          ? (stepCount <= 3 ? 14 : 12)
+          : (stepCount <= 3 ? 28 : (stepCount <= 4 ? 24 : 20));
+        
+        // 높이에 따라 인사이트/전환율 비교 표시 여부 결정
+        const showFunnelInsight = contentHeight > 220;
+        const showConversionCompare = hasCompareData && contentHeight > 160;
+
+        // 커스텀 Tooltip (비교 데이터 포함)
+        const FunnelTooltip = ({ active, payload }) => {
+          if (active && payload && payload.length) {
+            const data = payload[0].payload;
+            const changeNum = parseFloat(data.change);
+            const isNew = data.change === 'new';
+            return (
+              <div style={{
+                background: 'white',
+                border: '1px solid #e8e8e8',
+                borderRadius: 8,
+                padding: '8px 12px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+              }}>
+                <div style={{ fontWeight: 600, marginBottom: 4, color: data.fill }}>{data.name}</div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>
+                  현재: {data.current.toLocaleString()}명 ({data.currentRate}%)
+                </div>
+                {hasCompareData && (
+                  <>
+                    <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 2 }}>
+                      이전: {data.compare.toLocaleString()}명 ({data.compareRate}%)
+                    </div>
+                    <div style={{ 
+                      fontSize: 12, 
+                      marginTop: 4,
+                      color: isNew ? '#1890ff' : (changeNum >= 0 ? '#52c41a' : '#ff4d4f')
+                    }}>
+                      {isNew ? '🆕 신규' : (changeNum >= 0 ? `▲ ${changeNum}%` : `▼ ${Math.abs(changeNum)}%`)}
+                    </div>
+                  </>
+                )}
+                {data.dropRate > 0 && (
+                  <div style={{ fontSize: 12, color: '#ff4d4f', marginTop: 4 }}>
+                    ↓ {data.dropRate}% 이탈
+                  </div>
+                )}
+              </div>
+            );
+          }
+          return null;
+        };
+
+        return (
+          <div style={{ height: contentHeight, padding: '8px 0', display: 'flex', flexDirection: 'column' }}>
+            {/* 차트 영역 */}
+            <div style={{ flex: 1, minHeight: 0 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={funnelChartData}
+                  layout="vertical"
+                  margin={{ top: 5, right: 90, left: 5, bottom: 5 }}
+                  barGap={hasCompareData ? 2 : 0}
+                  barCategoryGap={hasCompareData ? '15%' : '20%'}
+                >
+                  <XAxis type="number" hide domain={[0, maxFunnelValue * 1.1]} />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 12, fill: '#262626', fontWeight: 500 }}
+                    width={55}
+                  />
+                  <Tooltip content={<FunnelTooltip />} cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
+                  
+                  {/* 이전 기간 막대 (투명하게 먼저 그림) */}
+                  {hasCompareData && (
+                    <Bar
+                      dataKey="compare"
+                      radius={[0, 6, 6, 0]}
+                      barSize={funnelBarSize}
+                    >
+                      {funnelChartData.map((entry, index) => (
+                        <Cell key={`compare-${index}`} fill={entry.fill} fillOpacity={0.3} />
+                      ))}
+                    </Bar>
+                  )}
+                  
+                  {/* 현재 기간 막대 */}
+                  <Bar
+                    dataKey="current"
+                    radius={[0, 6, 6, 0]}
+                    barSize={funnelBarSize}
+                    background={!hasCompareData ? { fill: '#f5f5f5', radius: [0, 6, 6, 0] } : false}
+                  >
+                    {funnelChartData.map((entry, index) => (
+                      <Cell key={`current-${index}`} fill={entry.fill} />
+                    ))}
+                    <LabelList
+                      dataKey="current"
+                      position="right"
+                      formatter={(value) => `${value.toLocaleString()}명`}
+                      style={{ fontSize: 11, fontWeight: 600, fill: '#262626' }}
+                    />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* 전환율 비교 (비교 모드일 때) */}
+            {showConversionCompare && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                padding: '6px 8px',
+                background: '#f6ffed',
+                borderRadius: 4,
+                margin: '0 8px 4px',
+                fontSize: 12
+              }}>
+                <span style={{ color: '#8c8c8c' }}>전환율</span>
+                <span style={{ fontWeight: 600, color: '#52c41a' }}>{funnelData.overallConversion}%</span>
+                <span style={{ color: '#8c8c8c' }}>vs</span>
+                <span style={{ fontWeight: 600, color: '#8c8c8c' }}>{funnelData.compareConversion}%</span>
+                {funnelData.conversionChange && funnelData.conversionChange !== 'new' && (
+                  <span style={{
+                    padding: '2px 6px',
+                    borderRadius: 4,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    background: parseFloat(funnelData.conversionChange) >= 0 ? '#d9f7be' : '#ffccc7',
+                    color: parseFloat(funnelData.conversionChange) >= 0 ? '#389e0d' : '#cf1322'
+                  }}>
+                    {parseFloat(funnelData.conversionChange) >= 0 ? '▲' : '▼'} {Math.abs(parseFloat(funnelData.conversionChange))}%
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* 결제시도 데이터 누락 안내 (현재 또는 비교 기간) */}
+            {(funnelData.checkoutDataMissing || funnelData.compareCheckoutDataMissing) && (
+              <AntTooltip 
+                title={
+                  <div>
+                    {funnelData.checkoutDataMissing && (
+                      <div>📊 현재 기간: {funnelData.checkoutDataMissingMessage}</div>
+                    )}
+                    {funnelData.compareCheckoutDataMissing && (
+                      <div style={{ marginTop: funnelData.checkoutDataMissing ? 8 : 0 }}>
+                        📊 비교 기간: {funnelData.compareCheckoutDataMissingMessage}
+                      </div>
+                    )}
+                  </div>
+                }
+                placement="top"
+                overlayStyle={{ maxWidth: 300 }}
+              >
+                <div style={{ 
+                  padding: '4px 8px', 
+                  background: '#fff1f0', 
+                  borderRadius: 4,
+                  fontSize: 11,
+                  color: '#cf1322',
+                  lineHeight: 1.4,
+                  margin: '0 8px 4px',
+                  textAlign: 'center',
+                  cursor: 'help'
+                }}>
+                  ⚠️ 일부 기간에 결제시도 데이터가 없습니다 (마우스를 올려 상세 보기)
+                </div>
+              </AntTooltip>
+            )}
+
+            {/* 인사이트 (공간이 충분하고 비교 모드가 아닐 때) */}
+            {showFunnelInsight && !hasCompareData && funnelData.insight && (
+              <div style={{ 
+                padding: '6px 8px', 
+                background: '#fff7e6', 
+                borderRadius: 4,
+                fontSize: 11,
+                color: '#ad6800',
+                lineHeight: 1.4,
+                margin: '0 8px'
+              }}>
+                💡 {funnelData.insight}
+              </div>
+            )}
+          </div>
+        );
+
       default:
         return <div>알 수 없는 위젯 타입</div>;
     }
@@ -1796,33 +2101,53 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, containerWidth, c
                   }}>
                     <span style={{ color: '#8c8c8c' }}>조회기간 :</span>
                     {(() => {
-                      const { start, end } = widget.dateRange;
-                      if (!start || !end) return '';
+                      const formatDateRange = (dateRange) => {
+                        if (!dateRange?.start || !dateRange?.end) return '';
+                        const { start, end } = dateRange;
+                        
+                        const startParts = start.split('-');
+                        const endParts = end.split('-');
+                        
+                        if (startParts.length < 3 || endParts.length < 3) return '';
+                        
+                        const startYear = startParts[0];
+                        const startMonth = startParts[1];
+                        const startDay = startParts[2];
+                        const endYear = endParts[0];
+                        const endMonth = endParts[1];
+                        const endDay = endParts[2];
+                        
+                        // 같은 년도, 같은 월
+                        if (startYear === endYear && startMonth === endMonth) {
+                          return `${startYear}.${startMonth}.${startDay} ~ ${endDay}`;
+                        }
+                        
+                        // 같은 년도, 다른 월
+                        if (startYear === endYear) {
+                          return `${startYear}.${startMonth}.${startDay} ~ ${endMonth}.${endDay}`;
+                        }
+                        
+                        // 다른 년도
+                        return `${startYear}.${startMonth}.${startDay} ~ ${endYear}.${endMonth}.${endDay}`;
+                      };
                       
-                      const startParts = start.split('-');
-                      const endParts = end.split('-');
+                      const currentRange = formatDateRange(widget.dateRange);
                       
-                      if (startParts.length < 3 || endParts.length < 3) return '';
-                      
-                      const startYear = startParts[0];
-                      const startMonth = startParts[1];
-                      const startDay = startParts[2];
-                      const endYear = endParts[0];
-                      const endMonth = endParts[1];
-                      const endDay = endParts[2];
-                      
-                      // 같은 년도, 같은 월
-                      if (startYear === endYear && startMonth === endMonth) {
-                        return `${startYear}.${startMonth}.${startDay} ~ ${endDay}`;
+                      // conversion_funnel 타입이고 비교 기간이 있을 때
+                      if (widget.type === 'conversion_funnel' && widget.compareEnabled && widget.compareRanges?.length > 0) {
+                        const compareRange = formatDateRange(widget.compareRanges[0]);
+                        if (compareRange) {
+                          return (
+                            <>
+                              <span style={{ color: '#1890ff', fontWeight: 500 }}>{currentRange}</span>
+                              <span style={{ color: '#8c8c8c', margin: '0 4px' }}>vs</span>
+                              <span style={{ color: '#8c8c8c' }}>{compareRange}</span>
+                            </>
+                          );
+                        }
                       }
                       
-                      // 같은 년도, 다른 월
-                      if (startYear === endYear) {
-                        return `${startYear}.${startMonth}.${startDay} ~ ${endMonth}.${endDay}`;
-                      }
-                      
-                      // 다른 년도
-                      return `${startYear}.${startMonth}.${startDay} ~ ${endYear}.${endMonth}.${endDay}`;
+                      return currentRange;
                     })()}
                   </span>
                 </>
