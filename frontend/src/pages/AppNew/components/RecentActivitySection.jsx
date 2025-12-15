@@ -2,10 +2,8 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
-import 'dayjs/locale/ko';
 
 dayjs.extend(relativeTime);
-dayjs.locale('ko');
 
 /**
  * 실시간 활동 섹션

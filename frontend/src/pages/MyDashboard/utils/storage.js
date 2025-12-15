@@ -22,7 +22,9 @@ export const saveToLocalStorage = (widgets, globalDateRange) => {
       suffix: w.suffix,
       dateRange: w.dateRange,
       compareEnabled: w.compareEnabled,
-      compareRanges: w.compareRanges || [] // 다중 비교 기간 배열
+      compareRanges: w.compareRanges || [], // 다중 비교 기간 배열
+      selectedChannel: w.selectedChannel, // 채널별 전환 퍼널용
+      viewMode: w.viewMode // 표시 모드
     }));
 
     const dataToSave = {

@@ -75,14 +75,45 @@ function markAdEntryPoints(pages, utmHistory) {
 }
 
 /**
+ * 이전 방문에서 구매가 발생했는지 확인
+ * order_result.html 페이지가 있으면 구매로 판단
+ * @param {Array} pages - 페이지 배열
+ * @returns {boolean} 구매 발생 여부
+ */
+function hasPurchaseInVisit(pages) {
+  if (!pages || pages.length === 0) return false;
+  return pages.some(page => 
+    page.clean_url?.includes('/order/order_result.html') ||
+    page.page_url?.includes('/order/order_result.html')
+  );
+}
+
+/**
+ * 날짜에 해당하는 과거 구매 찾기
+ * @param {string} visitDate - 방문 날짜 (YYYY-MM-DD)
+ * @param {Array} pastPurchases - 과거 구매 배열
+ * @returns {object|null} 해당 날짜의 구매 정보
+ */
+function findPurchaseForDate(visitDate, pastPurchases) {
+  if (!pastPurchases || pastPurchases.length === 0) return null;
+  
+  return pastPurchases.find(purchase => {
+    // UTC 시간으로 날짜 추출 (시간대 문제 방지)
+    const purchaseDate = purchase.timestamp.split('T')[0];
+    return purchaseDate === visitDate;
+  }) || null;
+}
+
+/**
  * 모든 여정 통합 (이전 방문 + 구매 당일)
  * @param {Array} filteredPreviousVisits - 필터링된 이전 방문 배열
  * @param {Array} validJourneyPages - 구매 당일 페이지 배열
  * @param {string} purchaseDate - 구매일 (YYYY-MM-DD)
  * @param {Array} utmHistory - UTM 히스토리 배열 (광고 유입 시점 표시용)
+ * @param {Array} pastPurchases - 과거 구매 배열 (이전 방문 구매 감지용)
  * @returns {Array} 통합된 여정 배열
  */
-export function buildAllJourneys(filteredPreviousVisits, validJourneyPages, purchaseDate, utmHistory = []) {
+export function buildAllJourneys(filteredPreviousVisits, validJourneyPages, purchaseDate, utmHistory = [], pastPurchases = []) {
   const journeys = [
     // 필터링된 이전 방문들 (연속 중복 제거 적용)
     ...filteredPreviousVisits.map((visit) => {
@@ -91,15 +122,20 @@ export function buildAllJourneys(filteredPreviousVisits, validJourneyPages, purc
       const pagesWithAdEntry = markAdEntryPoints(deduplicatedPages, utmHistory);
       const totalDuration = pagesWithAdEntry.reduce((sum, p) => sum + (p.time_spent_seconds || 0), 0);
 
+      // 이전 방문에서 구매가 발생했는지 확인
+      const hadPurchase = hasPurchaseInVisit(pagesWithAdEntry);
+      const matchingPurchase = hadPurchase ? findPurchaseForDate(visit.date, pastPurchases) : null;
+
       return {
         id: `visit-${visit.date}`,
         date: visit.date,
-        type: 'visit',
+        type: matchingPurchase ? 'purchase' : 'visit',
         dateLabel: dayjs(visit.date).format('YYYY-MM-DD'),
         pageCount: pagesWithAdEntry.length,
         duration: formatDuration(totalDuration),
         pages: pagesWithAdEntry,
-        color: '#9ca3af' // 회색
+        color: matchingPurchase ? '#60a5fa' : '#9ca3af', // 구매 시 파란색, 이탈 시 회색
+        pastPurchase: matchingPurchase // 이전 구매 정보 연결
       };
     }),
     // 구매 당일 (연속 중복 제거 적용)
@@ -117,7 +153,8 @@ export function buildAllJourneys(filteredPreviousVisits, validJourneyPages, purc
         pageCount: pagesWithAdEntry.length,
         duration: formatDuration(totalDuration),
         pages: pagesWithAdEntry,
-        color: '#60a5fa' // 밝은 파스텔 블루
+        color: '#60a5fa', // 밝은 파스텔 블루
+        pastPurchase: null // 현재 주문은 pastPurchase가 아님
       };
     })()
   ];

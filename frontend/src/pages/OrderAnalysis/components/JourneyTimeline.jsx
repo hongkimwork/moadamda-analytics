@@ -50,13 +50,17 @@ function buildTimelineItems(pages, journey, userMappings, order, findMatchingMap
   });
 
   // 구매 여정인 경우 마지막에 구매 완료 아이템 추가
-  if (journey.type === 'purchase' && order) {
-    items.push({
-      key: 'purchase-complete',
-      type: 'purchase',
-      color: 'blue',
-      order
-    });
+  if (journey.type === 'purchase') {
+    // 이전 구매인 경우 pastPurchase 사용, 현재 주문인 경우 order 사용
+    const purchaseData = journey.pastPurchase || order;
+    if (purchaseData) {
+      items.push({
+        key: 'purchase-complete',
+        type: 'purchase',
+        color: 'blue',
+        order: purchaseData
+      });
+    }
   }
 
   return items;

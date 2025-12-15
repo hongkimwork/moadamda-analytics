@@ -301,13 +301,31 @@ async function getOrderDetail(orderId) {
     has_purchase: row.has_purchase
   }));
 
-  const pastPurchasesMapped = pastPurchases.map(row => ({
-    order_id: row.order_id,
-    timestamp: row.timestamp,
-    final_payment: row.final_payment,
-    product_count: row.product_count,
-    product_name: row.product_name
-  }));
+  // 과거 구매 내역에 Cafe24 상세 정보 추가 (병렬 처리)
+  const pastPurchasesMapped = await Promise.all(
+    pastPurchases.map(async (row) => {
+      const cafe24Order = await fetchCafe24OrderDetail(row.order_id);
+      const orderItems = mapCafe24OrderItems(
+        cafe24Order,
+        row.product_name,
+        row.final_payment,
+        row.product_count
+      );
+
+      return {
+        order_id: row.order_id,
+        timestamp: row.timestamp,
+        final_payment: parseInt(row.final_payment) || 0,
+        product_count: row.product_count,
+        product_name: row.product_name,
+        order_items: orderItems,
+        payment_details: {
+          order_status: row.order_status || 'confirmed',
+          paid: row.paid || 'T'
+        }
+      };
+    })
+  );
 
   // 5. 응답 구성
   return {

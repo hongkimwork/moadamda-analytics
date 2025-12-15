@@ -115,8 +115,8 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, onFilterChange, c
   const renderWidgetContent = () => {
     const contentHeight = widgetHeight - 57; // Card header 높이 제외
     
-    // 공통 색상 배열 (전환 퍼널 차트용)
-    const funnelColors = ['#1890ff', '#52c41a', '#faad14', '#f5222d'];
+    // 공통 색상 배열 (전환 퍼널 차트용 - 5단계: 방문, 상세페이지, 장바구니, 결제시도, 구매완료)
+    const funnelColors = ['#1890ff', '#722ed1', '#52c41a', '#faad14', '#f5222d'];
     
     // 로딩 상태
     if (widget.loading) {
@@ -968,10 +968,10 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, onFilterChange, c
           hasCompareData ? (funnelChartData[0]?.compare || 0) : 0
         );
         
-        // 동적 막대 크기 (비교 모드일 때 더 작게)
+        // 동적 막대 크기 (비교 모드일 때 더 작게, 5단계 퍼널 지원)
         const funnelBarSize = hasCompareData 
-          ? (stepCount <= 3 ? 14 : 12)
-          : (stepCount <= 3 ? 28 : (stepCount <= 4 ? 24 : 20));
+          ? (stepCount <= 4 ? 14 : 12)
+          : (stepCount <= 4 ? 26 : (stepCount <= 5 ? 22 : 18));
         
         // 높이에 따라 인사이트/전환율 비교 표시 여부 결정
         const showFunnelInsight = contentHeight > 220;
@@ -1091,6 +1091,12 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, onFilterChange, c
                       {funnelChartData.map((entry, index) => (
                         <Cell key={`compare-${index}`} fill={entry.fill} fillOpacity={0.3} />
                       ))}
+                      <LabelList
+                        dataKey="compare"
+                        position="right"
+                        formatter={(value) => `${value.toLocaleString()}명`}
+                        style={{ fontSize: 11, fontWeight: 700, fill: '#000000' }}
+                      />
                     </Bar>
                   )}
                   
@@ -1129,8 +1135,11 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, onFilterChange, c
                 fontSize: 12
               }}>
                 <span style={{ color: '#8c8c8c' }}>전환율</span>
+                <span style={{ color: '#8c8c8c', margin: '0 4px' }}>|</span>
+                <span style={{ color: '#389e0d', fontSize: 11 }}>현재:</span>
                 <span style={{ fontWeight: 600, color: '#52c41a' }}>{funnelData.overallConversion}%</span>
                 <span style={{ color: '#8c8c8c' }}>vs</span>
+                <span style={{ color: '#8c8c8c', fontSize: 11 }}>이전:</span>
                 <span style={{ fontWeight: 600, color: '#8c8c8c' }}>{funnelData.compareConversion}%</span>
                 {funnelData.conversionChange && funnelData.conversionChange !== 'new' && (
                   <span style={{
@@ -1141,7 +1150,7 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, onFilterChange, c
                     background: parseFloat(funnelData.conversionChange) >= 0 ? '#d9f7be' : '#ffccc7',
                     color: parseFloat(funnelData.conversionChange) >= 0 ? '#389e0d' : '#cf1322'
                   }}>
-                    {parseFloat(funnelData.conversionChange) >= 0 ? '▲' : '▼'} {Math.abs(parseFloat(funnelData.conversionChange))}%
+                    {parseFloat(funnelData.conversionChange) >= 0 ? '▲' : '▼'} {Math.abs(parseFloat(funnelData.conversionChange))}% {parseFloat(funnelData.conversionChange) >= 0 ? '상승' : '하락'}
                   </span>
                 )}
               </div>
@@ -1228,13 +1237,12 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, onFilterChange, c
         const channelFunnelSteps = channelData.funnel || [];
         const channelCompareFunnel = channelData.compareFunnel || [];
         const channelHasCompare = widget.compareEnabled && channelCompareFunnel.length > 0;
-        const channelColor = funnelColors[0]; // 단일 채널이므로 첫 번째 색상 사용
 
-        // 차트 데이터 구성
+        // 차트 데이터 구성 (5단계 퍼널 지원)
         const channelStepCount = channelFunnelSteps.length;
         const channelBarSize = channelHasCompare 
-          ? (channelStepCount <= 3 ? 14 : 12)
-          : (channelStepCount <= 3 ? 28 : (channelStepCount <= 4 ? 24 : 20));
+          ? (channelStepCount <= 4 ? 14 : 12)
+          : (channelStepCount <= 4 ? 26 : (channelStepCount <= 5 ? 22 : 18));
 
         const channelChartData = channelFunnelSteps.map((step, index) => {
           const compareStep = channelHasCompare ? channelCompareFunnel[index] : null;
@@ -1244,7 +1252,8 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, onFilterChange, c
             currentRate: step.rate,
             compare: compareStep?.count || 0,
             compareRate: compareStep?.rate || 0,
-            dropRate: step.dropRate
+            dropRate: step.dropRate,
+            fill: funnelColors[index] // 각 단계별로 다른 색상 적용
           };
         });
 
@@ -1288,7 +1297,7 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, onFilterChange, c
                             padding: '8px 12px',
                             boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
                           }}>
-                            <div style={{ fontWeight: 600, marginBottom: 4, color: channelColor }}>{data.name}</div>
+                            <div style={{ fontWeight: 600, marginBottom: 4, color: data.fill }}>{data.name}</div>
                             <div style={{ fontSize: 14, fontWeight: 600 }}>
                               현재: {data.current.toLocaleString()}명 ({data.currentRate}%)
                             </div>
@@ -1318,9 +1327,17 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, onFilterChange, c
                       dataKey="compare"
                       radius={[0, 6, 6, 0]}
                       barSize={channelBarSize}
-                      fill={channelColor}
-                      fillOpacity={0.3}
-                    />
+                    >
+                      {channelChartData.map((entry, index) => (
+                        <Cell key={`compare-${index}`} fill={entry.fill} fillOpacity={0.3} />
+                      ))}
+                      <LabelList
+                        dataKey="compare"
+                        position="right"
+                        formatter={(value) => `${value.toLocaleString()}명`}
+                        style={{ fontSize: 11, fontWeight: 600, fill: '#262626' }}
+                      />
+                    </Bar>
                   )}
                   
                   {/* 현재 기간 막대 */}
@@ -1328,9 +1345,11 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, onFilterChange, c
                     dataKey="current"
                     radius={[0, 6, 6, 0]}
                     barSize={channelBarSize}
-                    fill={channelColor}
                     background={!channelHasCompare ? { fill: '#f5f5f5', radius: [0, 6, 6, 0] } : false}
                   >
+                    {channelChartData.map((entry, index) => (
+                      <Cell key={`current-${index}`} fill={entry.fill} />
+                    ))}
                     <LabelList
                       dataKey="current"
                       position="right"
@@ -1356,8 +1375,11 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, onFilterChange, c
                 fontSize: 12
               }}>
                 <span style={{ color: '#8c8c8c' }}>전환율</span>
+                <span style={{ color: '#8c8c8c', margin: '0 4px' }}>|</span>
+                <span style={{ color: '#389e0d', fontSize: 11 }}>현재:</span>
                 <span style={{ fontWeight: 600, color: '#52c41a' }}>{channelData.overallConversion}%</span>
                 <span style={{ color: '#8c8c8c' }}>vs</span>
+                <span style={{ color: '#8c8c8c', fontSize: 11 }}>이전:</span>
                 <span style={{ fontWeight: 600, color: '#8c8c8c' }}>{channelData.compareConversion}%</span>
                 {channelData.conversionChange && channelData.conversionChange !== 'new' && (
                   <span style={{
@@ -1368,7 +1390,7 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, onFilterChange, c
                     background: parseFloat(channelData.conversionChange) >= 0 ? '#d9f7be' : '#ffccc7',
                     color: parseFloat(channelData.conversionChange) >= 0 ? '#389e0d' : '#cf1322'
                   }}>
-                    {parseFloat(channelData.conversionChange) >= 0 ? '▲' : '▼'} {Math.abs(parseFloat(channelData.conversionChange))}%
+                    {parseFloat(channelData.conversionChange) >= 0 ? '▲' : '▼'} {Math.abs(parseFloat(channelData.conversionChange))}% {parseFloat(channelData.conversionChange) >= 0 ? '상승' : '하락'}
                   </span>
                 )}
               </div>
@@ -1579,8 +1601,8 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, onFilterChange, c
                       
                       const currentRange = formatDateRange(widget.dateRange);
                       
-                      // conversion_funnel 타입이고 비교 기간이 있을 때
-                      if (widget.type === 'conversion_funnel' && widget.compareEnabled && widget.compareRanges?.length > 0) {
+                      // conversion_funnel 또는 channel_funnel 타입이고 비교 기간이 있을 때
+                      if ((widget.type === 'conversion_funnel' || widget.type === 'channel_funnel') && widget.compareEnabled && widget.compareRanges?.length > 0) {
                         const compareRange = formatDateRange(widget.compareRanges[0]);
                         if (compareRange) {
                           return (

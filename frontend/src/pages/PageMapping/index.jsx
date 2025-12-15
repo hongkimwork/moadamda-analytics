@@ -12,7 +12,6 @@ import { Card, Tabs, Tag, Typography, Space, Button, Input, message, Form } from
 import { ReloadOutlined, SearchOutlined, PlusOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
-import 'dayjs/locale/ko';
 
 // Hooks
 import { usePageMappings } from './hooks/usePageMappings';
@@ -33,7 +32,6 @@ import { parseUrl, createUrlConditions } from '../../utils/urlParser';
 import { decodeUrl, parseBadges } from './utils/urlHelpers';
 
 dayjs.extend(relativeTime);
-dayjs.locale('ko');
 
 const { Title, Text } = Typography;
 

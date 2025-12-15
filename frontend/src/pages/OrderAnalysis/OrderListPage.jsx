@@ -7,7 +7,6 @@ import React, { useState, useMemo } from 'react';
 import { Card, Table, Button, Tag, Space, Typography, Modal } from 'antd';
 import { ShoppingCart, RefreshCw, XCircle } from 'lucide-react';
 import dayjs from 'dayjs';
-import 'dayjs/locale/ko';
 import { useOrderList } from '../../hooks/useOrderList';
 import { useUserMappings } from '../../hooks/useUserMappings';
 import SearchFilterBar from '../../components/SearchFilterBar';

@@ -74,7 +74,7 @@ router.get('/conversion', async (req, res) => {
       deviceFilter = `AND LOWER(v.device_type) = '${mappedDevice}'`;
     }
 
-    // 채널별 퍼널 데이터 쿼리
+    // 채널별 퍼널 데이터 쿼리 (상세페이지 조회 단계 포함)
     const channelFunnelQuery = `
       WITH period_visitors AS (
         -- 기간 내 모든 방문자와 그들의 채널 분류
@@ -95,6 +95,23 @@ router.get('/conversion', async (req, res) => {
           COUNT(DISTINCT visitor_id) as total_count
         FROM period_visitors
         GROUP BY channel
+      ),
+      channel_product_view AS (
+        -- 채널별 상세페이지 조회한 방문자 수
+        SELECT 
+          pv.channel,
+          COUNT(DISTINCT pg.visitor_id) as product_view_count
+        FROM pageviews pg
+        JOIN period_visitors pv ON pg.visitor_id = pv.visitor_id
+        WHERE (
+          pg.page_url LIKE '%/product/%'
+          OR pg.page_url LIKE '%product_no=%'
+          OR pg.page_url LIKE '%/surl/P/%'
+          OR pg.page_url LIKE '%/surl/p/%'
+        )
+          AND pg.timestamp >= $1::date 
+          AND pg.timestamp < ($2::date + INTERVAL '1 day')
+        GROUP BY pv.channel
       ),
       channel_cart AS (
         -- 채널별 장바구니 추가한 방문자 수
@@ -135,10 +152,12 @@ router.get('/conversion', async (req, res) => {
       SELECT 
         cv.channel,
         cv.total_count as visitors,
+        COALESCE(cpv.product_view_count, 0) as product_view_count,
         COALESCE(cc.cart_count, 0) as cart_count,
         COALESCE(cch.checkout_count, 0) as checkout_count,
         COALESCE(cp.purchase_count, 0) as purchase_count
       FROM channel_visitors cv
+      LEFT JOIN channel_product_view cpv ON cv.channel = cpv.channel
       LEFT JOIN channel_cart cc ON cv.channel = cc.channel
       LEFT JOIN channel_checkout cch ON cv.channel = cch.channel
       LEFT JOIN channel_purchase cp ON cv.channel = cp.channel
@@ -151,11 +170,13 @@ router.get('/conversion', async (req, res) => {
     // 각 채널별로 퍼널 데이터 구성
     const channels = result.rows.map(row => {
       const visitors = parseInt(row.visitors) || 0;
+      const productViewCount = parseInt(row.product_view_count) || 0;
       const cartCount = parseInt(row.cart_count) || 0;
       const checkoutCount = parseInt(row.checkout_count) || 0;
       const purchaseCount = parseInt(row.purchase_count) || 0;
 
       // 전환율 계산 (방문자 대비 %)
+      const productViewRate = visitors > 0 ? parseFloat(((productViewCount / visitors) * 100).toFixed(1)) : 0;
       const cartRate = visitors > 0 ? parseFloat(((cartCount / visitors) * 100).toFixed(1)) : 0;
       const checkoutRate = visitors > 0 ? parseFloat(((checkoutCount / visitors) * 100).toFixed(1)) : 0;
       const purchaseRate = visitors > 0 ? parseFloat(((purchaseCount / visitors) * 100).toFixed(1)) : 0;
@@ -164,7 +185,10 @@ router.get('/conversion', async (req, res) => {
       const checkoutDataMissing = checkoutCount === 0 && purchaseCount > 0;
 
       // 이탈률 계산 (이전 단계 대비)
-      const cartDropRate = parseFloat((100 - cartRate).toFixed(1));
+      const productViewDropRate = parseFloat((100 - productViewRate).toFixed(1));
+      const cartDropRate = productViewCount > 0 
+        ? parseFloat((((productViewCount - cartCount) / productViewCount) * 100).toFixed(1)) 
+        : 0;
       
       let checkoutDropRate = 0;
       let purchaseDropRate = 0;
@@ -183,20 +207,22 @@ router.get('/conversion', async (req, res) => {
           : 0;
       }
 
-      // 퍼널 구성 (결제시도 데이터 없으면 3단계, 있으면 4단계)
+      // 퍼널 구성 (결제시도 데이터 없으면 4단계, 있으면 5단계)
       let funnel;
       
       if (checkoutDataMissing) {
-        // 3단계 퍼널
+        // 4단계 퍼널 (결제시도 제외)
         funnel = [
           { step: '방문', count: visitors, rate: 100.0, dropRate: 0 },
+          { step: '상세페이지', count: productViewCount, rate: productViewRate, dropRate: productViewDropRate },
           { step: '장바구니', count: cartCount, rate: cartRate, dropRate: cartDropRate },
           { step: '구매완료', count: purchaseCount, rate: purchaseRate, dropRate: purchaseDropRate }
         ];
       } else {
-        // 4단계 퍼널
+        // 5단계 퍼널 (전체)
         funnel = [
           { step: '방문', count: visitors, rate: 100.0, dropRate: 0 },
+          { step: '상세페이지', count: productViewCount, rate: productViewRate, dropRate: productViewDropRate },
           { step: '장바구니', count: cartCount, rate: cartRate, dropRate: cartDropRate },
           { step: '결제시도', count: checkoutCount, rate: checkoutRate, dropRate: checkoutDropRate },
           { step: '구매완료', count: purchaseCount, rate: purchaseRate, dropRate: purchaseDropRate }
@@ -216,12 +242,15 @@ router.get('/conversion', async (req, res) => {
 
       let insight = '';
       if (checkoutDataMissing) {
-        insight = maxDropIndex === 1
-          ? `${cartDropRate}% 이탈 (장바구니 전)`
-          : `${purchaseDropRate}% 이탈 (장바구니→구매)`;
+        // 4단계 퍼널
+        if (maxDropIndex === 1) insight = `${productViewDropRate}% 이탈 (상세페이지 전)`;
+        else if (maxDropIndex === 2) insight = `${cartDropRate}% 이탈 (상세→장바구니)`;
+        else insight = `${purchaseDropRate}% 이탈 (장바구니→구매)`;
       } else {
-        if (maxDropIndex === 1) insight = `${cartDropRate}% 이탈 (장바구니 전)`;
-        else if (maxDropIndex === 2) insight = `${checkoutDropRate}% 이탈 (장바구니→결제)`;
+        // 5단계 퍼널
+        if (maxDropIndex === 1) insight = `${productViewDropRate}% 이탈 (상세페이지 전)`;
+        else if (maxDropIndex === 2) insight = `${cartDropRate}% 이탈 (상세→장바구니)`;
+        else if (maxDropIndex === 3) insight = `${checkoutDropRate}% 이탈 (장바구니→결제)`;
         else insight = `${purchaseDropRate}% 이탈 (결제→구매)`;
       }
 
@@ -272,7 +301,7 @@ router.get('/single', async (req, res) => {
       deviceFilter = `AND LOWER(v.device_type) = '${mappedDevice}'`;
     }
 
-    // 단일 채널 퍼널 데이터 조회 함수
+    // 단일 채널 퍼널 데이터 조회 함수 (상세페이지 조회 단계 포함)
     const getChannelFunnel = async (startDate, endDate) => {
       const query = `
         WITH period_visitors AS (
@@ -285,6 +314,20 @@ router.get('/single', async (req, res) => {
             AND pv.visitor_id IS NOT NULL
             AND ${CHANNEL_CLASSIFICATION_SQL} = $3
             ${deviceFilter}
+        ),
+        product_view_visitors AS (
+          -- 상세페이지 조회한 방문자
+          SELECT COUNT(DISTINCT pg.visitor_id) as product_view_count
+          FROM pageviews pg
+          WHERE (
+            pg.page_url LIKE '%/product/%'
+            OR pg.page_url LIKE '%product_no=%'
+            OR pg.page_url LIKE '%/surl/P/%'
+            OR pg.page_url LIKE '%/surl/p/%'
+          )
+            AND pg.timestamp >= $1::date 
+            AND pg.timestamp < ($2::date + INTERVAL '1 day')
+            AND pg.visitor_id IN (SELECT visitor_id FROM period_visitors)
         ),
         cart_visitors AS (
           -- 장바구니 추가한 방문자
@@ -315,6 +358,7 @@ router.get('/single', async (req, res) => {
         )
         SELECT 
           (SELECT COUNT(*) FROM period_visitors) as visitors,
+          (SELECT product_view_count FROM product_view_visitors) as product_view_count,
           (SELECT cart_count FROM cart_visitors) as cart_count,
           (SELECT checkout_count FROM checkout_visitors) as checkout_count,
           (SELECT purchase_count FROM purchase_visitors) as purchase_count
@@ -324,11 +368,13 @@ router.get('/single', async (req, res) => {
       const row = result.rows[0];
 
       const visitors = parseInt(row.visitors) || 0;
+      const productViewCount = parseInt(row.product_view_count) || 0;
       const cartCount = parseInt(row.cart_count) || 0;
       const checkoutCount = parseInt(row.checkout_count) || 0;
       const purchaseCount = parseInt(row.purchase_count) || 0;
 
       // 전환율 계산
+      const productViewRate = visitors > 0 ? parseFloat(((productViewCount / visitors) * 100).toFixed(1)) : 0;
       const cartRate = visitors > 0 ? parseFloat(((cartCount / visitors) * 100).toFixed(1)) : 0;
       const checkoutRate = visitors > 0 ? parseFloat(((checkoutCount / visitors) * 100).toFixed(1)) : 0;
       const purchaseRate = visitors > 0 ? parseFloat(((purchaseCount / visitors) * 100).toFixed(1)) : 0;
@@ -337,7 +383,10 @@ router.get('/single', async (req, res) => {
       const checkoutDataMissing = checkoutCount === 0 && purchaseCount > 0;
 
       // 이탈률 계산
-      const cartDropRate = parseFloat((100 - cartRate).toFixed(1));
+      const productViewDropRate = parseFloat((100 - productViewRate).toFixed(1));
+      const cartDropRate = productViewCount > 0 
+        ? parseFloat((((productViewCount - cartCount) / productViewCount) * 100).toFixed(1)) 
+        : 0;
       
       let checkoutDropRate = 0;
       let purchaseDropRate = 0;
@@ -355,17 +404,19 @@ router.get('/single', async (req, res) => {
           : 0;
       }
 
-      // 퍼널 구성
+      // 퍼널 구성 (결제시도 데이터 없으면 4단계, 있으면 5단계)
       let funnel;
       if (checkoutDataMissing) {
         funnel = [
           { step: '방문', count: visitors, rate: 100.0, dropRate: 0 },
+          { step: '상세페이지', count: productViewCount, rate: productViewRate, dropRate: productViewDropRate },
           { step: '장바구니', count: cartCount, rate: cartRate, dropRate: cartDropRate },
           { step: '구매완료', count: purchaseCount, rate: purchaseRate, dropRate: purchaseDropRate }
         ];
       } else {
         funnel = [
           { step: '방문', count: visitors, rate: 100.0, dropRate: 0 },
+          { step: '상세페이지', count: productViewCount, rate: productViewRate, dropRate: productViewDropRate },
           { step: '장바구니', count: cartCount, rate: cartRate, dropRate: cartDropRate },
           { step: '결제시도', count: checkoutCount, rate: checkoutRate, dropRate: checkoutDropRate },
           { step: '구매완료', count: purchaseCount, rate: purchaseRate, dropRate: purchaseDropRate }
@@ -384,12 +435,15 @@ router.get('/single', async (req, res) => {
 
       let insight = '';
       if (checkoutDataMissing) {
-        insight = maxDropIndex === 1
-          ? `${cartDropRate}% 이탈 (장바구니 전)`
-          : `${purchaseDropRate}% 이탈 (장바구니→구매)`;
+        // 4단계 퍼널
+        if (maxDropIndex === 1) insight = `${productViewDropRate}% 이탈 (상세페이지 전)`;
+        else if (maxDropIndex === 2) insight = `${cartDropRate}% 이탈 (상세→장바구니)`;
+        else insight = `${purchaseDropRate}% 이탈 (장바구니→구매)`;
       } else {
-        if (maxDropIndex === 1) insight = `${cartDropRate}% 이탈 (장바구니 전)`;
-        else if (maxDropIndex === 2) insight = `${checkoutDropRate}% 이탈 (장바구니→결제)`;
+        // 5단계 퍼널
+        if (maxDropIndex === 1) insight = `${productViewDropRate}% 이탈 (상세페이지 전)`;
+        else if (maxDropIndex === 2) insight = `${cartDropRate}% 이탈 (상세→장바구니)`;
+        else if (maxDropIndex === 3) insight = `${checkoutDropRate}% 이탈 (장바구니→결제)`;
         else insight = `${purchaseDropRate}% 이탈 (결제→구매)`;
       }
 

@@ -1,6 +1,7 @@
 import React, { useState, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { Layout, Menu, Spin } from 'antd';
+import { Layout, Menu, Spin, ConfigProvider } from 'antd';
+import koKR from 'antd/locale/ko_KR';
 import { 
   ShoppingOutlined, 
   DatabaseOutlined, 
@@ -16,7 +17,12 @@ import {
   SettingOutlined,
   AppstoreOutlined
 } from '@ant-design/icons';
+import dayjs from 'dayjs';
+import 'dayjs/locale/ko';
 import './index.css';
+
+// dayjs 전역 로케일 설정
+dayjs.locale('ko');
 
 // Lazy load pages for code splitting (reduces initial bundle size)
 // Named exports from OrderAnalysis are wrapped to work with lazy loading
@@ -225,9 +231,11 @@ function AppLayout() {
 // ============================================================================
 function App() {
   return (
-    <Router>
-      <AppLayout />
-    </Router>
+    <ConfigProvider locale={koKR}>
+      <Router>
+        <AppLayout />
+      </Router>
+    </ConfigProvider>
   );
 }
 

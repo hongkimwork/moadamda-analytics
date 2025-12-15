@@ -461,18 +461,26 @@ async function getPastPurchases(visitorId, excludeOrderId) {
       c.timestamp,
       c.final_payment,
       c.product_count,
-      (
-        SELECT e.product_name
-        FROM events e
-        WHERE e.visitor_id = c.visitor_id
-          AND e.event_type = 'purchase'
-          AND e.timestamp <= c.timestamp
-        ORDER BY e.timestamp DESC
-        LIMIT 1
+      c.order_status,
+      c.paid,
+      COALESCE(
+        c.product_name,
+        (
+          SELECT e.product_name
+          FROM events e
+          WHERE e.visitor_id = c.visitor_id
+            AND e.event_type = 'purchase'
+            AND e.timestamp <= c.timestamp
+          ORDER BY e.timestamp DESC
+          LIMIT 1
+        )
       ) as product_name
     FROM conversions c
     WHERE c.visitor_id = $1
       AND c.order_id != $2
+      AND c.paid = 'T'
+      AND (c.canceled = 'F' OR c.canceled IS NULL)
+      AND (c.order_status = 'confirmed' OR c.order_status IS NULL)
     ORDER BY c.timestamp DESC
     LIMIT 10
   `;

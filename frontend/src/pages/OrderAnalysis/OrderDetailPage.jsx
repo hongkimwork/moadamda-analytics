@@ -9,7 +9,6 @@ import { Card, DatePicker, Button, Spin, Alert, message } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { TrendingUp } from 'lucide-react';
 import dayjs from 'dayjs';
-import 'dayjs/locale/ko';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { useOrderDetail } from '../../hooks/useOrderDetail';
 import { useJourneyExpansion } from '../../hooks/useJourneyExpansion';
@@ -20,7 +19,6 @@ import JourneyMiniCard from './components/JourneyMiniCard';
 import JourneyTimeline from './components/JourneyTimeline';
 
 dayjs.extend(relativeTime);
-dayjs.locale('ko');
 
 const { RangePicker } = DatePicker;
 
@@ -77,7 +75,7 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
     );
   }
 
-  const { order, purchase_journey, previous_visits, page_path, utm_history } = data;
+  const { order, purchase_journey, previous_visits, page_path, utm_history, past_purchases } = data;
 
   // 구매 직전 경로 (광고 클릭 후 ~ 구매까지)
   const journeyPages = purchase_journey?.pages || page_path || [];
@@ -97,8 +95,8 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
   // 이전 방문 필터링
   const filteredPreviousVisits = filterPreviousVisits(previous_visits, order.timestamp, selectedDateRange);
 
-  // 모든 여정 통합 (광고 유입 시점 표시 포함)
-  const allJourneys = buildAllJourneys(filteredPreviousVisits, validJourneyPages, purchaseDate, utm_history || []);
+  // 모든 여정 통합 (광고 유입 시점 표시 + 이전 구매 감지 포함)
+  const allJourneys = buildAllJourneys(filteredPreviousVisits, validJourneyPages, purchaseDate, utm_history || [], past_purchases || []);
 
   return (
     <div style={{ background: '#fafbfc', height: '100%', display: 'flex', flexDirection: 'column' }}>

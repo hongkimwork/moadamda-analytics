@@ -17,6 +17,12 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-12-15 | 채널퍼널 저장 수정 | storage.js |
+| 2025-12-15 | 이전방문 구매감지 기능 | journeyCalculations.js |
+| 2025-12-15 | 퍼널 위젯 UI 통일 | DashboardWidget.jsx |
+| 2025-12-15 | DatePicker 한국어 적용 | App.jsx |
+| 2025-12-15 | 퍼널 이전기간 숫자표시 | DashboardWidget.jsx |
+| 2025-12-15 | 전환율 비교 UI 개선 | DashboardWidget.jsx |
 | 2025-12-15 | API 환경변수 수정 | constants.jsx |
 | 2025-12-11 | 채널퍼널 채널선택 개선 | AddWidgetModal.jsx |
 | 2025-12-11 | 전환퍼널 통합 및 UI개선 | AddWidgetModal.jsx |
@@ -26,12 +32,6 @@
 | 2025-12-11 | 백업 파일 정리 | App.jsx |
 | 2025-12-11 | AppNew 리팩토링 | AppNew/ |
 | 2025-12-11 | 소재분석 페이지 리팩토링 | CreativePerformance/ |
-| 2025-12-11 | 페이지매핑 리팩토링 | PageMapping/ |
-| 2025-12-11 | 데이터테이블 리팩토링 | DataTables/ |
-| 2025-12-11 | 대시보드 리팩토링 완료 | MyDashboard/ |
-| 2025-12-11 | 테이블API 서비스분리 | tablesService.js |
-| 2025-12-11 | 소재분석 POST리팩토링 | detailService.js |
-| 2025-12-11 | 소재분석 서비스분리 | creativeService.js |
 
 ---
 
