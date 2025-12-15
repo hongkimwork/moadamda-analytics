@@ -440,6 +440,64 @@ export const transformWidgetData = (widget, apiData, compareDataList) => {
     };
   }
 
+  // 고객 유형 분석 (신규 vs 재구매)
+  if (type === 'compare_bar' && presetId === 'new_vs_returning_customers') {
+    const newCustomers = apiData?.new_customers || {};
+    const returningCustomers = apiData?.returning_customers || {};
+    const total = apiData?.total || {};
+    
+    // 차트 데이터 구성
+    const chartData = [
+      {
+        name: '신규 고객',
+        value: newCustomers.revenue || 0,
+        count: newCustomers.count || 0,
+        orders: newCustomers.orders || 0,
+        aov: newCustomers.aov || 0,
+        rate: newCustomers.revenue_share || 0,
+        fill: '#52c41a'
+      },
+      {
+        name: '재구매 고객',
+        value: returningCustomers.revenue || 0,
+        count: returningCustomers.count || 0,
+        orders: returningCustomers.orders || 0,
+        aov: returningCustomers.aov || 0,
+        rate: returningCustomers.revenue_share || 0,
+        fill: '#1890ff'
+      }
+    ];
+    
+    // 비교 데이터 처리
+    let compareValues = null;
+    if (compareDataList && compareDataList.length > 0 && compareDataList[0]?.data) {
+      const compareData = compareDataList[0].data;
+      const compareNew = compareData.new_customers || {};
+      const compareReturning = compareData.returning_customers || {};
+      
+      compareValues = [
+        {
+          value: compareNew.revenue || 0,
+          count: compareNew.count || 0,
+          change: calculateChange(newCustomers.revenue || 0, compareNew.revenue || 0)
+        },
+        {
+          value: compareReturning.revenue || 0,
+          count: compareReturning.count || 0,
+          change: calculateChange(returningCustomers.revenue || 0, compareReturning.revenue || 0)
+        }
+      ];
+    }
+    
+    return {
+      chartData,
+      compareValues,
+      total,
+      period: apiData?.period,
+      comparePeriod: compareDataList?.[0]
+    };
+  }
+
   // 기본 반환
   return apiData;
 };

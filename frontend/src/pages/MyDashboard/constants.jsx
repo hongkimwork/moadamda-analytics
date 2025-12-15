@@ -41,10 +41,9 @@ export const DATA_SOURCES = {
   customer_type: {
     id: 'customer_type',
     name: '고객 유형 분석',
-    icon: <TeamOutlined style={{ fontSize: 28, color: '#8c8c8c' }} />,
+    icon: <TeamOutlined style={{ fontSize: 28, color: '#722ed1' }} />,
     description: '신규 vs 재구매 고객 비교',
-    enabled: false,
-    comingSoon: true
+    enabled: true
   },
   ad_platforms: { 
     id: 'ad_platforms',

@@ -105,5 +105,70 @@ export const WIDGET_PRESETS = {
         requiresChannel: true  // 채널 선택 필수
       }
     ]
+  },
+  customer_type: {
+    chart: [
+      {
+        id: 'new_vs_returning_customers',
+        label: '신규 vs 재구매 고객',
+        icon: '👥',
+        description: '신규 고객과 재구매 고객의 수와 매출 비교',
+        type: 'compare_bar',
+        apiEndpoint: '/api/stats/customer-type',
+        dataKey: 'customer_comparison',
+        defaultWidth: 'medium',
+        defaultHeight: 'medium'
+      }
+    ],
+    kpi: [
+      {
+        id: 'new_customer_count',
+        label: '신규 고객 수',
+        icon: '🆕',
+        description: '처음 구매한 고객 수',
+        type: 'kpi',
+        apiEndpoint: '/api/stats/customer-type',
+        dataKey: 'new_customers.count',
+        suffix: '명',
+        defaultWidth: 'small',
+        defaultHeight: 'short'
+      },
+      {
+        id: 'returning_customer_count',
+        label: '재구매 고객 수',
+        icon: '🔄',
+        description: '이전에도 구매한 고객 수',
+        type: 'kpi',
+        apiEndpoint: '/api/stats/customer-type',
+        dataKey: 'returning_customers.count',
+        suffix: '명',
+        defaultWidth: 'small',
+        defaultHeight: 'short'
+      },
+      {
+        id: 'new_customer_revenue',
+        label: '신규 고객 매출',
+        icon: '💰',
+        description: '신규 고객의 총 매출액',
+        type: 'kpi',
+        apiEndpoint: '/api/stats/customer-type',
+        dataKey: 'new_customers.revenue',
+        suffix: '원',
+        defaultWidth: 'small',
+        defaultHeight: 'short'
+      },
+      {
+        id: 'returning_customer_revenue',
+        label: '재구매 고객 매출',
+        icon: '💵',
+        description: '재구매 고객의 총 매출액',
+        type: 'kpi',
+        apiEndpoint: '/api/stats/customer-type',
+        dataKey: 'returning_customers.revenue',
+        suffix: '원',
+        defaultWidth: 'small',
+        defaultHeight: 'short'
+      }
+    ]
   }
 };
