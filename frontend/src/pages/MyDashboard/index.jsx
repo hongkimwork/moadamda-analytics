@@ -208,6 +208,22 @@ function MyDashboard() {
     ));
   }, []);
 
+  // 위젯 필터 변경 (디바이스 필터 등) - API 재호출 포함
+  const handleWidgetFilterChange = useCallback(async (widgetId, filterUpdates) => {
+    // 먼저 위젯 설정 업데이트 및 로딩 상태로
+    setWidgets(prev => prev.map(w => 
+      w.id === widgetId ? { ...w, ...filterUpdates, loading: true } : w
+    ));
+
+    // 업데이트된 위젯 찾기
+    const updatedWidget = widgets.find(w => w.id === widgetId);
+    if (updatedWidget && updatedWidget.presetId && updatedWidget.apiEndpoint) {
+      const widgetWithFilters = { ...updatedWidget, ...filterUpdates };
+      const loadedWidget = await loadWidgetData(widgetWithFilters);
+      setWidgets(prev => prev.map(w => w.id === loadedWidget.id ? loadedWidget : w));
+    }
+  }, [widgets, loadWidgetData]);
+
   const gap = 16;
   const colWidth = (containerWidth - gap * 2) / 3;
 
@@ -287,6 +303,7 @@ function MyDashboard() {
                 onDelete={handleDeleteWidget}
                 onEdit={handleEditWidget}
                 onResize={handleResizeWidget}
+                onFilterChange={handleWidgetFilterChange}
                 containerWidth={containerWidth}
                 containerRef={containerRef}
               />

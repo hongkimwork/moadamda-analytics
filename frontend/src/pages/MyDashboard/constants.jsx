@@ -9,14 +9,15 @@ import {
   BarChartOutlined,
   TableOutlined,
   FundOutlined,
-  FileTextOutlined
+  FileTextOutlined,
+  RiseOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 
 // ============================================================================
 // API & Storage 상수
 // ============================================================================
-export const API_BASE_URL = 'http://localhost:3003';
+export const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 export const STORAGE_KEY = 'moadamda_my_dashboard';
 
 // ============================================================================
@@ -34,13 +35,13 @@ export const DATA_SOURCES = {
     id: 'funnel',
     name: '전환 퍼널 분석',
     icon: <FunnelPlotOutlined style={{ fontSize: 28, color: '#52c41a' }} />,
-    description: '어디서 고객이 이탈하는지 분석',
+    description: '전체 또는 채널별 전환 단계 분석',
     enabled: true
   },
   customer_type: {
     id: 'customer_type',
     name: '고객 유형 분석',
-    icon: <TeamOutlined style={{ fontSize: 28, color: '#722ed1' }} />,
+    icon: <TeamOutlined style={{ fontSize: 28, color: '#8c8c8c' }} />,
     description: '신규 vs 재구매 고객 비교',
     enabled: false,
     comingSoon: true

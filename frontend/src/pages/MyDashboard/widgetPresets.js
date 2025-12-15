@@ -83,14 +83,26 @@ export const WIDGET_PRESETS = {
     chart: [
       {
         id: 'conversion_funnel',
-        label: '전환 퍼널 차트',
+        label: '전체 전환 퍼널',
         icon: '📊',
-        description: '방문→장바구니→결제→구매 4단계 시각화',
+        description: '모든 채널을 합산한 전체 퍼널',
         type: 'conversion_funnel',
         apiEndpoint: '/api/stats/funnel/conversion',
         dataKey: 'funnel',
         defaultWidth: 'medium',
         defaultHeight: 'tall'
+      },
+      {
+        id: 'channel_funnel_chart',
+        label: '채널별 전환 퍼널',
+        icon: '📊',
+        description: '특정 채널의 방문→장바구니→결제→구매 단계 분석',
+        type: 'channel_funnel',
+        apiEndpoint: '/api/stats/channel-funnel/single',
+        dataKey: 'funnel',
+        defaultWidth: 'medium',
+        defaultHeight: 'tall',
+        requiresChannel: true  // 채널 선택 필수
       }
     ]
   }

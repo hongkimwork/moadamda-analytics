@@ -29,7 +29,7 @@ export const calculateChange = (current, previous) => {
 
 // 위젯 데이터 변환 함수 (프리셋별 데이터 가공) - 다중 비교 기간 지원
 export const transformWidgetData = (widget, apiData, compareDataList) => {
-  const { presetId, type, dataKey, suffix, dateRange, compareRanges, compareRange } = widget;
+  const { presetId, type, dataKey, suffix, dateRange, compareRanges, compareRange, viewMode } = widget;
 
   console.log('[transformWidgetData] Input:', {
     presetId,
@@ -236,8 +236,20 @@ export const transformWidgetData = (widget, apiData, compareDataList) => {
     return apiData?.campaigns || [];
   }
 
-  // 전환 퍼널 차트 (비교 기간 지원)
+  // 전환 퍼널 차트 (비교 기간 지원 + 채널별 데이터)
   if (type === 'conversion_funnel' && presetId === 'conversion_funnel') {
+    // 채널별 데이터인지 확인
+    const isChannelData = apiData?.channels && apiData.channels.length > 0;
+    
+    if (isChannelData) {
+      // 채널별 데이터 그대로 반환 (프론트엔드에서 선택 처리)
+      return {
+        channels: apiData.channels,
+        period: apiData.period
+      };
+    }
+    
+    // 기존 전체 퍼널 데이터
     const currentFunnel = apiData?.funnel || [];
     const currentInsight = apiData?.insight || '';
     const currentConversion = apiData?.overallConversion || 0;
@@ -279,6 +291,152 @@ export const transformWidgetData = (widget, apiData, compareDataList) => {
       checkoutDataMissingMessage,
       compareCheckoutDataMissing,
       compareCheckoutDataMissingMessage
+    };
+  }
+
+  // 채널별 전환 퍼널 (비교 기간 지원)
+  if (type === 'channel_funnel' && presetId === 'channel_funnel_chart') {
+    // 새로운 API 구조: 단일 채널 응답 (channel, funnel, compareFunnel 등)
+    if (apiData?.channel && apiData?.funnel) {
+      // 단일 채널 데이터 그대로 반환 (API에서 이미 비교 데이터 포함)
+      return {
+        ...apiData,
+        isEmpty: apiData.isEmpty || false
+      };
+    }
+    
+    // 기존 API 구조: 여러 채널 배열 (레거시 호환)
+    const currentChannels = apiData?.channels || [];
+    
+    // viewMode가 'all_combined'일 때: 모든 채널 합산
+    if (viewMode === 'all_combined') {
+      // 모든 채널의 퍼널 단계를 합산
+      const combinedFunnel = {};
+      
+      currentChannels.forEach(channel => {
+        channel.funnel.forEach(step => {
+          if (!combinedFunnel[step.step]) {
+            combinedFunnel[step.step] = { count: 0, step: step.step };
+          }
+          combinedFunnel[step.step].count += step.count;
+        });
+      });
+      
+      // 합산된 퍼널 배열로 변환 및 비율 계산
+      const funnelArray = Object.values(combinedFunnel);
+      const totalVisitors = funnelArray[0]?.count || 1;
+      
+      const combinedFunnelWithRates = funnelArray.map((step, index) => {
+        const rate = totalVisitors > 0 ? parseFloat(((step.count / totalVisitors) * 100).toFixed(1)) : 0;
+        const dropRate = index > 0 
+          ? parseFloat((((funnelArray[index - 1].count - step.count) / funnelArray[index - 1].count) * 100).toFixed(1))
+          : 0;
+        
+        return {
+          step: step.step,
+          count: step.count,
+          rate,
+          dropRate
+        };
+      });
+      
+      // 전체 전환율 계산
+      const overallConversion = funnelArray.length > 0 && totalVisitors > 0
+        ? parseFloat(((funnelArray[funnelArray.length - 1].count / totalVisitors) * 100).toFixed(1))
+        : 0;
+      
+      // 비교 데이터 처리 (합산)
+      let compareFunnel = null;
+      let compareConversion = null;
+      let conversionChange = null;
+      
+      if (compareDataList && compareDataList.length > 0 && compareDataList[0]?.data) {
+        const compareChannels = compareDataList[0].data.channels || [];
+        const compareCombinedFunnel = {};
+        
+        compareChannels.forEach(channel => {
+          channel.funnel.forEach(step => {
+            if (!compareCombinedFunnel[step.step]) {
+              compareCombinedFunnel[step.step] = { count: 0, step: step.step };
+            }
+            compareCombinedFunnel[step.step].count += step.count;
+          });
+        });
+        
+        const compareFunnelArray = Object.values(compareCombinedFunnel);
+        const compareTotalVisitors = compareFunnelArray[0]?.count || 1;
+        
+        compareFunnel = compareFunnelArray.map((step, index) => {
+          const rate = compareTotalVisitors > 0 ? parseFloat(((step.count / compareTotalVisitors) * 100).toFixed(1)) : 0;
+          const dropRate = index > 0
+            ? parseFloat((((compareFunnelArray[index - 1].count - step.count) / compareFunnelArray[index - 1].count) * 100).toFixed(1))
+            : 0;
+          
+          return {
+            step: step.step,
+            count: step.count,
+            rate,
+            dropRate
+          };
+        });
+        
+        compareConversion = compareFunnelArray.length > 0 && compareTotalVisitors > 0
+          ? parseFloat(((compareFunnelArray[compareFunnelArray.length - 1].count / compareTotalVisitors) * 100).toFixed(1))
+          : 0;
+        
+        if (compareConversion > 0) {
+          conversionChange = ((overallConversion - compareConversion) / compareConversion * 100).toFixed(1);
+        } else if (overallConversion > 0) {
+          conversionChange = 'new';
+        }
+      }
+      
+      // 단일 채널 형태로 반환 (전체 합산)
+      return {
+        channels: [{
+          channel: '전체',
+          funnel: combinedFunnelWithRates,
+          overallConversion,
+          compareFunnel,
+          compareConversion,
+          conversionChange,
+          insight: `전체 전환율 ${overallConversion}%`
+        }],
+        period: apiData?.period,
+        comparePeriod: compareDataList?.[0]
+      };
+    }
+    
+    // viewMode가 'channel_separate'일 때: 각 채널 개별 표시 (기본)
+    // 비교 데이터 처리
+    let compareChannels = null;
+    if (compareDataList && compareDataList.length > 0 && compareDataList[0]?.data) {
+      compareChannels = compareDataList[0].data.channels || [];
+    }
+    
+    // 각 채널별로 비교 데이터 매칭
+    const channelsWithCompare = currentChannels.map(channel => {
+      const compareChannel = compareChannels?.find(c => c.channel === channel.channel);
+      
+      let conversionChange = null;
+      if (compareChannel && compareChannel.overallConversion > 0) {
+        conversionChange = ((channel.overallConversion - compareChannel.overallConversion) / compareChannel.overallConversion * 100).toFixed(1);
+      } else if (channel.overallConversion > 0) {
+        conversionChange = 'new';
+      }
+      
+      return {
+        ...channel,
+        compareFunnel: compareChannel?.funnel || null,
+        compareConversion: compareChannel?.overallConversion || null,
+        conversionChange
+      };
+    });
+    
+    return {
+      channels: channelsWithCompare,
+      period: apiData?.period,
+      comparePeriod: compareDataList?.[0]
     };
   }
 

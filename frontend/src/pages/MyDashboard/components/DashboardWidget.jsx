@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Card, Button, Dropdown, Modal, Spin, Tooltip as AntTooltip } from 'antd';
+import { Card, Button, Dropdown, Modal, Spin, Tooltip as AntTooltip, Select } from 'antd';
 import {
   DeleteOutlined,
   EditOutlined,
@@ -12,11 +12,12 @@ import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell, Tooltip, LabelL
 import { WIDTH_SIZES, HEIGHT_SIZES } from '../constants.jsx';
 import { getWidthSizeFromCols, getHeightSizeFromPixels } from '../utils/sizingUtils';
 
-const DashboardWidget = ({ widget, onDelete, onEdit, onResize, containerWidth, containerRef }) => {
+const DashboardWidget = ({ widget, onDelete, onEdit, onResize, onFilterChange, containerWidth, containerRef }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [resizeDirection, setResizeDirection] = useState(null); // 'corner-left', 'corner-right', 'bottom'
   const [previewSize, setPreviewSize] = useState(null); // { cols, height }
+  const [selectedChannel, setSelectedChannel] = useState('all'); // 전환 퍼널 채널 필터
   const widgetRef = useRef(null);
   const startPosRef = useRef({ x: 0, y: 0 });
   const startSizeRef = useRef({ cols: 1, height: 150 });
@@ -113,6 +114,9 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, containerWidth, c
   // 위젯 타입별 렌더링
   const renderWidgetContent = () => {
     const contentHeight = widgetHeight - 57; // Card header 높이 제외
+    
+    // 공통 색상 배열 (전환 퍼널 차트용)
+    const funnelColors = ['#1890ff', '#52c41a', '#faad14', '#f5222d'];
     
     // 로딩 상태
     if (widget.loading) {
@@ -912,12 +916,30 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, containerWidth, c
       
       case 'conversion_funnel':
         const funnelData = widget.data;
-        if (!funnelData?.funnel) {
+        if (!funnelData?.funnel && !funnelData?.channels) {
           return <div style={{ height: contentHeight, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8c8c8c' }}>데이터가 없습니다</div>;
         }
 
-        const funnelColors = ['#1890ff', '#52c41a', '#faad14', '#f5222d'];
-        const funnelSteps = funnelData.funnel;
+        // 채널 선택에 따라 데이터 결정
+        const isChannelView = funnelData?.channels && funnelData.channels.length > 0;
+        let currentFunnelData;
+        
+        if (isChannelView && selectedChannel !== 'all') {
+          // 특정 채널 선택 시
+          currentFunnelData = funnelData.channels.find(c => c.channel === selectedChannel);
+          if (!currentFunnelData) {
+            // 선택한 채널이 없으면 첫 번째 채널
+            currentFunnelData = funnelData.channels[0];
+          }
+        } else if (isChannelView && selectedChannel === 'all') {
+          // 전체 선택 시 - 모든 채널 합산 (첫 번째 채널 데이터 사용 또는 전체 API 재호출 필요)
+          currentFunnelData = funnelData;
+        } else {
+          // 일반 퍼널 데이터
+          currentFunnelData = funnelData;
+        }
+
+        const funnelSteps = currentFunnelData?.funnel || [];
         const compareFunnel = funnelData.compareFunnel;
         const hasCompareData = widget.compareEnabled && compareFunnel && compareFunnel.length > 0;
         const stepCount = funnelSteps.length;
@@ -998,8 +1020,46 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, containerWidth, c
           return null;
         };
 
+        // 채널 목록 (channel-funnel API에서 가져온 경우)
+        const availableChannels = isChannelView && funnelData.channels 
+          ? [{ value: 'all', label: '전체' }, ...funnelData.channels.map(c => ({ value: c.channel, label: c.channel }))]
+          : [];
+
         return (
           <div style={{ height: contentHeight, padding: '8px 0', display: 'flex', flexDirection: 'column' }}>
+            {/* 채널 필터 (채널 데이터가 있을 때만 표시) */}
+            {isChannelView && availableChannels.length > 0 && (
+              <div style={{
+                padding: '4px 12px 8px',
+                borderBottom: '1px solid #f0f0f0',
+                marginBottom: 8,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8
+              }}>
+                <span style={{ fontSize: 12, color: '#8c8c8c' }}>채널:</span>
+                <Select
+                  value={selectedChannel}
+                  onChange={setSelectedChannel}
+                  size="small"
+                  style={{ width: 120 }}
+                  options={availableChannels}
+                />
+                {selectedChannel !== 'all' && currentFunnelData?.overallConversion && (
+                  <span style={{
+                    fontSize: 11,
+                    padding: '2px 6px',
+                    borderRadius: 3,
+                    background: '#e6f7ff',
+                    color: '#1890ff',
+                    fontWeight: 600
+                  }}>
+                    전환율 {currentFunnelData.overallConversion}%
+                  </span>
+                )}
+              </div>
+            )}
+            
             {/* 차트 영역 */}
             <div style={{ flex: 1, minHeight: 0 }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -1122,7 +1182,7 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, containerWidth, c
             )}
 
             {/* 인사이트 (공간이 충분하고 비교 모드가 아닐 때) */}
-            {showFunnelInsight && !hasCompareData && funnelData.insight && (
+            {showFunnelInsight && !hasCompareData && currentFunnelData?.insight && (
               <div style={{ 
                 padding: '6px 8px', 
                 background: '#fff7e6', 
@@ -1132,7 +1192,234 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, containerWidth, c
                 lineHeight: 1.4,
                 margin: '0 8px'
               }}>
-                💡 {funnelData.insight}
+                💡 {currentFunnelData.insight}
+              </div>
+            )}
+          </div>
+        );
+
+      case 'channel_funnel':
+        const channelData = widget.data;
+        
+        // 데이터 없음 처리
+        if (!channelData || channelData.isEmpty) {
+          return (
+            <div style={{ 
+              height: contentHeight, 
+              display: 'flex', 
+              flexDirection: 'column',
+              alignItems: 'center', 
+              justifyContent: 'center',
+              padding: '0 20px',
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>📭</div>
+              <Text style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+                선택한 기간에 {widget.selectedChannel} 채널의 방문 데이터가 없습니다
+              </Text>
+              <Text style={{ fontSize: 12, color: '#8c8c8c' }}>
+                💡 다른 기간을 시도해보세요
+              </Text>
+            </div>
+          );
+        }
+
+        // 단일 채널 데이터 처리 (새로운 API 구조)
+        const channelFunnelSteps = channelData.funnel || [];
+        const channelCompareFunnel = channelData.compareFunnel || [];
+        const channelHasCompare = widget.compareEnabled && channelCompareFunnel.length > 0;
+        const channelColor = funnelColors[0]; // 단일 채널이므로 첫 번째 색상 사용
+
+        // 차트 데이터 구성
+        const channelStepCount = channelFunnelSteps.length;
+        const channelBarSize = channelHasCompare 
+          ? (channelStepCount <= 3 ? 14 : 12)
+          : (channelStepCount <= 3 ? 28 : (channelStepCount <= 4 ? 24 : 20));
+
+        const channelChartData = channelFunnelSteps.map((step, index) => {
+          const compareStep = channelHasCompare ? channelCompareFunnel[index] : null;
+          return {
+            name: step.step,
+            current: step.count,
+            currentRate: step.rate,
+            compare: compareStep?.count || 0,
+            compareRate: compareStep?.rate || 0,
+            dropRate: step.dropRate
+          };
+        });
+
+        const channelMaxValue = Math.max(
+          channelChartData[0]?.current || 1,
+          channelHasCompare ? (channelChartData[0]?.compare || 0) : 0
+        );
+
+        const channelShowConversionCompare = channelHasCompare && contentHeight > 160;
+
+        return (
+          <div style={{ height: contentHeight, padding: '8px 0', display: 'flex', flexDirection: 'column' }}>
+            {/* 차트 영역 */}
+            <div style={{ flex: 1, minHeight: 0 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={channelChartData}
+                  layout="vertical"
+                  margin={{ top: 5, right: 90, left: 5, bottom: 5 }}
+                  barGap={channelHasCompare ? 2 : 0}
+                  barCategoryGap={channelHasCompare ? '15%' : '20%'}
+                >
+                  <XAxis type="number" hide domain={[0, channelMaxValue * 1.1]} />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 12, fill: '#262626', fontWeight: 500 }}
+                    width={55}
+                  />
+                  <Tooltip 
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        const data = payload[0].payload;
+                        return (
+                          <div style={{
+                            background: 'white',
+                            border: '1px solid #e8e8e8',
+                            borderRadius: 8,
+                            padding: '8px 12px',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                          }}>
+                            <div style={{ fontWeight: 600, marginBottom: 4, color: channelColor }}>{data.name}</div>
+                            <div style={{ fontSize: 14, fontWeight: 600 }}>
+                              현재: {data.current.toLocaleString()}명 ({data.currentRate}%)
+                            </div>
+                            {channelHasCompare && (
+                              <>
+                                <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 2 }}>
+                                  이전: {data.compare.toLocaleString()}명 ({data.compareRate}%)
+                                </div>
+                              </>
+                            )}
+                            {data.dropRate > 0 && (
+                              <div style={{ fontSize: 12, color: '#ff4d4f', marginTop: 4 }}>
+                                ↓ {data.dropRate}% 이탈
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                    cursor={{ fill: 'rgba(0,0,0,0.05)' }} 
+                  />
+                  
+                  {/* 이전 기간 막대 (투명하게) */}
+                  {channelHasCompare && (
+                    <Bar
+                      dataKey="compare"
+                      radius={[0, 6, 6, 0]}
+                      barSize={channelBarSize}
+                      fill={channelColor}
+                      fillOpacity={0.3}
+                    />
+                  )}
+                  
+                  {/* 현재 기간 막대 */}
+                  <Bar
+                    dataKey="current"
+                    radius={[0, 6, 6, 0]}
+                    barSize={channelBarSize}
+                    fill={channelColor}
+                    background={!channelHasCompare ? { fill: '#f5f5f5', radius: [0, 6, 6, 0] } : false}
+                  >
+                    <LabelList
+                      dataKey="current"
+                      position="right"
+                      formatter={(value) => `${value.toLocaleString()}명`}
+                      style={{ fontSize: 11, fontWeight: 600, fill: '#262626' }}
+                    />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* 전환율 비교 (비교 모드일 때) */}
+            {channelShowConversionCompare && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                padding: '6px 8px',
+                background: '#f6ffed',
+                borderRadius: 4,
+                margin: '0 8px 4px',
+                fontSize: 12
+              }}>
+                <span style={{ color: '#8c8c8c' }}>전환율</span>
+                <span style={{ fontWeight: 600, color: '#52c41a' }}>{channelData.overallConversion}%</span>
+                <span style={{ color: '#8c8c8c' }}>vs</span>
+                <span style={{ fontWeight: 600, color: '#8c8c8c' }}>{channelData.compareConversion}%</span>
+                {channelData.conversionChange && channelData.conversionChange !== 'new' && (
+                  <span style={{
+                    padding: '2px 6px',
+                    borderRadius: 4,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    background: parseFloat(channelData.conversionChange) >= 0 ? '#d9f7be' : '#ffccc7',
+                    color: parseFloat(channelData.conversionChange) >= 0 ? '#389e0d' : '#cf1322'
+                  }}>
+                    {parseFloat(channelData.conversionChange) >= 0 ? '▲' : '▼'} {Math.abs(parseFloat(channelData.conversionChange))}%
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* 결제시도 데이터 누락 안내 */}
+            {(channelData.checkoutDataMissing || channelData.compareCheckoutDataMissing) && (
+              <AntTooltip 
+                title={
+                  <div>
+                    {channelData.checkoutDataMissing && (
+                      <div>📊 현재 기간: {channelData.checkoutDataMissingMessage}</div>
+                    )}
+                    {channelData.compareCheckoutDataMissing && (
+                      <div style={{ marginTop: channelData.checkoutDataMissing ? 8 : 0 }}>
+                        📊 비교 기간: {channelData.compareCheckoutDataMissingMessage}
+                      </div>
+                    )}
+                  </div>
+                }
+                placement="top"
+                overlayStyle={{ maxWidth: 300 }}
+              >
+                <div style={{ 
+                  padding: '4px 8px', 
+                  background: '#fff1f0', 
+                  borderRadius: 4,
+                  fontSize: 11,
+                  color: '#cf1322',
+                  lineHeight: 1.4,
+                  margin: '0 8px 4px',
+                  textAlign: 'center',
+                  cursor: 'help'
+                }}>
+                  ⚠️ 일부 기간에 결제시도 데이터가 없습니다 (마우스를 올려 상세 보기)
+                </div>
+              </AntTooltip>
+            )}
+
+            {/* 인사이트 */}
+            {channelData.insight && !channelHasCompare && (
+              <div style={{ 
+                padding: '6px 8px', 
+                background: '#fff7e6', 
+                borderRadius: 4,
+                fontSize: 11,
+                color: '#ad6800',
+                lineHeight: 1.4,
+                margin: '0 8px'
+              }}>
+                💡 {channelData.insight}
               </div>
             )}
           </div>
