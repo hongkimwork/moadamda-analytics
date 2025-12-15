@@ -17,6 +17,8 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-12-15 | Cafe24 재구매판단 개선 | ordersRepository.js |
+| 2025-12-15 | 고객유형분석 위젯 구현 | customer-type.js |
 | 2025-12-15 | 퍼널 상세페이지단계 추가 | funnel.js |
 | 2025-12-15 | 채널퍼널 저장 수정 | storage.js |
 | 2025-12-15 | 이전방문 구매감지 기능 | journeyCalculations.js |
@@ -26,12 +28,10 @@
 | 2025-12-15 | 전환율 비교 UI 개선 | DashboardWidget.jsx |
 | 2025-12-15 | API 환경변수 수정 | constants.jsx |
 | 2025-12-11 | 채널퍼널 채널선택 개선 | AddWidgetModal.jsx |
-| 2025-12-11 | 전환퍼널 통합 및 UI개선 | AddWidgetModal.jsx |
 | 2025-12-11 | 채널퍼널 필터 기능 추가 | DashboardWidget.jsx |
 | 2025-12-11 | 채널별 퍼널 위젯 추가 | DashboardWidget.jsx |
 | 2025-12-11 | 채널별 퍼널 PRD 작성 | CHANNEL_FUNNEL_PRD.md |
 | 2025-12-11 | 백업 파일 정리 | App.jsx |
-| 2025-12-11 | AppNew 리팩토링 | AppNew/ |
 
 ---
 
