@@ -323,5 +323,29 @@ router.post('/cafe24/update-pending', async (req, res) => {
   }
 });
 
+/**
+ * first_order 일괄 업데이트
+ * first_order가 NULL인 주문들에 Cafe24 API에서 first_order 조회하여 UPDATE
+ */
+router.post('/cafe24/backfill-first-order', async (req, res) => {
+  try {
+    console.log('[Cafe24 First Order Backfill] Starting first_order backfill via API...');
+    
+    const result = await cafe24.backfillFirstOrder();
+    
+    res.json({
+      success: true,
+      total_orders: result.total,
+      updated: result.updated,
+      errors: result.errors || 0,
+      error: result.error || null
+    });
+    
+  } catch (error) {
+    console.error('[Cafe24 First Order Backfill] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
 

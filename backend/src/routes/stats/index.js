@@ -11,6 +11,7 @@
  * - orders.js:        /orders, /order-detail/:orderId (주문 분석)
  * - funnel.js:        /funnel/conversion (전환 퍼널)
  * - channel-funnel.js: /channel-funnel/conversion (채널별 전환 퍼널)
+ * - customer-type.js: /customer-type (신규/재구매 고객 분석)
  */
 
 const express = require('express');
@@ -24,6 +25,7 @@ const utmRouter = require('./utm');
 const ordersRouter = require('./orders');
 const funnelRouter = require('./funnel');
 const channelFunnelRouter = require('./channel-funnel');
+const customerTypeRouter = require('./customer-type');
 
 // Mount sub-routers at root level (same path as parent)
 router.use('/', basicRouter);      // /today, /conversion, /products
@@ -31,6 +33,7 @@ router.use('/', rangeRouter);      // /range, /daily
 router.use('/', activityRouter);   // /recent-activity, /segments
 router.use('/', utmRouter);        // /utm-performance, /utm-attribution, /utm-keys, /utm-values
 router.use('/', ordersRouter);     // /orders, /order-detail/:orderId
+router.use('/', customerTypeRouter); // /customer-type
 
 // Mount funnel at /funnel prefix
 router.use('/funnel', funnelRouter); // /funnel/conversion

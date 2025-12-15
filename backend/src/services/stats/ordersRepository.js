@@ -153,8 +153,12 @@ async function getOrders(options) {
           LIMIT 1
         )
       ) as product_name,
-      -- 재구매 여부: 동일 visitor_id로 이전 구매가 있는지 확인
+      -- 재구매 여부: Cafe24 first_order 우선, 없으면 visitor_id 기반 계산
       CASE 
+        -- 1순위: Cafe24 first_order 필드 (T=신규, F=재구매)
+        WHEN c.first_order = 'T' THEN false
+        WHEN c.first_order = 'F' THEN true
+        -- 2순위: visitor_id 기반 계산 (기존 로직)
         WHEN c.visitor_id IS NULL OR c.visitor_id = '' THEN NULL
         WHEN EXISTS (
           SELECT 1 FROM conversions c2 

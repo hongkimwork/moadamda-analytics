@@ -150,6 +150,7 @@ async function syncOrdersForRange(startDate, endDate, options = {}) {
           : (order.payment_method_name || null);
         const cafe24Status = order.items?.[0]?.order_status || null;
         const canceled = order.canceled || 'F';
+        const firstOrder = order.first_order || null; // Cafe24 최초 주문 여부 (T=신규, F=재구매)
         
         // order_status 결정 (Cafe24 상태 코드 기반)
         // C로 시작 = 취소, R로 시작 = 반품, 그 외 = confirmed
@@ -201,10 +202,10 @@ async function syncOrdersForRange(startDate, endDate, options = {}) {
             product_count, timestamp, discount_amount, mileage_used, 
             shipping_fee, order_status, synced_at, product_name, paid,
             points_spent, credits_spent, order_place_name, payment_method_name,
-            cafe24_status, canceled
+            cafe24_status, canceled, first_order
           ) VALUES (
             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), $12, $13,
-            $14, $15, $16, $17, $18, $19
+            $14, $15, $16, $17, $18, $19, $20
           )
           ON CONFLICT (order_id) DO UPDATE SET
             paid = EXCLUDED.paid,
@@ -222,6 +223,7 @@ async function syncOrdersForRange(startDate, endDate, options = {}) {
             cafe24_status = EXCLUDED.cafe24_status,
             canceled = EXCLUDED.canceled,
             order_status = EXCLUDED.order_status,
+            first_order = EXCLUDED.first_order,
             synced_at = NOW()`,
           [
             visitorId,
@@ -242,7 +244,8 @@ async function syncOrdersForRange(startDate, endDate, options = {}) {
             orderPlaceName,
             paymentMethodName,
             cafe24Status,
-            canceled
+            canceled,
+            firstOrder
           ]
         );
         
@@ -527,11 +530,89 @@ async function updatePendingPayments() {
   }
 }
 
+/**
+ * 기존 주문들의 first_order 일괄 업데이트
+ * first_order가 NULL인 주문들 대상으로 Cafe24 API에서 first_order 조회하여 UPDATE
+ */
+async function backfillFirstOrder() {
+  try {
+    console.log(`${BACKFILL_PREFIX} Starting first_order backfill...`);
+    
+    // first_order가 NULL이고 synced_at이 있는 주문들 조회 (Cafe24 동기화 주문만)
+    const ordersResult = await db.query(
+      `SELECT order_id 
+       FROM conversions 
+       WHERE first_order IS NULL
+         AND synced_at IS NOT NULL
+       ORDER BY timestamp DESC
+       LIMIT 1000`
+    );
+    
+    if (ordersResult.rows.length === 0) {
+      console.log(`${BACKFILL_PREFIX} No orders need first_order update`);
+      return { total: 0, updated: 0 };
+    }
+    
+    console.log(`${BACKFILL_PREFIX} Found ${ordersResult.rows.length} orders to update`);
+    
+    let updatedCount = 0;
+    let errorCount = 0;
+    
+    // 배치 처리 (Rate limit 고려)
+    for (let i = 0; i < ordersResult.rows.length; i++) {
+      const order = ordersResult.rows[i];
+      
+      try {
+        // Cafe24 API에서 주문 상세 조회
+        const orderDetail = await getOrderDetail(order.order_id);
+        
+        if (orderDetail.order && orderDetail.order.first_order) {
+          const firstOrder = orderDetail.order.first_order;
+          
+          await db.query(
+            `UPDATE conversions SET first_order = $1 WHERE order_id = $2`,
+            [firstOrder, order.order_id]
+          );
+          updatedCount++;
+          
+          // 진행 상황 로그 (100개마다)
+          if (updatedCount % 100 === 0) {
+            console.log(`${BACKFILL_PREFIX} Progress: ${updatedCount}/${ordersResult.rows.length}`);
+          }
+        }
+        
+        // Rate limit 방지 (200ms 대기)
+        await sleep(200);
+        
+      } catch (orderError) {
+        errorCount++;
+        // 에러는 조용히 처리 (로그만 남김)
+        if (errorCount <= 5) {
+          console.error(`${BACKFILL_PREFIX} Error ${order.order_id}:`, orderError.message);
+        }
+      }
+    }
+    
+    console.log(`${BACKFILL_PREFIX} Completed: ${updatedCount} updated, ${errorCount} errors out of ${ordersResult.rows.length}`);
+    
+    return {
+      total: ordersResult.rows.length,
+      updated: updatedCount,
+      errors: errorCount
+    };
+    
+  } catch (error) {
+    console.error(`${BACKFILL_PREFIX} Error:`, error.message);
+    return { total: 0, updated: 0, error: error.message };
+  }
+}
+
 module.exports = {
   findMatchingVisitor,
   syncOrdersForRange,
   syncOrders,
   backfillVisitorIds,
   backfillProductNames,
-  updatePendingPayments
+  updatePendingPayments,
+  backfillFirstOrder
 };
