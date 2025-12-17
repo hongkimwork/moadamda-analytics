@@ -147,3 +147,16 @@ body.ant-scrolling-effect {
   overflow: hidden !important;
 }
 
+/* ============================================================================
+   나만의 대시보드 - react-grid-layout 드래그 플레이스홀더 스타일
+   ============================================================================ */
+
+/* 위젯 드래그 시 표시되는 가이드 네모를 파란색으로 변경 */
+.react-grid-item.react-grid-placeholder {
+  background: #1890ff !important;
+  opacity: 0.2 !important;
+  transition-duration: 100ms !important;
+  z-index: 2 !important;
+  border-radius: 8px !important;
+}
+

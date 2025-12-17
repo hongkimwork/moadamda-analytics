@@ -241,6 +241,7 @@ function MappingModal({ visible, onClose, onSubmit, url, form, submitting, initi
       onCancel={onClose}
       footer={null}
       width={680}
+      style={{ top: 20 }}
     >
       <div style={{ marginBottom: 16 }}>
         <Text type="secondary">URL:</Text>
@@ -466,8 +467,12 @@ function MappingModal({ visible, onClose, onSubmit, url, form, submitting, initi
                       {({ getFieldValue }) => {
                         const text = getFieldValue('badge_text') || '뱃지 텍스트';
                         return (
-                          <span style={{
-                            display: 'inline-block',
+                          <div style={{
+                            display: 'flex',
+                            height: 36,
+                            flexDirection: 'column',
+                            justifyContent: 'center',
+                            alignItems: 'center',
                             padding: '4px 12px',
                             borderRadius: '4px',
                             fontSize: '13px',
@@ -477,7 +482,7 @@ function MappingModal({ visible, onClose, onSubmit, url, form, submitting, initi
                             boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
                           }}>
                             {text}
-                          </span>
+                          </div>
                         );
                       }}
                     </Form.Item>

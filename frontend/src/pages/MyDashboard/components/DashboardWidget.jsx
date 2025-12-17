@@ -3,7 +3,6 @@ import { Card, Button, Dropdown, Modal, Spin, Tooltip as AntTooltip, Select } fr
 import {
   DeleteOutlined,
   EditOutlined,
-  DragOutlined,
   MoreOutlined,
   LoadingOutlined
 } from '@ant-design/icons';
@@ -15,7 +14,7 @@ import { getWidthSizeFromCols, getHeightSizeFromPixels } from '../utils/sizingUt
 const DashboardWidget = ({ widget, onDelete, onEdit, onResize, onFilterChange, containerWidth, containerRef }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
-  const [resizeDirection, setResizeDirection] = useState(null); // 'corner-left', 'corner-right', 'bottom'
+  const [resizeDirection, setResizeDirection] = useState(null); // 'left', 'right', 'bottom'
   const [previewSize, setPreviewSize] = useState(null); // { cols, height }
   const [selectedChannel, setSelectedChannel] = useState('all'); // 전환 퍼널 채널 필터
   const widgetRef = useRef(null);
@@ -58,16 +57,14 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, onFilterChange, c
       let newHeight = startSizeRef.current.height;
       
       // 방향에 따라 크기 계산
-      if (resizeDirection === 'corner-right') {
-        // 우하단: 너비 + 높이
+      if (resizeDirection === 'right') {
+        // 우측 면: 너비만
         const deltaColsRaw = deltaX / colWidth;
         newCols = Math.round(startSizeRef.current.cols + deltaColsRaw);
-        newHeight = startSizeRef.current.height + deltaY;
-      } else if (resizeDirection === 'corner-left') {
-        // 좌하단: 너비 + 높이 (좌측으로 늘리면 너비 증가)
+      } else if (resizeDirection === 'left') {
+        // 좌측 면: 너비만 (좌측으로 늘리면 너비 증가)
         const deltaColsRaw = -deltaX / colWidth;
         newCols = Math.round(startSizeRef.current.cols + deltaColsRaw);
-        newHeight = startSizeRef.current.height + deltaY;
       } else if (resizeDirection === 'bottom') {
         // 하단 중앙: 높이만
         newHeight = startSizeRef.current.height + deltaY;
@@ -76,8 +73,8 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, onFilterChange, c
       // 범위 제한
       newCols = Math.max(1, Math.min(3, newCols));
       
-      // 높이 스냅 (short: 150, medium: 250, tall: 350)
-      const heightSteps = [150, 250, 350];
+      // 높이 스냅 (medium: 250, tall: 350)
+      const heightSteps = [250, 350];
       const closestHeight = heightSteps.reduce((prev, curr) => 
         Math.abs(curr - newHeight) < Math.abs(prev - newHeight) ? curr : prev
       );
@@ -257,7 +254,7 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, onFilterChange, c
                 {/* 증감률 */}
                 <div style={{ 
                   fontSize: 12, 
-                  marginTop: 8,
+                  marginTop: 4,
                   padding: '3px 10px',
                   borderRadius: 10,
                   background: isNewData ? '#e6f7ff' : (numericChange >= 0 ? '#f6ffed' : '#fff2f0'),
@@ -317,43 +314,6 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, onFilterChange, c
         const periodColors = ['#7C3AED', '#94A3B8', '#CBD5E1', '#E2E8F0', '#F1F5F9'];
         const maxPeriodValue = Math.max(...periodData.chartData.map(d => d.value));
         
-        // 증감률 렌더링 (2개일 때만 표시, 3개 이상은 표시하지 않음)
-        const renderChangeIndicator = () => {
-          // 3개 이상이면 표시하지 않음
-          if (barCount > 2) return null;
-          
-          const compareValues = periodData.compareValues || [];
-          if (compareValues.length === 0) return null;
-          
-          // 2개일 때: 첫 번째 비교값만 이전 스타일로 표시
-          const firstCompare = compareValues[0];
-          const changeValue = firstCompare.change;
-          const isNew = changeValue === 'new';
-          const numericChange = isNew ? 0 : (parseFloat(changeValue) || 0);
-
-          return (
-            <div style={{
-              textAlign: 'center',
-              padding: '8px 0 4px',
-              borderTop: '1px solid #f0f0f0'
-            }}>
-              <span style={{
-                fontSize: 13,
-                padding: '4px 12px',
-                borderRadius: 12,
-                background: isNew ? '#e6f7ff' : (numericChange >= 0 ? '#f6ffed' : '#fff2f0'),
-                color: isNew ? '#1890ff' : (numericChange >= 0 ? '#52c41a' : '#ff4d4f')
-              }}>
-                {isNew ? '신규 (이전 데이터 없음)' : (
-                  <>
-                    {numericChange >= 0 ? '▲' : '▼'} {Math.abs(numericChange)}% {numericChange >= 0 ? '증가' : '감소'}
-                  </>
-                )}
-              </span>
-            </div>
-          );
-        };
-
         // 동적 막대 높이 계산 (기간 개수에 따라)
         const barCount = periodData.chartData.length;
         const dynamicBarSize = barCount <= 2 ? 28 : (barCount <= 3 ? 24 : (barCount <= 4 ? 20 : 16));
@@ -427,9 +387,6 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, onFilterChange, c
                 </BarChart>
               </ResponsiveContainer>
             </div>
-
-            {/* 증감률 표시 (2개일 때만) */}
-            {renderChangeIndicator()}
           </div>
         );
       
@@ -871,6 +828,9 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, onFilterChange, c
         }
 
         const maxCompareValue = Math.max(...compareData.chartData.map(d => d.value));
+        
+        // 단위 결정 (신규 vs 재구매 고객 매출은 "원", 그 외는 "명")
+        const compareUnit = widget.presetId === 'new_vs_returning_customers' ? '원' : '명';
 
         return (
           <div style={{ height: contentHeight, padding: '12px 0' }}>
@@ -891,7 +851,7 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, onFilterChange, c
                   width={60}
                 />
                 <Tooltip 
-                  formatter={(value, name, props) => [`${value.toLocaleString()}명 (${props.payload.rate}%)`, props.payload.name]}
+                  formatter={(value, name, props) => [`${value.toLocaleString()}${compareUnit} (${props.payload.rate}%)`, props.payload.name]}
                   contentStyle={{ borderRadius: 8, border: '1px solid #e8e8e8' }}
                 />
                 <Bar
@@ -905,7 +865,7 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, onFilterChange, c
                   <LabelList
                     dataKey="value"
                     position="right"
-                    formatter={(value) => `${value.toLocaleString()}명`}
+                    formatter={(value) => `${value.toLocaleString()}${compareUnit}`}
                     style={{ fontSize: 12, fontWeight: 600, fill: '#262626' }}
                   />
                 </Bar>
@@ -1485,15 +1445,53 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, onFilterChange, c
     <div 
       ref={widgetRef}
       style={{ 
-        width: widgetWidth,
-        height: widgetHeight,
+        width: '100%',
+        height: '100%',
         minWidth: 200,
-        flexShrink: 0,
         position: 'relative'
       }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => !isResizing && setIsHovered(false)}
     >
+      {/* 상단 중앙 드래그 핸들 (뒤집힌 사다리꼴) */}
+      <div
+        className="drag-handle"
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 20,
+          cursor: 'grab',
+          padding: '2px 0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}
+        onMouseDown={(e) => {
+          e.currentTarget.style.cursor = 'grabbing';
+        }}
+        onMouseUp={(e) => {
+          e.currentTarget.style.cursor = 'grab';
+        }}
+      >
+        {/* 뒤집힌 사다리꼴 SVG */}
+        <svg 
+          width="32" 
+          height="8" 
+          viewBox="0 0 32 8" 
+          style={{ 
+            opacity: isHovered ? 0.8 : 0.3,
+            transition: 'opacity 0.2s ease'
+          }}
+        >
+          <path 
+            d="M4 0 L28 0 L24 8 L8 8 Z" 
+            fill="#8c8c8c"
+          />
+        </svg>
+      </div>
+
       {/* 원본 카드 */}
       <Card
         size="small"
@@ -1510,8 +1508,25 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, onFilterChange, c
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
             {/* 왼쪽 그룹: 제목 + 날짜 */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <DragOutlined style={{ color: '#bfbfbf', cursor: 'grab' }} />
-              <span style={{ fontSize: 14, fontWeight: 600 }}>{widget.title}</span>
+              <span style={{ 
+                fontSize: 14, 
+                fontWeight: 600,
+                ...(widget.title === '신규 고객과 재구매 고객의 수와 매출 비교' ? {
+                  display: 'inline-block',
+                  textAlign: 'center',
+                  lineHeight: 1.4
+                } : {})
+              }}>
+                {widget.title === '신규 고객과 재구매 고객의 수와 매출 비교' 
+                  ? '신규 고객과 재구매 고객의 수와\n매출 비교'.split('\n').map((line, i) => (
+                      <React.Fragment key={i}>
+                        {line}
+                        {i === 0 && <br />}
+                      </React.Fragment>
+                    ))
+                  : widget.title
+                }
+              </span>
               
               {/* period_compare 타입일 때 날짜 정보 표시 (2개일 때만 vs 형태로 표시, 3개 이상은 Tooltip으로) */}
               {widget.type === 'period_compare' && widget.data?.detailedDates && (
@@ -1632,29 +1647,29 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, onFilterChange, c
             />
           </Dropdown>
         }
-        bodyStyle={{ padding: '0 12px', height: widgetHeight - 57, overflow: 'hidden' }}
+        bodyStyle={{ padding: '0 12px', height: 'calc(100% - 57px)', overflow: 'hidden' }}
       >
         {renderWidgetContent()}
       </Card>
       
-      {/* 좌측 하단 리사이즈 핸들 (대각선) */}
+      {/* 좌측 면 중앙 리사이즈 핸들 (너비만) */}
       <div
         style={{
           ...handleBaseStyle,
           left: 0,
-          bottom: 0,
-          width: 20,
-          height: 20,
-          cursor: 'nesw-resize'
+          top: '50%',
+          transform: 'translateY(-50%)',
+          width: 16,
+          height: 40,
+          cursor: 'ew-resize'
         }}
-        onMouseDown={(e) => handleResizeStart(e, 'corner-left')}
+        onMouseDown={(e) => handleResizeStart(e, 'left')}
       >
         <div style={{
-          width: 10,
-          height: 10,
-          borderLeft: '2px solid #1890ff',
-          borderBottom: '2px solid #1890ff',
-          borderBottomLeftRadius: 2
+          width: 4,
+          height: 24,
+          background: '#1890ff',
+          borderRadius: 2
         }} />
       </div>
       
@@ -1679,24 +1694,24 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, onFilterChange, c
         }} />
       </div>
       
-      {/* 우측 하단 리사이즈 핸들 (대각선) */}
+      {/* 우측 면 중앙 리사이즈 핸들 (너비만) */}
       <div
         style={{
           ...handleBaseStyle,
           right: 0,
-          bottom: 0,
-          width: 20,
-          height: 20,
-          cursor: 'nwse-resize'
+          top: '50%',
+          transform: 'translateY(-50%)',
+          width: 16,
+          height: 40,
+          cursor: 'ew-resize'
         }}
-        onMouseDown={(e) => handleResizeStart(e, 'corner-right')}
+        onMouseDown={(e) => handleResizeStart(e, 'right')}
       >
         <div style={{
-          width: 10,
-          height: 10,
-          borderRight: '2px solid #1890ff',
-          borderBottom: '2px solid #1890ff',
-          borderBottomRightRadius: 2
+          width: 4,
+          height: 24,
+          background: '#1890ff',
+          borderRadius: 2
         }} />
       </div>
       
@@ -1706,7 +1721,7 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, onFilterChange, c
           style={{
             position: 'absolute',
             top: 0,
-            left: resizeDirection === 'corner-left' 
+            left: resizeDirection === 'left' 
               ? -(getWidthFromCols(previewSize.cols) - widgetWidth) 
               : 0,
             width: getWidthFromCols(previewSize.cols),

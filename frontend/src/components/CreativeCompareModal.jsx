@@ -1,5 +1,5 @@
 import { Modal, Table, Typography, Spin, Empty, Row, Col, Card, Tag, Tooltip, Progress, Segmented } from 'antd';
-import { SwapOutlined, TrophyOutlined, RocketOutlined, NodeIndexOutlined, AimOutlined, RiseOutlined, FallOutlined } from '@ant-design/icons';
+import { ArrowLeftRight, Trophy, Rocket, GitBranch, Target, TrendingUp, TrendingDown } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import dayjs from 'dayjs';
@@ -249,10 +249,14 @@ function CreativeCompareModal({ visible, onClose, creatives, dateRange }) {
           <div style={{ 
             fontWeight: isBest ? 700 : 400,
             color: isBest ? COLORS[idx] : '#595959',
-            fontSize: 13
+            fontSize: 13,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 4
           }}>
             {value}
-            {isBest && <TrophyOutlined style={{ marginLeft: 4, color: '#faad14' }} />}
+            {isBest && <Trophy size={14} style={{ color: '#faad14' }} />}
           </div>
         );
       }
@@ -327,7 +331,7 @@ function CreativeCompareModal({ visible, onClose, creatives, dateRange }) {
     <Modal
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <SwapOutlined style={{ fontSize: '20px', color: '#722ed1' }} />
+          <ArrowLeftRight size={20} style={{ color: '#722ed1' }} />
           <span>소재 비교 분석</span>
           <Tag color="purple">{creatives?.length || 0}개 소재</Tag>
         </div>
@@ -336,6 +340,7 @@ function CreativeCompareModal({ visible, onClose, creatives, dateRange }) {
       onCancel={onClose}
       footer={null}
       width={1100}
+      style={{ top: 20 }}
       styles={{
         body: { padding: '16px 24px', maxHeight: '85vh', overflowY: 'auto' }
       }}
@@ -535,7 +540,7 @@ function CreativeCompareModal({ visible, onClose, creatives, dateRange }) {
                     <Row gutter={16}>
                       <Col span={8}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                          <RocketOutlined style={{ color: '#1890ff' }} />
+                          <Rocket size={16} style={{ color: '#1890ff' }} />
                           <span style={{ fontSize: 12 }}>첫 접점</span>
                           <span style={{ marginLeft: 'auto', fontWeight: 600, color: '#1890ff' }}>
                             {role.first_touch_ratio || 0}%
@@ -551,7 +556,7 @@ function CreativeCompareModal({ visible, onClose, creatives, dateRange }) {
                       </Col>
                       <Col span={8}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                          <NodeIndexOutlined style={{ color: '#faad14' }} />
+                          <GitBranch size={16} style={{ color: '#faad14' }} />
                           <span style={{ fontSize: 12 }}>중간 터치</span>
                           <span style={{ marginLeft: 'auto', fontWeight: 600, color: '#faad14' }}>
                             {role.mid_touch_ratio || 0}%
@@ -567,7 +572,7 @@ function CreativeCompareModal({ visible, onClose, creatives, dateRange }) {
                       </Col>
                       <Col span={8}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                          <AimOutlined style={{ color: '#52c41a' }} />
+                          <Target size={16} style={{ color: '#52c41a' }} />
                           <span style={{ fontSize: 12 }}>막타</span>
                           <span style={{ marginLeft: 'auto', fontWeight: 600, color: '#52c41a' }}>
                             {role.last_touch_ratio || 0}%
@@ -624,9 +629,9 @@ function CreativeCompareModal({ visible, onClose, creatives, dateRange }) {
                         border: '1px solid #f0f0f0'
                       }}
                     >
-                      {insight.type === 'success' && <RiseOutlined style={{ color: '#52c41a', marginTop: 2 }} />}
-                      {insight.type === 'warning' && <FallOutlined style={{ color: '#faad14', marginTop: 2 }} />}
-                      {insight.type === 'info' && <SwapOutlined style={{ color: '#1890ff', marginTop: 2 }} />}
+                      {insight.type === 'success' && <TrendingUp size={16} style={{ color: '#52c41a', marginTop: 2 }} />}
+                      {insight.type === 'warning' && <TrendingDown size={16} style={{ color: '#faad14', marginTop: 2 }} />}
+                      {insight.type === 'info' && <ArrowLeftRight size={16} style={{ color: '#1890ff', marginTop: 2 }} />}
                       <Text style={{ fontSize: 13, color: '#595959' }}>{insight.text}</Text>
                     </div>
                   ))}

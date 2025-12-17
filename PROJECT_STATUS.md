@@ -1,6 +1,6 @@
 # 🎯 Moadamda Analytics - 프로젝트 현황
 
-**마지막 업데이트**: 2025-12-15
+**마지막 업데이트**: 2025-12-16
 
 ---
 
@@ -17,21 +17,21 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
-| 2025-12-15 | Cafe24 재구매판단 개선 | ordersRepository.js |
-| 2025-12-15 | 고객유형분석 위젯 구현 | customer-type.js |
-| 2025-12-15 | 퍼널 상세페이지단계 추가 | funnel.js |
-| 2025-12-15 | 채널퍼널 저장 수정 | storage.js |
-| 2025-12-15 | 이전방문 구매감지 기능 | journeyCalculations.js |
-| 2025-12-15 | 퍼널 위젯 UI 통일 | DashboardWidget.jsx |
-| 2025-12-15 | DatePicker 한국어 적용 | App.jsx |
-| 2025-12-15 | 퍼널 이전기간 숫자표시 | DashboardWidget.jsx |
-| 2025-12-15 | 전환율 비교 UI 개선 | DashboardWidget.jsx |
-| 2025-12-15 | API 환경변수 수정 | constants.jsx |
-| 2025-12-11 | 채널퍼널 채널선택 개선 | AddWidgetModal.jsx |
-| 2025-12-11 | 채널퍼널 필터 기능 추가 | DashboardWidget.jsx |
-| 2025-12-11 | 채널별 퍼널 위젯 추가 | DashboardWidget.jsx |
-| 2025-12-11 | 채널별 퍼널 PRD 작성 | CHANNEL_FUNNEL_PRD.md |
-| 2025-12-11 | 백업 파일 정리 | App.jsx |
+| 2025-12-17 | 매핑 모달 위치 조정 | MappingModal.jsx |
+| 2025-12-17 | 드래그 가이드 파란색 | index.css |
+| 2025-12-17 | 소재성과 아이콘 통일 | CreativeAnalysisModal.jsx |
+| 2025-12-17 | 성과분석 아이콘 통일 | PerformanceTable.jsx |
+| 2025-12-17 | 소재비교 컬럼명 추가 | PerformanceTable.jsx |
+| 2025-12-17 | 날짜선택기 제거 | index.jsx |
+| 2025-12-16 | 기간비교 증감률 제거 | DashboardWidget.jsx |
+| 2025-12-16 | 버튼 수직 중앙정렬 | AddWidgetModal.jsx |
+| 2025-12-16 | KPI증감률 위치 조정 | DashboardWidget.jsx |
+| 2025-12-16 | 배지 미리보기 스타일 | MappingModal.jsx |
+| 2025-12-16 | 플로팅추가버튼 구현 | index.jsx |
+| 2025-12-16 | 위젯교환버그 수정 | index.jsx |
+| 2025-12-16 | 위젯 자동압축 해제 | index.jsx |
+| 2025-12-16 | 위젯추가 위치 열별계산 | index.jsx |
+| 2025-12-16 | 위젯추가 위치 개선 | index.jsx |
 
 ---
 

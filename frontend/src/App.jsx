@@ -17,6 +17,7 @@ import {
   SettingOutlined,
   AppstoreOutlined
 } from '@ant-design/icons';
+import { BarChart3 } from 'lucide-react';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ko';
 import './index.css';
@@ -178,9 +179,17 @@ function AppLayout() {
           color: 'white',
           fontSize: collapsed ? '18px' : '16px',
           fontWeight: 'bold',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
+          borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+          gap: '8px'
         }}>
-          {collapsed ? '📊' : '📊 Moadamda Analytics'}
+          {collapsed ? (
+            <BarChart3 size={20} />
+          ) : (
+            <>
+              <BarChart3 size={20} />
+              <span>Moadamda Analytics</span>
+            </>
+          )}
               </div>
 
         {/* 메뉴 */}

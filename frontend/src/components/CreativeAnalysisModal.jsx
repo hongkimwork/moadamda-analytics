@@ -1,5 +1,5 @@
 import { Modal, Table, Typography, Spin, Empty, Row, Col, Card, Progress, Segmented } from 'antd';
-import { BarChartOutlined, MobileOutlined, ShoppingOutlined, UserOutlined, TeamOutlined } from '@ant-design/icons';
+import { BarChart3, Smartphone, ShoppingBag, User, Users } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import dayjs from 'dayjs';
@@ -102,7 +102,7 @@ function CreativeAnalysisModal({ visible, onClose, creative, dateRange }) {
       width: 100,
       render: (text, record) => (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <MobileOutlined style={{ 
+          <Smartphone size={16} style={{ 
             color: record.device_type === 'mobile' ? '#1890ff' : 
                    record.device_type === 'desktop' ? '#52c41a' : '#faad14'
           }} />
@@ -201,7 +201,7 @@ function CreativeAnalysisModal({ visible, onClose, creative, dateRange }) {
     <Modal
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <BarChartOutlined style={{ fontSize: '20px', color: '#1890ff' }} />
+          <BarChart3 size={20} style={{ color: '#1890ff' }} />
           <span>광고 소재 성과 분석</span>
         </div>
       }
@@ -351,7 +351,7 @@ function CreativeAnalysisModal({ visible, onClose, creative, dateRange }) {
                     <div style={{ marginBottom: 16 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                         <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <UserOutlined style={{ color: '#1890ff' }} />
+                          <User size={16} style={{ color: '#1890ff' }} />
                           <span>신규 방문자</span>
                         </span>
                         <span style={{ fontWeight: 600 }}>
@@ -368,7 +368,7 @@ function CreativeAnalysisModal({ visible, onClose, creative, dateRange }) {
                     <div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                         <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <TeamOutlined style={{ color: '#52c41a' }} />
+                          <Users size={16} style={{ color: '#52c41a' }} />
                           <span>재방문자</span>
                         </span>
                         <span style={{ fontWeight: 600 }}>
@@ -392,8 +392,8 @@ function CreativeAnalysisModal({ visible, onClose, creative, dateRange }) {
               size="small" 
               style={{ borderRadius: 8 }}
               title={
-                <span style={{ fontSize: 14, fontWeight: 600 }}>
-                  <ShoppingOutlined style={{ marginRight: 8, color: '#faad14' }} />
+                <span style={{ fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <ShoppingBag size={16} style={{ color: '#faad14' }} />
                   상품별 매출 TOP 10
                 </span>
               }

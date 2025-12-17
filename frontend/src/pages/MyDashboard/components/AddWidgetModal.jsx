@@ -1,18 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, Steps, Button, Radio, DatePicker, Checkbox, Typography, Spin } from 'antd';
 import {
-  PlusOutlined,
-  DeleteOutlined,
-  ArrowLeftOutlined,
-  ArrowRightOutlined,
-  CheckOutlined,
-  LockOutlined,
-  LoadingOutlined,
-  ReloadOutlined
-} from '@ant-design/icons';
+  Plus,
+  Trash2,
+  ChevronLeft,
+  ChevronRight,
+  Check,
+  Lock,
+  Loader2,
+  RotateCw
+} from 'lucide-react';
 import dayjs from 'dayjs';
 import { DATA_SOURCES, DATE_PRESETS, TYPES_WITHOUT_COMPARE } from '../constants.jsx';
-import { WIDGET_PRESETS } from '../widgetPresets';
+import { WIDGET_PRESETS } from '../widgetPresets.jsx';
 import axios from 'axios';
 
 const { Text } = Typography;
@@ -341,11 +341,11 @@ const AddWidgetModal = ({ visible, onClose, onAdd, globalDateRange }) => {
                     alignItems: 'center',
                     gap: 4
                   }}>
-                    <LockOutlined style={{ fontSize: 10 }} /> 준비중
+                    <Lock size={10} /> 준비중
                   </span>
                 )}
               </div>
-              <div style={{ fontSize: 13, color: '#8c8c8c' }}>{source.description}</div>
+              <div style={{ fontSize: 13, color: '#595959' }}>{source.description}</div>
             </div>
             {source.enabled && (
               <div style={{ 
@@ -358,7 +358,7 @@ const AddWidgetModal = ({ visible, onClose, onAdd, globalDateRange }) => {
                 alignItems: 'center',
                 justifyContent: 'center'
               }}>
-                {selectedCategory === source.id && <CheckOutlined style={{ color: 'white', fontSize: 12 }} />}
+                {selectedCategory === source.id && <Check size={12} color="white" />}
               </div>
             )}
           </div>
@@ -383,7 +383,7 @@ const AddWidgetModal = ({ visible, onClose, onAdd, globalDateRange }) => {
         <Text style={{ display: 'block', marginBottom: 16, fontSize: 15 }}>
           어떤 정보를 볼까요?
         </Text>
-        <div style={{ maxHeight: 400, overflowY: 'auto', paddingRight: 8 }}>
+        <div>
         {sections.map(section => (
           section.items.length > 0 && (
             <div key={section.key} style={{ marginBottom: 20 }}>
@@ -415,9 +415,9 @@ const AddWidgetModal = ({ visible, onClose, onAdd, globalDateRange }) => {
                       textAlign: 'center'
                     }}
                   >
-                    <div style={{ fontSize: 28, marginBottom: 6 }}>{item.icon}</div>
+                    <div style={{ fontSize: 28, marginBottom: 6, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>{item.icon}</div>
                     <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{item.label}</div>
-                    <div style={{ fontSize: 11, color: '#8c8c8c', lineHeight: 1.3 }}>{item.description}</div>
+                    <div style={{ fontSize: 11, color: '#595959', lineHeight: 1.3 }}>{item.description}</div>
                   </div>
                 ))}
               </div>
@@ -441,7 +441,7 @@ const AddWidgetModal = ({ visible, onClose, onAdd, globalDateRange }) => {
           justifyContent: 'center',
           minHeight: 300
         }}>
-          <Spin indicator={<LoadingOutlined style={{ fontSize: 32 }} spin />} />
+          <Spin indicator={<Loader2 size={32} className="animate-spin" />} />
           <Text style={{ marginTop: 16, color: '#8c8c8c' }}>
             데이터가 있는 채널 목록을 불러오는 중...
           </Text>
@@ -468,7 +468,7 @@ const AddWidgetModal = ({ visible, onClose, onAdd, globalDateRange }) => {
           </Text>
           <Button 
             type="primary" 
-            icon={<ReloadOutlined />}
+            icon={<RotateCw size={16} />}
             onClick={handleRetryChannels}
           >
             다시 시도
@@ -555,7 +555,7 @@ const AddWidgetModal = ({ visible, onClose, onAdd, globalDateRange }) => {
                 {channel}
               </span>
               {selectedChannel === channel && (
-                <CheckOutlined style={{ color: '#1890ff', fontSize: 16 }} />
+                <Check size={16} color="#1890ff" />
               )}
             </div>
           ))}
@@ -767,7 +767,7 @@ const AddWidgetModal = ({ visible, onClose, onAdd, globalDateRange }) => {
                             <Button 
                               type="text" 
                               size="small"
-                              icon={<DeleteOutlined />}
+                              icon={<Trash2 size={16} />}
                               onClick={() => handleRemoveCompareRange(range.id)}
                               style={{ color: '#ff4d4f' }}
                             />
@@ -809,8 +809,10 @@ const AddWidgetModal = ({ visible, onClose, onAdd, globalDateRange }) => {
                         style={{
                           border: '2px dashed #d9d9d9',
                           borderRadius: 8,
-                          padding: '12px 16px',
-                          textAlign: 'center',
+                          padding: '8px 4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
                           cursor: 'pointer',
                           color: '#8c8c8c',
                           background: 'white',
@@ -826,7 +828,7 @@ const AddWidgetModal = ({ visible, onClose, onAdd, globalDateRange }) => {
                           e.currentTarget.style.color = '#8c8c8c';
                         }}
                       >
-                        <PlusOutlined style={{ marginRight: 8 }} />
+                        <Plus size={16} style={{ marginRight: 8 }} />
                         비교할 기간 추가 (최대 4개)
                       </div>
                     )}
@@ -908,7 +910,7 @@ const AddWidgetModal = ({ visible, onClose, onAdd, globalDateRange }) => {
     <Modal
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <PlusOutlined style={{ color: '#1890ff' }} />
+          <Plus size={20} color="#1890ff" />
           <span>위젯 추가</span>
         </div>
       }
@@ -921,7 +923,7 @@ const AddWidgetModal = ({ visible, onClose, onAdd, globalDateRange }) => {
           <Button 
             onClick={handlePrev} 
             disabled={currentStep === 0}
-            icon={<ArrowLeftOutlined />}
+            icon={<ChevronLeft size={16} />}
           >
             이전
           </Button>
@@ -935,14 +937,14 @@ const AddWidgetModal = ({ visible, onClose, onAdd, globalDateRange }) => {
                 onClick={handleNext}
                 disabled={!canGoNext()}
               >
-                다음 <ArrowRightOutlined />
+                다음 <ChevronRight size={16} />
               </Button>
             ) : (
               <Button 
                 type="primary" 
                 onClick={handleComplete}
                 disabled={!selectedPreset}
-                icon={<CheckOutlined />}
+                icon={<Check size={16} />}
               >
                 완료
               </Button>
@@ -962,7 +964,7 @@ const AddWidgetModal = ({ visible, onClose, onAdd, globalDateRange }) => {
       )}
       
       {/* 스텝별 콘텐츠 */}
-      <div style={{ minHeight: 320 }}>
+      <div style={{ minHeight: currentStep === 1 ? 520 : 320 }}>
         {currentStep === 0 && renderStep1()}
         {currentStep === 1 && renderStep2()}
         {currentStep === 2 && (isChannelFunnelWidget() ? renderChannelSelectionStep() : renderDateRangeStep())}

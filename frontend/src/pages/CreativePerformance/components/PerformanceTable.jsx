@@ -4,7 +4,7 @@
 
 import React from 'react';
 import { Card, Table, Checkbox, Tooltip, Dropdown, Button, message } from 'antd';
-import { ShoppingCartOutlined, BarChartOutlined, NodeIndexOutlined, FileSearchOutlined, SettingOutlined } from '@ant-design/icons';
+import { ShoppingCart, BarChart3, Network, FileSearch, Settings } from 'lucide-react';
 import { formatDuration, formatCurrency, formatNumber } from '../utils/formatters';
 import { getRowKey } from '../utils/helpers';
 
@@ -36,15 +36,9 @@ function PerformanceTable({
 
   const columns = [
     {
-      title: (
-        <Checkbox
-          checked={selectedCreatives.length > 0 && selectedCreatives.length === Math.min(data.length, 5)}
-          indeterminate={selectedCreatives.length > 0 && selectedCreatives.length < Math.min(data.length, 5)}
-          onChange={(e) => onSelectAll(e.target.checked)}
-        />
-      ),
+      title: <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>소재<br />비교</div>,
       key: 'select',
-      width: 50,
+      width: 60,
       align: 'center',
       fixed: 'left',
       render: (_, record) => (
@@ -435,14 +429,14 @@ function PerformanceTable({
           {
             key: 'orders',
             label: '주문 보기',
-            icon: <ShoppingCartOutlined />,
+            icon: <ShoppingCart size={16} />,
             disabled: record.contributed_orders_count === 0,
             onClick: () => onViewOrders(record)
           },
           {
             key: 'analysis',
             label: '성과 분석',
-            icon: <BarChartOutlined />,
+            icon: <BarChart3 size={16} />,
             onClick: () => onViewAnalysis(record)
           },
           {
@@ -451,13 +445,13 @@ function PerformanceTable({
           {
             key: 'journey',
             label: '고객 여정',
-            icon: <NodeIndexOutlined />,
+            icon: <Network size={16} />,
             onClick: () => onViewJourney(record)
           },
           {
             key: 'landing',
             label: '페이지 분석',
-            icon: <FileSearchOutlined />,
+            icon: <FileSearch size={16} />,
             onClick: () => onViewLanding(record)
           }
         ];
@@ -468,7 +462,7 @@ function PerformanceTable({
             trigger={['click']}
             placement="bottomRight"
           >
-            <Button icon={<SettingOutlined />}>
+            <Button icon={<Settings size={16} />}>
               상세 분석
             </Button>
           </Dropdown>

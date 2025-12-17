@@ -1,4 +1,3 @@
-import dayjs from 'dayjs';
 import { STORAGE_KEY } from '../constants.jsx';
 
 // ============================================================================
@@ -6,7 +5,7 @@ import { STORAGE_KEY } from '../constants.jsx';
 // ============================================================================
 
 // 위젯 설정 저장 (data 제외, 설정만 저장)
-export const saveToLocalStorage = (widgets, globalDateRange) => {
+export const saveToLocalStorage = (widgets) => {
   try {
     // data, loading, error는 제외하고 설정만 저장
     const widgetsToSave = widgets.map(w => ({
@@ -15,6 +14,8 @@ export const saveToLocalStorage = (widgets, globalDateRange) => {
       title: w.title,
       widthSize: w.widthSize,
       heightSize: w.heightSize,
+      gridX: w.gridX, // 그리드 X 위치
+      gridY: w.gridY, // 그리드 Y 위치
       presetId: w.presetId,
       category: w.category,
       apiEndpoint: w.apiEndpoint,
@@ -29,10 +30,6 @@ export const saveToLocalStorage = (widgets, globalDateRange) => {
 
     const dataToSave = {
       widgets: widgetsToSave,
-      globalDateRange: globalDateRange ? {
-        start: globalDateRange[0].format('YYYY-MM-DD'),
-        end: globalDateRange[1].format('YYYY-MM-DD')
-      } : null,
       lastUpdated: new Date().toISOString()
     };
 
@@ -84,10 +81,6 @@ export const loadFromLocalStorage = () => {
           error: null
         };
       }),
-      globalDateRange: parsed.globalDateRange ? [
-        dayjs(parsed.globalDateRange.start),
-        dayjs(parsed.globalDateRange.end)
-      ] : null,
       lastUpdated: parsed.lastUpdated
     };
   } catch (error) {
