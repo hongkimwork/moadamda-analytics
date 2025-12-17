@@ -20,19 +20,19 @@ const { Title } = Typography;
 const OrderStatusBadge = ({ order }) => {
   const { order_status, canceled, paid } = order;
   
-  // 입금대기 상태 (paid = 'F')
-  if (paid === 'F') {
-    return <Tag color="gold" style={{ margin: 0 }}>입금대기</Tag>;
-  }
-  
-  // 취소 상태
+  // 1순위: 취소 상태 (취소된 주문은 paid 상태와 관계없이 취소로 표시)
   if (canceled === 'T' || order_status === 'cancelled') {
     return <Tag color="red" icon={<XCircle size={10} />} style={{ margin: 0 }}>취소</Tag>;
   }
   
-  // 반품 상태
+  // 2순위: 반품 상태
   if (order_status === 'refunded') {
     return <Tag color="orange" style={{ margin: 0 }}>반품</Tag>;
+  }
+  
+  // 3순위: 입금대기 상태 (paid = 'F')
+  if (paid === 'F') {
+    return <Tag color="gold" style={{ margin: 0 }}>입금대기</Tag>;
   }
   
   return null;
@@ -151,19 +151,19 @@ export function OrderListPage() {
       render: (paid, record) => {
         const { order_status, canceled } = record;
         
-        // 입금대기
-        if (paid === 'F') {
-          return <Tag color="gold">입금대기</Tag>;
-        }
-        // 취소
+        // 1순위: 취소 (취소된 주문은 paid 상태와 관계없이 취소로 표시)
         if (canceled === 'T' || order_status === 'cancelled') {
           return <Tag color="red">취소</Tag>;
         }
-        // 반품
+        // 2순위: 반품
         if (order_status === 'refunded') {
           return <Tag color="orange">반품</Tag>;
         }
-        // 입금완료
+        // 3순위: 입금대기
+        if (paid === 'F') {
+          return <Tag color="gold">입금대기</Tag>;
+        }
+        // 4순위: 입금완료
         return <Tag color="green">입금완료</Tag>;
       }
     },

@@ -356,6 +356,7 @@ async function getOrderDetail(orderId) {
         payment_method: order.payment_method_name || null,
         order_place: order.order_place_name || null,
         order_status: order.order_status || 'confirmed',
+        canceled: order.canceled || 'F',
         paid: order.paid || 'T'
       },
       order_items: orderItems

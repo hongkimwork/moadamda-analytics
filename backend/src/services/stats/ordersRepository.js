@@ -41,16 +41,23 @@ function buildOrderFilters(filters = {}) {
     paramIndex++;
   }
 
-  // 입금대기 주문 필터
-  if (includePending !== true && includePending !== 'true') {
-    filterClauses.push(`c.paid = 'T'`);
-  }
-
   // 취소/반품 주문 필터 및 금액 조건
   if (includeCancelled !== true && includeCancelled !== 'true') {
     filterClauses.push(`(c.canceled = 'F' OR c.canceled IS NULL)`);
     filterClauses.push(`(c.order_status = 'confirmed' OR c.order_status IS NULL)`);
     filterClauses.push(`(c.final_payment > 0 OR c.total_amount > 0)`);
+  }
+
+  // 입금대기 주문 필터
+  // 취소/반품 포함 시, 취소된 주문은 paid 상태와 관계없이 표시
+  if (includePending !== true && includePending !== 'true') {
+    if (includeCancelled === true || includeCancelled === 'true') {
+      // 취소/반품 포함이면: 정상 주문만 paid='T' 필터 적용, 취소/반품 주문은 제외하지 않음
+      filterClauses.push(`(c.paid = 'T' OR c.canceled = 'T' OR c.order_status IN ('cancelled', 'refunded'))`);
+    } else {
+      // 취소/반품 미포함이면: 기존대로 paid='T' 필터
+      filterClauses.push(`c.paid = 'T'`);
+    }
   }
 
   return {
@@ -242,6 +249,7 @@ async function getOrderBasicInfo(orderId) {
       c.payment_method_name,
       c.order_place_name,
       c.order_status,
+      c.canceled,
       c.paid,
       c.product_name as db_product_name,
       s.ip_address,

@@ -16,17 +16,24 @@ function formatPrice(amount) {
 
 /**
  * 주문 상태 텍스트 및 색상
+ * @param {string} orderStatus - 주문 상태
+ * @param {string} canceled - 취소 여부 ('T' 또는 'F')
+ * @param {string} paid - 결제 여부 ('T' 또는 'F')
  */
-function getStatusConfig(orderStatus, paid) {
-  if (orderStatus === 'cancelled') {
+function getStatusConfig(orderStatus, canceled, paid) {
+  // 1순위: 취소 (canceled 필드 또는 order_status로 판단)
+  if (canceled === 'T' || orderStatus === 'cancelled') {
     return { text: '주문 취소', color: '#dc2626' };
   }
+  // 2순위: 반품/환불
   if (orderStatus === 'refunded') {
     return { text: '환불 완료', color: '#d97706' };
   }
+  // 3순위: 입금대기
   if (paid === 'F') {
     return { text: '입금 대기', color: '#9333ea' };
   }
+  // 4순위: 결제 완료
   return { text: '결제 완료', color: '#16a34a' };
 }
 
@@ -64,10 +71,11 @@ export function PurchaseTimelineItem({ order }) {
 
   const {
     order_status = 'confirmed',
+    canceled = 'F',
     paid = 'T'
   } = payment_details;
 
-  const statusConfig = getStatusConfig(order_status, paid);
+  const statusConfig = getStatusConfig(order_status, canceled, paid);
 
   // 주문 시간 포맷 (HH:MM:SS)
   const orderTime = timestamp ? new Date(timestamp).toLocaleTimeString('ko-KR', {
