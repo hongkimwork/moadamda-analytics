@@ -986,7 +986,7 @@ const DashboardWidget = ({ widget, onDelete, onEdit, onResize, onFilterChange, c
           : [];
 
         return (
-          <div style={{ height: contentHeight, padding: '8px 0', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ height: contentHeight, display: 'flex', flexDirection: 'column' }}>
             {/* 채널 필터 (채널 데이터가 있을 때만 표시) */}
             {isChannelView && availableChannels.length > 0 && (
               <div style={{
