@@ -17,6 +17,8 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-12-17 | 위젯 편집 모달 추가 | EditWidgetModal.jsx |
+| 2025-12-17 | 위젯 여백 조정 | DashboardWidget.jsx |
 | 2025-12-17 | 취소주문 필터 로직 수정 | ordersRepository.js |
 | 2025-12-17 | 그리드 레이아웃 전환 | index.jsx |
 | 2025-12-17 | 매핑 모달 위치 조정 | MappingModal.jsx |
@@ -30,8 +32,6 @@
 | 2025-12-16 | KPI증감률 위치 조정 | DashboardWidget.jsx |
 | 2025-12-16 | 배지 미리보기 스타일 | MappingModal.jsx |
 | 2025-12-16 | 플로팅추가버튼 구현 | index.jsx |
-| 2025-12-16 | 위젯교환버그 수정 | index.jsx |
-| 2025-12-16 | 위젯 자동압축 해제 | index.jsx |
 
 ---
 

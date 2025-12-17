@@ -6,6 +6,7 @@ import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import DashboardWidget from './components/DashboardWidget';
 import AddWidgetModal from './components/AddWidgetModal';
+import EditWidgetModal from './components/EditWidgetModal';
 import { fetchWidgetData } from './utils/api';
 import { transformWidgetData } from './utils/dataTransform';
 import { loadFromLocalStorage, saveToLocalStorage } from './utils/storage';
@@ -122,6 +123,8 @@ function MyDashboard() {
 
   // 모달 state
   const [addModalVisible, setAddModalVisible] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editingWidget, setEditingWidget] = useState(null);
 
   // 위젯 데이터 로드 함수
   const loadWidgetData = useCallback(async (widget) => {
@@ -224,10 +227,29 @@ function MyDashboard() {
     });
   }, []);
 
-  // 위젯 편집
+  // 위젯 편집 모달 열기
   const handleEditWidget = useCallback((widget) => {
-    console.log('Edit widget:', widget);
+    setEditingWidget(widget);
+    setEditModalVisible(true);
   }, []);
+
+  // 위젯 업데이트 (편집 저장)
+  const handleUpdateWidget = useCallback(async (updatedWidget) => {
+    // 먼저 로딩 상태로 업데이트
+    setWidgets(prev => prev.map(w => 
+      w.id === updatedWidget.id ? { ...updatedWidget, loading: true } : w
+    ));
+    
+    // 모달 닫기
+    setEditModalVisible(false);
+    setEditingWidget(null);
+    
+    // API 연결된 위젯이면 데이터 재로드
+    if (updatedWidget.presetId && updatedWidget.apiEndpoint) {
+      const loadedWidget = await loadWidgetData(updatedWidget);
+      setWidgets(prev => prev.map(w => w.id === loadedWidget.id ? loadedWidget : w));
+    }
+  }, [loadWidgetData]);
 
   // 위젯 크기 변경 (너비 + 높이)
   const handleResizeWidget = useCallback((widgetId, newWidthSize, newHeightSize) => {
@@ -449,6 +471,17 @@ function MyDashboard() {
         visible={addModalVisible}
         onClose={() => setAddModalVisible(false)}
         onAdd={handleAddWidget}
+      />
+
+      {/* 위젯 편집 모달 */}
+      <EditWidgetModal
+        visible={editModalVisible}
+        onClose={() => {
+          setEditModalVisible(false);
+          setEditingWidget(null);
+        }}
+        onSave={handleUpdateWidget}
+        widget={editingWidget}
       />
     </div>
   );
