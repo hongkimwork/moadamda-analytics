@@ -49,7 +49,7 @@ function PerformanceHeader({
               }}
             >
               <BarChart3 size={28} strokeWidth={2.5} style={{ color: '#1890ff' }} />
-              광고 소재 모수 분석
+              광고 소재 분석
             </Title>
             <div style={{ 
               color: '#6b7280', 

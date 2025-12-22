@@ -77,7 +77,7 @@ function AppLayout() {
         {
           key: 'creative-performance',
           icon: <BarChartOutlined />,
-          label: '광고 소재 모수 분석',
+          label: '광고 소재 분석',
           onClick: () => navigate('/creative-performance')
         },
         {
@@ -216,7 +216,7 @@ function AppLayout() {
               <Route path="/" element={<OrderListPage />} />
               <Route path="/order/:orderId" element={<OrderDetailPage />} />
               
-              {/* 광고 소재 모수 분석 */}
+              {/* 광고 소재 분석 */}
               <Route path="/creative-performance" element={<CreativePerformance />} />
               
               {/* 나만의 대시보드 */}

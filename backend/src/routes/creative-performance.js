@@ -7,7 +7,7 @@ const detailService = require('../services/creative/detailService');
 
 /**
  * GET /api/creative-performance
- * 광고 소재 모수 분석 API
+ * 광고 소재 분석 API
  * 
  * Query Parameters:
  *  - start: 시작일 (YYYY-MM-DD) - 필수
