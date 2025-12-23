@@ -153,7 +153,7 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
       render: (isLastTouch) => (
         isLastTouch ? (
           <Tooltip title="마지막으로 본 광고">
-            <Tag color="red" style={{ margin: 0, fontWeight: 600 }}>
+            <Tag color="blue" style={{ margin: 0, fontWeight: 600 }}>
               <AimOutlined /> 막타
             </Tag>
           </Tooltip>
@@ -245,8 +245,8 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
               }
               value={summary.last_touch_count || 0}
               suffix="건"
-              prefix={<AimOutlined style={{ color: '#cf1322' }} />}
-              valueStyle={{ fontSize: '18px', fontWeight: 600, color: '#cf1322' }}
+              prefix={<AimOutlined style={{ color: '#0958d9' }} />}
+              valueStyle={{ fontSize: '18px', fontWeight: 600, color: '#0958d9' }}
             />
           </div>
         </Col>
@@ -280,7 +280,7 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
               title={<span style={{ fontSize: '11px', color: '#8c8c8c' }}>평균 객단가</span>}
               value={summary.avg_order_value}
               suffix="원"
-              valueStyle={{ fontSize: '18px', fontWeight: 600, color: '#722ed1' }}
+              valueStyle={{ fontSize: '18px', fontWeight: 600, color: '#0050b3' }}
               formatter={(value) => parseInt(value).toLocaleString()}
             />
           </div>

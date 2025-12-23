@@ -88,7 +88,7 @@ function CreativeAnalysisModal({ visible, onClose, creative, dateRange }) {
         <div style={{ fontWeight: 600, marginBottom: 8 }}>{dataPoint?.fullDate}</div>
         <div style={{ color: '#1890ff', marginBottom: 4 }}>UV: {formatNumber(dataPoint?.uv)}</div>
         <div style={{ color: '#52c41a', marginBottom: 4 }}>전환: {formatNumber(dataPoint?.orders)}건</div>
-        <div style={{ color: '#722ed1' }}>매출: {formatCurrency(dataPoint?.revenue)}</div>
+        <div style={{ color: '#389e0d' }}>매출: {formatCurrency(dataPoint?.revenue)}</div>
       </div>
     );
   };
@@ -265,7 +265,7 @@ function CreativeAnalysisModal({ visible, onClose, creative, dateRange }) {
               <Col span={8}>
                 <Card size="small" style={{ textAlign: 'center', borderRadius: 8 }}>
                   <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 4 }}>총 매출</div>
-                  <div style={{ fontSize: 24, fontWeight: 700, color: '#722ed1' }}>
+                  <div style={{ fontSize: 24, fontWeight: 700, color: '#389e0d' }}>
                     {formatCurrency(data.summary?.total_revenue)}
                   </div>
                 </Card>
@@ -312,7 +312,7 @@ function CreativeAnalysisModal({ visible, onClose, creative, dateRange }) {
                     <Line 
                       type="monotone" 
                       dataKey={chartMetric} 
-                      stroke={chartMetric === 'uv' ? '#1890ff' : chartMetric === 'orders' ? '#52c41a' : '#722ed1'}
+                      stroke={chartMetric === 'uv' ? '#1890ff' : chartMetric === 'orders' ? '#52c41a' : '#389e0d'}
                       strokeWidth={2}
                       dot={{ r: 3 }}
                       activeDot={{ r: 5 }}

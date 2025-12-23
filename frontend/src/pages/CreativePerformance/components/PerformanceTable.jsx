@@ -283,7 +283,7 @@ function PerformanceTable({
       align: 'center',
       render: (num) => (
         <span style={{
-          color: num > 0 ? '#cf1322' : '#9ca3af',
+          color: num > 0 ? '#0958d9' : '#9ca3af',
           fontWeight: num > 0 ? 600 : 400,
           fontSize: '12px'
         }}>
@@ -334,13 +334,13 @@ function PerformanceTable({
                 top: '10%',
                 height: '80%',
                 width: `${percent}%`,
-                background: 'linear-gradient(90deg, rgba(255, 85, 0, 0.12) 0%, rgba(255, 122, 69, 0.18) 100%)',
+                background: 'linear-gradient(90deg, rgba(56, 158, 13, 0.12) 0%, rgba(82, 196, 26, 0.18) 100%)',
                 borderRadius: '4px',
                 transition: 'width 0.3s ease'
               }}
             />
             <span style={{
-              color: amount > 0 ? '#d4380d' : '#9ca3af',
+              color: amount > 0 ? '#389e0d' : '#9ca3af',
               fontWeight: amount > 0 ? 600 : 400,
               fontSize: '11px',
               position: 'relative',
@@ -397,13 +397,13 @@ function PerformanceTable({
                 top: '10%',
                 height: '80%',
                 width: `${percent}%`,
-                background: 'linear-gradient(90deg, rgba(114, 46, 209, 0.12) 0%, rgba(146, 84, 222, 0.18) 100%)',
+                background: 'linear-gradient(90deg, rgba(0, 80, 179, 0.12) 0%, rgba(0, 105, 214, 0.18) 100%)',
                 borderRadius: '4px',
                 transition: 'width 0.3s ease'
               }}
             />
             <span style={{
-              color: amount > 0 ? '#722ed1' : '#9ca3af',
+              color: amount > 0 ? '#0050b3' : '#9ca3af',
               fontWeight: amount > 0 ? 600 : 400,
               fontSize: '11px',
               position: 'relative',
@@ -421,7 +421,7 @@ function PerformanceTable({
     {
       title: '상세 분석',
       key: 'action',
-      width: 100,
+      width: 130,
       align: 'center',
       fixed: 'right',
       render: (_, record) => {
@@ -485,6 +485,7 @@ function PerformanceTable({
         rowKey={(record) => `${record.creative_name}-${record.utm_source}-${record.utm_campaign}`}
         loading={loading}
         onChange={onTableChange}
+        scroll={{ x: 1350 }}
         pagination={{
           current: currentPage,
           pageSize: pageSize,
