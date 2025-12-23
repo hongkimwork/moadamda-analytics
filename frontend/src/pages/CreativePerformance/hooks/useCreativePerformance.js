@@ -30,7 +30,7 @@ export const useCreativePerformance = () => {
   const [searchTerm, setSearchTerm] = useState(initialSearchTerm);
   const [filters, setFilters] = useState({
     dateRange: [
-      dayjs().format('YYYY-MM-DD'),
+      dayjs().subtract(29, 'day').format('YYYY-MM-DD'),
       dayjs().format('YYYY-MM-DD')
     ]
   });
@@ -165,7 +165,7 @@ export const useCreativePerformance = () => {
     setSearchTerm('');
     setFilters({
       dateRange: [
-        dayjs().format('YYYY-MM-DD'),
+        dayjs().subtract(29, 'day').format('YYYY-MM-DD'),
         dayjs().format('YYYY-MM-DD')
       ]
     });

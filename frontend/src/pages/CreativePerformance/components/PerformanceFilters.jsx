@@ -44,7 +44,7 @@ function PerformanceFilters({
         showBouncedFilter={false}
         showConvertedFilter={false}
         showUtmFilter={false}
-        defaultActiveQuickDate="today"
+        defaultActiveQuickDate="30days"
         loading={loading}
       />
 
