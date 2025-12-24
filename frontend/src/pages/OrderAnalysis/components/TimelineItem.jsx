@@ -137,7 +137,7 @@ export function TimelineItemContent({
       )}
 
       {/* 콘텐츠 wrapper */}
-      <div style={{ paddingBottom: '14px' }}>
+      <div style={{ paddingBottom: '0px' }}>
         {/* 첫 줄: 단계 */}
         <div style={{ marginBottom: '8px' }}>
           <span style={{
@@ -195,7 +195,9 @@ export function TimelineItemContent({
             fontSize: '11px',
             color: '#6b7280',
             marginTop: '6px',
-            fontWeight: '400'
+            fontWeight: '400',
+            display: 'flex',
+            alignItems: 'center'
           }}>
             <span style={{ marginRight: '4px' }}>접속 시간:</span>
             <span style={{ color: '#374151', fontWeight: '500' }}>{accessTime}</span>
@@ -203,12 +205,12 @@ export function TimelineItemContent({
         )}
       </div>
 
-      {/* 지구본 아이콘 - 우측 하단 */}
+      {/* 지구본 아이콘 - 우측 하단 (접속 시간과 수평) */}
       <GlobalOutlined
         style={{
           position: 'absolute',
           right: '10px',
-          bottom: '6px',
+          bottom: '10px',
           fontSize: '16px',
           color: '#9ca3af',
           cursor: 'pointer',

@@ -97,7 +97,7 @@ export function AdEntryDivider({ utmSession }) {
       }}
     >
       {/* 콘텐츠 wrapper */}
-      <div style={{ paddingBottom: '14px' }}>
+      <div style={{ paddingBottom: '0px' }}>
         {/* 첫 줄: 광고 클릭 */}
         <div style={{ marginBottom: '8px' }}>
           <span style={{
@@ -161,7 +161,9 @@ export function AdEntryDivider({ utmSession }) {
         {entryTimeFormatted && (
           <div style={{
             fontSize: '11px',
-            marginTop: '6px'
+            marginTop: '6px',
+            display: 'flex',
+            alignItems: 'center'
           }}>
             <span style={{ color: '#6b7280', fontWeight: '500', marginRight: '4px' }}>접속 시간:</span>
             <span style={{ color: '#000000', fontWeight: '600' }}>{entryTimeFormatted}</span>
@@ -169,14 +171,14 @@ export function AdEntryDivider({ utmSession }) {
         )}
       </div>
 
-      {/* 차트 아이콘 - 우측 하단 (클릭 시 광고 소재 분석 페이지로 이동) */}
+      {/* 차트 아이콘 - 우측 하단 (접속 시간과 수평) */}
       <BarChart3
         size={25}
         strokeWidth={3.5}
         style={{
           position: 'absolute',
           right: '8px',
-          bottom: '8px',
+          bottom: '10px',
           color: AD_COLOR,
           opacity: isIconClickable ? 0.5 : 0.2,
           cursor: isIconClickable ? 'pointer' : 'default',

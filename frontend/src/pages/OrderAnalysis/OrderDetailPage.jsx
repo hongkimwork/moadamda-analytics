@@ -112,35 +112,47 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
         gap: '20px',
         overflowX: 'auto'
       }}>
-        <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-          <h3 style={{
-            margin: 0,
-            fontSize: '20px',
-            fontWeight: '700',
-            whiteSpace: 'nowrap',
-            color: '#1f2937',
-            letterSpacing: '-0.02em'
-          }}>
-            고객 여정 분석
-          </h3>
-          <RangePicker
-            placeholder={['시작 날짜', '종료 날짜']}
-            style={{
-              width: 280,
-              borderRadius: '8px',
-              boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
-            }}
-            onChange={(dates) => setSelectedDateRange(dates)}
-            disabledDate={(current) => {
-              if (!current) return false;
-              const purchaseDateObj = dayjs(order.timestamp);
-              // 구매일 이후는 선택 불가
-              return current.isAfter(purchaseDateObj, 'day');
-            }}
-            value={selectedDateRange}
-            allowClear
-            format="YYYY-MM-DD"
-          />
+        <div style={{ display: 'flex', gap: '24px', alignItems: 'center', flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <h3 style={{
+              margin: 0,
+              fontSize: '20px',
+              fontWeight: '700',
+              whiteSpace: 'nowrap',
+              color: '#1f2937',
+              letterSpacing: '-0.02em'
+            }}>
+              고객 여정 분석
+            </h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ 
+                fontSize: '13px', 
+                color: '#4b5563', 
+                fontWeight: '600',
+                whiteSpace: 'nowrap'
+              }}>
+                날짜 선택 :
+              </span>
+              <RangePicker
+                placeholder={['시작 날짜', '종료 날짜']}
+                style={{
+                  width: 280,
+                  borderRadius: '8px',
+                  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
+                }}
+                onChange={(dates) => setSelectedDateRange(dates)}
+                disabledDate={(current) => {
+                  if (!current) return false;
+                  const purchaseDateObj = dayjs(order.timestamp);
+                  // 구매일 이후는 선택 불가
+                  return current.isAfter(purchaseDateObj, 'day');
+                }}
+                value={selectedDateRange}
+                allowClear
+                format="YYYY-MM-DD"
+              />
+            </div>
+          </div>
 
           {/* 미니 카드들 - 페이드 효과 wrapper */}
           <div style={{
