@@ -10,6 +10,7 @@ const tablesRoutes = require('./routes/tables');
 const mappingsRoutes = require('./routes/mappings');
 const creativePerformanceRoutes = require('./routes/creative-performance');
 const cafe24Routes = require('./routes/cafe24');
+const metaRoutes = require('./routes/meta');
 const cafe24Client = require('./utils/cafe24');
 
 const app = express();
@@ -38,6 +39,7 @@ app.use('/api/tables', tablesRoutes);
 app.use('/api/mappings', mappingsRoutes);
 app.use('/api', creativePerformanceRoutes);
 app.use('/api', cafe24Routes);
+app.use('/api', metaRoutes);
 
 // Error handling
 app.use((err, req, res, next) => {

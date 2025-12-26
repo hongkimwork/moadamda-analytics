@@ -2,7 +2,7 @@
 // 광고 소재 퍼포먼스 페이지 (리팩토링)
 // ============================================================================
 
-import React from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Alert, message } from 'antd';
 import dayjs from 'dayjs';
 import { useCreativePerformance } from './hooks/useCreativePerformance';
@@ -10,6 +10,7 @@ import { getRowKey } from './utils/helpers';
 import PerformanceHeader from './components/PerformanceHeader';
 import PerformanceFilters from './components/PerformanceFilters';
 import PerformanceTable from './components/PerformanceTable';
+import InsightCards from './components/InsightCards';
 import CreativeOrdersModal from '../../components/CreativeOrdersModal';
 import CreativeAnalysisModal from '../../components/CreativeAnalysisModal';
 import CreativeJourneyModal from '../../components/CreativeJourneyModal';
@@ -20,6 +21,13 @@ import CreativeCompareModal from '../../components/CreativeCompareModal';
  * 광고 소재 퍼포먼스 페이지
  */
 function CreativePerformance() {
+  // 마지막 갱신 시간 state
+  const [lastUpdated, setLastUpdated] = useState(dayjs());
+  // 테이블 ref (카드 클릭 시 스크롤용)
+  const tableRef = useRef(null);
+  // 하이라이트할 소재 키
+  const [highlightedKey, setHighlightedKey] = useState(null);
+
   const {
     // 데이터
     data,
@@ -68,6 +76,19 @@ function CreativePerformance() {
     handlePageChange,
     fetchData
   } = useCreativePerformance();
+
+  // 로딩 완료 시 갱신 시간 업데이트
+  useEffect(() => {
+    if (!loading && data.length >= 0) {
+      setLastUpdated(dayjs());
+    }
+  }, [loading, data.length]);
+
+  // 새로고침 핸들러 (갱신 시간 업데이트 포함)
+  const handleRefresh = () => {
+    fetchData();
+    setLastUpdated(dayjs());
+  };
 
   // 주문 보기 버튼 클릭 핸들러
   const handleViewOrders = (record) => {
@@ -148,15 +169,37 @@ function CreativePerformance() {
     setCompareModalVisible(true);
   };
 
+  // 인사이트 카드 클릭 핸들러 (해당 소재로 스크롤 + 하이라이트)
+  const handleInsightCardClick = (creative) => {
+    if (!creative) return;
+    const key = getRowKey(creative);
+    setHighlightedKey(key);
+    
+    // 테이블로 스크롤
+    if (tableRef.current) {
+      tableRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    
+    // 3초 후 하이라이트 해제
+    setTimeout(() => setHighlightedKey(null), 3000);
+  };
+
   return (
     <div style={{ padding: '24px', background: '#f5f7fa', minHeight: '100vh' }}>
       {/* 헤더 */}
       <PerformanceHeader
-        total={total}
         selectedCreatives={selectedCreatives}
-        onRefresh={fetchData}
+        onRefresh={handleRefresh}
         onCompare={handleOpenCompare}
         loading={loading}
+        lastUpdated={lastUpdated}
+      />
+
+      {/* 인사이트 카드 영역 */}
+      <InsightCards 
+        data={data} 
+        loading={loading} 
+        onCardClick={handleInsightCardClick}
       />
 
       {/* 검색 및 필터 */}
@@ -184,34 +227,25 @@ function CreativePerformance() {
       )}
 
       {/* 테이블 */}
-      <PerformanceTable
-        data={data}
-        loading={loading}
-        total={total}
-        currentPage={currentPage}
-        pageSize={pageSize}
-        summaryStats={summaryStats}
-        selectedCreatives={selectedCreatives}
-        onTableChange={handleTableChange}
-        onPageChange={handlePageChange}
-        onSelectCreative={handleSelectCreative}
-        onSelectAll={handleSelectAll}
-        onViewOrders={handleViewOrders}
-        onViewAnalysis={handleViewAnalysis}
-        onViewJourney={handleViewJourney}
-        onViewLanding={handleViewLanding}
-      />
-
-      {/* 푸터 */}
-      <div style={{ 
-        marginTop: '24px', 
-        textAlign: 'center', 
-        color: '#9ca3af',
-        fontSize: '13px',
-        fontWeight: 500,
-        paddingBottom: '16px'
-      }}>
-        마지막 갱신: {dayjs().format('YYYY-MM-DD HH:mm:ss')}
+      <div ref={tableRef}>
+        <PerformanceTable
+          data={data}
+          loading={loading}
+          total={total}
+          currentPage={currentPage}
+          pageSize={pageSize}
+          summaryStats={summaryStats}
+          selectedCreatives={selectedCreatives}
+          highlightedKey={highlightedKey}
+          onTableChange={handleTableChange}
+          onPageChange={handlePageChange}
+          onSelectCreative={handleSelectCreative}
+          onSelectAll={handleSelectAll}
+          onViewOrders={handleViewOrders}
+          onViewAnalysis={handleViewAnalysis}
+          onViewJourney={handleViewJourney}
+          onViewLanding={handleViewLanding}
+        />
       </div>
 
       {/* 주문 보기 모달 */}

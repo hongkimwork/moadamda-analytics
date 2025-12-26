@@ -1,0 +1,119 @@
+/* Meta Insights 테이블 스타일 - .meta-table-wrapper 내부에서만 적용 */
+
+/* 테이블 컨테이너 */
+.meta-table-wrapper {
+  position: relative;
+}
+
+/* Resizable 핸들 스타일 - 메타 광고 관리자 스타일 */
+.meta-table-wrapper .react-resizable {
+  position: relative;
+}
+
+/* 리사이즈 핸들 - 테이블 전체 높이로 확장 */
+.meta-table-wrapper .react-resizable-handle {
+  position: absolute;
+  right: -8px;
+  top: 0;
+  width: 16px;
+  height: 100vh;
+  cursor: col-resize;
+  z-index: 100;
+  background: transparent;
+  user-select: none;
+}
+
+/* 호버 시 경계선 표시 - 전체 높이 */
+.meta-table-wrapper .react-resizable-handle::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 0;
+  height: 100vh;
+  width: 3px;
+  background-color: transparent;
+  transition: background-color 0.1s ease;
+  pointer-events: none;
+}
+
+.meta-table-wrapper .react-resizable-handle:hover::before,
+.meta-table-wrapper .react-resizable-handle:active::before {
+  background-color: #1877F2;
+}
+
+/* 테이블 헤더 스타일 */
+.meta-table-wrapper .ant-table-thead > tr > th {
+  position: relative;
+  background-color: #fafafa !important;
+  border-right: 1px solid #e8e8e8;
+}
+
+/* 헤더 셀 호버 시 */
+.meta-table-wrapper .ant-table-thead > tr > th:hover {
+  background-color: #f5f5f5 !important;
+}
+
+/* 선택된 행 스타일 */
+.meta-table-wrapper .ant-table-tbody > tr.ant-table-row-selected > td {
+  background-color: #e6f4ff !important;
+}
+
+/* 호버 스타일 */
+.meta-table-wrapper .ant-table-tbody > tr:hover > td {
+  background-color: #f5f5f5 !important;
+}
+
+.meta-table-wrapper .ant-table-tbody > tr.ant-table-row-selected:hover > td {
+  background-color: #bae0ff !important;
+}
+
+/* 컬럼 정렬 아이콘 */
+.meta-table-wrapper .ant-table-column-sorter {
+  margin-left: 4px;
+}
+
+/* 고정 컬럼 그림자 */
+.meta-table-wrapper .ant-table-cell-fix-left-last::after {
+  box-shadow: inset 10px 0 8px -8px rgba(0, 0, 0, 0.1);
+}
+
+.meta-table-wrapper .ant-table-cell-fix-right-first::after {
+  box-shadow: inset -10px 0 8px -8px rgba(0, 0, 0, 0.1);
+}
+
+/* 테이블 셀 경계선 */
+.meta-table-wrapper .ant-table-tbody > tr > td {
+  border-right: 1px solid #f0f0f0;
+}
+
+.meta-table-wrapper .ant-table-tbody > tr > td:last-child,
+.meta-table-wrapper .ant-table-thead > tr > th:last-child {
+  border-right: none;
+}
+
+/* 헤더 셀 패딩 조정 (리사이즈 영역 확보) */
+.meta-table-wrapper .ant-table-thead > tr > th {
+  padding-right: 16px !important;
+}
+
+/* 이름 컬럼 스타일 - 너비 조절 가능 */
+.meta-table-wrapper .ant-table-thead > tr > th:first-child,
+.meta-table-wrapper .ant-table-tbody > tr > td:first-child {
+  position: relative;
+}
+
+/* 광고 탭 이름 컬럼 셀 - 너비 조절 가능하도록 */
+.meta-table-wrapper .ant-table-tbody > tr > td {
+  overflow: hidden;
+  max-width: 0; /* flexbox 내부 콘텐츠가 셀 너비를 초과하지 않도록 */
+}
+
+/* 테이블 overflow 설정 */
+.meta-table-wrapper .ant-table-container {
+  overflow: visible !important;
+}
+
+.meta-table-wrapper .ant-table-header {
+  overflow: visible !important;
+}

@@ -1,0 +1,256 @@
+/* 광고 썸네일 미리보기 스타일 */
+
+/* 썸네일 컨테이너 */
+.ad-thumbnail-container {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  overflow: hidden;
+  cursor: pointer;
+  flex-shrink: 0;
+  background-color: #f5f5f5;
+  border: 1px solid #e8e8e8;
+  transition: border-color 0.2s;
+}
+
+.ad-thumbnail-container:hover {
+  border-color: #1877F2;
+}
+
+/* 썸네일 이미지 */
+.ad-thumbnail-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* 썸네일 플레이스홀더 */
+.ad-thumbnail-placeholder {
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  background-color: #f5f5f5;
+  border: 1px solid #e8e8e8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* 썸네일 폴백 */
+.ad-thumbnail-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f5f5f5;
+}
+
+/* 동영상 배지 */
+.ad-thumbnail-video-badge {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  border-radius: 2px;
+  padding: 1px 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ========================================
+   확대 미리보기 팝업
+   ======================================== */
+.ad-preview-popup {
+  position: fixed;
+  z-index: 9999;
+  width: 360px;
+  max-height: 500px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 6px 16px 0 rgba(0, 0, 0, 0.12),
+              0 3px 6px -4px rgba(0, 0, 0, 0.16),
+              0 9px 28px 8px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  animation: previewFadeIn 0.15s ease-out;
+}
+
+@keyframes previewFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* 미리보기 헤더 */
+.ad-preview-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  background-color: #fafafa;
+}
+
+.ad-preview-header-content {
+  flex: 1;
+  min-width: 0;
+  padding-right: 8px;
+}
+
+.ad-preview-title {
+  display: block;
+  font-weight: 600;
+  font-size: 14px;
+  color: #262626;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+
+.ad-preview-id {
+  font-size: 12px;
+  color: #8c8c8c;
+}
+
+.ad-preview-close {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: #8c8c8c;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.ad-preview-close:hover {
+  background-color: #f0f0f0;
+  color: #262626;
+}
+
+/* 미리보기 콘텐츠 */
+.ad-preview-content {
+  position: relative;
+  width: 100%;
+  max-height: 360px;
+  min-height: 200px;
+  overflow: hidden;
+  background-color: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ad-preview-image {
+  width: 100%;
+  height: auto;
+  max-height: 360px;
+  object-fit: contain;
+  display: block;
+}
+
+/* 동영상 플레이어 */
+.ad-preview-video {
+  width: 100%;
+  max-height: 360px;
+  object-fit: contain;
+  display: block;
+  background-color: #000;
+}
+
+/* Meta Ad Preview iframe */
+.ad-preview-iframe {
+  width: 100%;
+  height: 360px;
+  border: none;
+  background-color: #fff;
+}
+
+/* 로딩 상태 */
+.ad-preview-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  color: #8c8c8c;
+  gap: 12px;
+  background-color: #fafafa;
+  width: 100%;
+  min-height: 200px;
+}
+
+/* 동영상 오버레이 */
+.ad-preview-video-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+
+/* 광고 텍스트 */
+.ad-preview-text {
+  padding: 12px 16px;
+  font-size: 13px;
+  color: #595959;
+  line-height: 1.5;
+  border-top: 1px solid #f0f0f0;
+  background-color: #fff;
+  max-height: 80px;
+  overflow-y: auto;
+  word-break: break-word;
+}
+
+/* ========================================
+   광고 이름 셀 스타일
+   ======================================== */
+.ad-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.ad-name-info {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.ad-name-text {
+  color: #1877F2;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+.ad-name-id {
+  font-size: 12px;
+  color: #8c8c8c;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

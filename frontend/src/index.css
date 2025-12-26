@@ -55,13 +55,16 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
       'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
       sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 }
+
+/* Pretendard 웹폰트 로드 */
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
 
 /* ============================================================================
    테이블 정렬 기능 커스텀 스타일
@@ -158,5 +161,43 @@ body.ant-scrolling-effect {
   transition-duration: 100ms !important;
   z-index: 2 !important;
   border-radius: 8px !important;
+}
+
+/* ============================================================================
+   주문 분석 테이블 - Zebra Striping & 행 호버 효과
+   ============================================================================ */
+
+/* Zebra Striping: 짝수 행 배경색 */
+.order-analysis-table .ant-table-tbody > tr:nth-child(even) > td {
+  background-color: #fafbfc;
+}
+
+/* 행 호버 효과: 연한 파란색 배경 + 왼쪽 강조선 */
+.order-analysis-table .ant-table-tbody > tr:hover > td {
+  background-color: #f0f7ff !important;
+}
+
+.order-analysis-table .ant-table-tbody > tr:hover > td:first-child {
+  box-shadow: inset 3px 0 0 #1890ff;
+}
+
+/* 호버 시 부드러운 전환 효과 */
+.order-analysis-table .ant-table-tbody > tr > td {
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* 테이블 헤더 스타일 강화 */
+.order-analysis-table .ant-table-thead > tr > th {
+  background-color: #f8fafc !important;
+  border-bottom: 2px solid #e5e7eb !important;
+  font-weight: 600;
+  color: #374151;
+  font-size: 13px;
+}
+
+/* 테이블 셀 기본 스타일 */
+.order-analysis-table .ant-table-tbody > tr > td {
+  border-bottom: 1px solid #f0f0f0;
+  padding: 12px 16px !important;
 }
 

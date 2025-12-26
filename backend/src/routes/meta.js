@@ -1,0 +1,235 @@
+/**
+ * Meta Ads API Routes
+ * 메타 광고 성과 조회 API 엔드포인트
+ */
+
+const express = require('express');
+const router = express.Router();
+const metaService = require('../services/meta');
+
+/**
+ * GET /api/meta/campaigns
+ * 캠페인 목록 + 인사이트 조회
+ */
+router.get('/meta/campaigns', async (req, res) => {
+  try {
+    const { status = 'ACTIVE', dateFrom, dateTo } = req.query;
+    
+    const campaigns = await metaService.getCampaignsWithInsights({
+      status,
+      dateFrom,
+      dateTo
+    });
+
+    res.json({
+      success: true,
+      data: campaigns,
+      count: campaigns.length
+    });
+  } catch (error) {
+    console.error('[Meta API] getCampaigns error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch campaigns'
+    });
+  }
+});
+
+/**
+ * GET /api/meta/adsets
+ * 광고 세트 목록 + 인사이트 조회
+ */
+router.get('/meta/adsets', async (req, res) => {
+  try {
+    const { status = 'ACTIVE', campaignIds, dateFrom, dateTo } = req.query;
+    
+    const parsedCampaignIds = campaignIds ? campaignIds.split(',') : [];
+    
+    const adSets = await metaService.getAdSetsWithInsights({
+      status,
+      campaignIds: parsedCampaignIds,
+      dateFrom,
+      dateTo
+    });
+
+    res.json({
+      success: true,
+      data: adSets,
+      count: adSets.length
+    });
+  } catch (error) {
+    console.error('[Meta API] getAdSets error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch ad sets'
+    });
+  }
+});
+
+/**
+ * GET /api/meta/ads
+ * 광고 목록 + 인사이트 조회
+ */
+router.get('/meta/ads', async (req, res) => {
+  try {
+    const { status = 'ACTIVE', adSetIds, campaignIds, dateFrom, dateTo } = req.query;
+    
+    const parsedAdSetIds = adSetIds ? adSetIds.split(',') : [];
+    const parsedCampaignIds = campaignIds ? campaignIds.split(',') : [];
+    
+    const ads = await metaService.getAdsWithInsights({
+      status,
+      adSetIds: parsedAdSetIds,
+      campaignIds: parsedCampaignIds,
+      dateFrom,
+      dateTo
+    });
+
+    res.json({
+      success: true,
+      data: ads,
+      count: ads.length
+    });
+  } catch (error) {
+    console.error('[Meta API] getAds error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch ads'
+    });
+  }
+});
+
+/**
+ * POST /api/meta/refresh
+ * 캐시 초기화 (강제 새로고침)
+ */
+router.post('/meta/refresh', async (req, res) => {
+  try {
+    metaService.clearCache();
+    res.json({
+      success: true,
+      message: 'Cache cleared successfully'
+    });
+  } catch (error) {
+    console.error('[Meta API] refresh error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to clear cache'
+    });
+  }
+});
+
+/**
+ * GET /api/meta/summary
+ * 전체 요약 (캠페인/광고세트/광고 개수)
+ */
+router.get('/meta/summary', async (req, res) => {
+  try {
+    const { status = 'ACTIVE' } = req.query;
+    
+    const [campaigns, adSets, ads] = await Promise.all([
+      metaService.getCampaigns({ status, limit: 500 }),
+      metaService.getAdSets({ status, limit: 1000 }),
+      metaService.getAds({ status, limit: 3000 })
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        campaigns: campaigns.length,
+        adSets: adSets.length,
+        ads: ads.length
+      }
+    });
+  } catch (error) {
+    console.error('[Meta API] summary error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch summary'
+    });
+  }
+});
+
+/**
+ * GET /api/meta/ad/:adId/media
+ * 단일 광고의 미디어 상세 정보 조회 (미리보기용)
+ */
+router.get('/meta/ad/:adId/media', async (req, res) => {
+  try {
+    const { adId } = req.params;
+    
+    if (!adId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Ad ID is required'
+      });
+    }
+    
+    const mediaDetails = await metaService.getAdMediaDetails(adId);
+    
+    if (!mediaDetails) {
+      return res.status(404).json({
+        success: false,
+        error: 'Ad not found'
+      });
+    }
+    
+    if (mediaDetails.error) {
+      return res.status(500).json({
+        success: false,
+        error: mediaDetails.error
+      });
+    }
+
+    res.json({
+      success: true,
+      data: mediaDetails
+    });
+  } catch (error) {
+    console.error('[Meta API] getAdMedia error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch ad media'
+    });
+  }
+});
+
+/**
+ * GET /api/meta/ad/:adId/preview
+ * 광고 미리보기 iframe URL 조회
+ */
+router.get('/meta/ad/:adId/preview', async (req, res) => {
+  try {
+    const { adId } = req.params;
+    const { format = 'MOBILE_FEED_STANDARD' } = req.query;
+    
+    if (!adId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Ad ID is required'
+      });
+    }
+    
+    const preview = await metaService.getAdPreview(adId, format);
+    
+    if (!preview) {
+      return res.status(404).json({
+        success: false,
+        error: 'Preview not available'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: preview
+    });
+  } catch (error) {
+    console.error('[Meta API] getAdPreview error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch ad preview'
+    });
+  }
+});
+
+module.exports = router;

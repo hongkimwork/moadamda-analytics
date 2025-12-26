@@ -1,28 +1,30 @@
 // ============================================================================
 // 광고 소재 퍼포먼스 페이지 헤더
+// 주문 분석 페이지 스타일과 통일
 // ============================================================================
 
 import React from 'react';
-import { Card, Typography, Space, Button, Tag } from 'antd';
-import { BarChart3, RefreshCw, GitCompare } from 'lucide-react';
+import { Card, Typography, Button } from 'antd';
+import { BarChart3, RefreshCw, GitCompare, Clock } from 'lucide-react';
+import dayjs from 'dayjs';
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 
 /**
  * 퍼포먼스 페이지 헤더 컴포넌트
  * @param {Object} props
- * @param {number} props.total - 전체 광고 소재 개수
  * @param {Array} props.selectedCreatives - 선택된 광고 소재 목록
  * @param {Function} props.onRefresh - 새로고침 핸들러
  * @param {Function} props.onCompare - 소재 비교 핸들러
  * @param {boolean} props.loading - 로딩 상태
+ * @param {Object} props.lastUpdated - 마지막 갱신 시간 (dayjs 객체)
  */
 function PerformanceHeader({ 
-  total, 
   selectedCreatives, 
   onRefresh, 
   onCompare, 
-  loading 
+  loading,
+  lastUpdated
 }) {
   return (
     <Card 
@@ -33,35 +35,35 @@ function PerformanceHeader({
         border: '1px solid #e8eaed'
       }}
     >
-      <Space direction="vertical" size="small" style={{ width: '100%' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <Title 
-              level={2} 
-              style={{ 
-                margin: 0, 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '10px',
-                fontSize: '24px',
-                fontWeight: 700,
-                color: '#1a1a1a'
-              }}
-            >
-              <BarChart3 size={28} strokeWidth={2.5} style={{ color: '#1890ff' }} />
-              광고 소재 분석
-            </Title>
-            <div style={{ 
-              color: '#6b7280', 
-              fontSize: '14px', 
-              marginTop: '8px',
-              fontWeight: 400,
-              lineHeight: '1.5'
-            }}>
-              각 광고 소재의 방문자 수, 페이지뷰, 체류시간, 구매 전환을 분석합니다
-            </div>
-          </div>
-          <Space>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <Title 
+            level={2} 
+            style={{ 
+              margin: 0, 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '10px',
+              fontSize: '24px',
+              fontWeight: 700,
+              color: '#1a1a1a'
+            }}
+          >
+            <BarChart3 size={28} strokeWidth={2.5} style={{ color: '#1890ff' }} />
+            광고 소재 분석
+          </Title>
+          <Text type="secondary" style={{ 
+            fontSize: '14px', 
+            marginTop: '8px',
+            display: 'block'
+          }}>
+            각 광고 소재의 방문자 수, 페이지뷰, 체류시간, 구매 전환을 분석합니다
+          </Text>
+        </div>
+        
+        {/* 우측: 버튼 + 갱신 시간 */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px' }}>
             {selectedCreatives.length > 0 && (
               <Button
                 type="primary"
@@ -82,7 +84,7 @@ function PerformanceHeader({
               </Button>
             )}
             <Button
-              icon={<RefreshCw size={16} />}
+              icon={<RefreshCw size={16} className={loading ? 'spin-animation' : ''} />}
               onClick={onRefresh}
               loading={loading}
               style={{
@@ -96,23 +98,19 @@ function PerformanceHeader({
             >
               새로고침
             </Button>
-          </Space>
+          </div>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '4px',
+            color: '#9ca3af',
+            fontSize: '12px'
+          }}>
+            <Clock size={12} />
+            <span>마지막 갱신: {lastUpdated ? lastUpdated.format('HH:mm:ss') : dayjs().format('HH:mm:ss')}</span>
+          </div>
         </div>
-        <Tag 
-          color="blue" 
-          style={{
-            padding: '4px 12px',
-            borderRadius: '6px',
-            fontSize: '13px',
-            fontWeight: 500,
-            border: 'none',
-            background: '#e6f4ff',
-            color: '#0958d9'
-          }}
-        >
-          총 {total.toLocaleString()}개 광고 소재
-        </Tag>
-      </Space>
+      </div>
     </Card>
   );
 }

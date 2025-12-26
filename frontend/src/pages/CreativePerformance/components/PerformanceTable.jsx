@@ -20,6 +20,7 @@ function PerformanceTable({
   pageSize,
   summaryStats,
   selectedCreatives,
+  highlightedKey,
   onTableChange,
   onPageChange,
   onSelectCreative,
@@ -56,7 +57,7 @@ function PerformanceTable({
       align: 'center',
       ellipsis: true,
       render: (text) => (
-        <span style={{ fontSize: '12px' }} title={text}>
+        <span style={{ fontSize: '13px' }} title={text}>
           {text || '-'}
         </span>
       ),
@@ -71,7 +72,7 @@ function PerformanceTable({
       align: 'center',
       ellipsis: true,
       render: (text) => (
-        <span style={{ fontSize: '12px' }} title={text}>
+        <span style={{ fontSize: '13px' }} title={text}>
           {text || '-'}
         </span>
       ),
@@ -86,7 +87,7 @@ function PerformanceTable({
       align: 'center',
       ellipsis: true,
       render: (text) => (
-        <span style={{ fontSize: '12px' }} title={text}>
+        <span style={{ fontSize: '13px' }} title={text}>
           {text || '-'}
         </span>
       ),
@@ -130,9 +131,9 @@ function PerformanceTable({
       title: 'UV',
       dataIndex: 'unique_visitors',
       key: 'unique_visitors',
-      width: 60,
-      align: 'center',
-      render: (num) => <span style={{ fontWeight: 600, fontSize: '12px', color: '#374151' }}>{formatNumber(num)}</span>,
+      width: 70,
+      align: 'right',
+      render: (num) => <span style={{ fontWeight: 600, fontSize: '13px', color: '#374151' }}>{formatNumber(num)}</span>,
       sorter: true,
       showSorterTooltip: false
     },
@@ -140,9 +141,9 @@ function PerformanceTable({
       title: '평균PV',
       dataIndex: 'avg_pageviews',
       key: 'avg_pageviews',
-      width: 70,
-      align: 'center',
-      render: (num) => <span style={{ fontSize: '12px', color: '#4b5563', fontWeight: 500 }}>{num ? num.toFixed(1) : '0.0'}</span>,
+      width: 75,
+      align: 'right',
+      render: (num) => <span style={{ fontSize: '13px', color: '#4b5563', fontWeight: 500 }}>{num ? num.toFixed(1) : '0.0'}</span>,
       sorter: true,
       showSorterTooltip: false
     },
@@ -150,9 +151,9 @@ function PerformanceTable({
       title: <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>평균<br />체류시간</div>,
       dataIndex: 'avg_duration_seconds',
       key: 'avg_duration_seconds',
-      width: 75,
-      align: 'center',
-      render: (seconds) => <span style={{ fontSize: '12px', color: '#4b5563', fontWeight: 500 }}>{formatDuration(seconds)}</span>,
+      width: 80,
+      align: 'right',
+      render: (seconds) => <span style={{ fontSize: '13px', color: '#4b5563', fontWeight: 500 }}>{formatDuration(seconds)}</span>,
       sorter: true,
       showSorterTooltip: false
     },
@@ -181,12 +182,12 @@ function PerformanceTable({
       ),
       dataIndex: 'total_revenue',
       key: 'total_revenue',
-      width: 85,
-      align: 'center',
+      width: 95,
+      align: 'right',
       render: (amount) => {
         const percent = summaryStats.maxRevenue > 0 ? (amount / summaryStats.maxRevenue) * 100 : 0;
         return (
-          <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
             <div
               style={{
                 position: 'absolute',
@@ -202,7 +203,7 @@ function PerformanceTable({
             <span style={{
               color: amount > 0 ? '#0958d9' : '#9ca3af',
               fontWeight: amount > 0 ? 600 : 400,
-              fontSize: '11px',
+              fontSize: '13px',
               position: 'relative',
               zIndex: 1,
               fontFamily: 'system-ui, -apple-system, sans-serif'
@@ -240,13 +241,13 @@ function PerformanceTable({
       ),
       dataIndex: 'contributed_orders_count',
       key: 'contributed_orders_count',
-      width: 80,
-      align: 'center',
+      width: 85,
+      align: 'right',
       render: (num) => (
         <span style={{
           color: num > 0 ? '#389e0d' : '#9ca3af',
           fontWeight: num > 0 ? 600 : 400,
-          fontSize: '12px'
+          fontSize: '13px'
         }}>
           {formatNumber(num)}
         </span>
@@ -279,13 +280,13 @@ function PerformanceTable({
       ),
       dataIndex: 'last_touch_count',
       key: 'last_touch_count',
-      width: 70,
-      align: 'center',
+      width: 75,
+      align: 'right',
       render: (num) => (
         <span style={{
           color: num > 0 ? '#0958d9' : '#9ca3af',
           fontWeight: num > 0 ? 600 : 400,
-          fontSize: '12px'
+          fontSize: '13px'
         }}>
           {formatNumber(num)}
         </span>
@@ -321,12 +322,12 @@ function PerformanceTable({
       ),
       dataIndex: 'attributed_revenue',
       key: 'attributed_revenue',
-      width: 85,
-      align: 'center',
+      width: 95,
+      align: 'right',
       render: (amount) => {
         const percent = summaryStats.maxRevenue > 0 ? (amount / summaryStats.maxRevenue) * 100 : 0;
         return (
-          <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
             <div
               style={{
                 position: 'absolute',
@@ -342,7 +343,7 @@ function PerformanceTable({
             <span style={{
               color: amount > 0 ? '#389e0d' : '#9ca3af',
               fontWeight: amount > 0 ? 600 : 400,
-              fontSize: '11px',
+              fontSize: '13px',
               position: 'relative',
               zIndex: 1,
               fontFamily: 'system-ui, -apple-system, sans-serif'
@@ -384,12 +385,12 @@ function PerformanceTable({
       ),
       dataIndex: 'total_contributed_revenue',
       key: 'total_contributed_revenue',
-      width: 95,
-      align: 'center',
+      width: 100,
+      align: 'right',
       render: (amount) => {
         const percent = summaryStats.maxRevenue > 0 ? (amount / summaryStats.maxRevenue) * 100 : 0;
         return (
-          <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
             <div
               style={{
                 position: 'absolute',
@@ -405,7 +406,7 @@ function PerformanceTable({
             <span style={{
               color: amount > 0 ? '#0050b3' : '#9ca3af',
               fontWeight: amount > 0 ? 600 : 400,
-              fontSize: '11px',
+              fontSize: '13px',
               position: 'relative',
               zIndex: 1,
               fontFamily: 'system-ui, -apple-system, sans-serif'
@@ -495,12 +496,80 @@ function PerformanceTable({
           pageSizeOptions: ['100', '200', '500', '1000'],
           onChange: onPageChange
         }}
-        size="small"
+        size="middle"
+        rowClassName={(record, index) => {
+          const key = getRowKey(record);
+          const isHighlighted = highlightedKey === key;
+          const baseClass = index % 2 === 0 ? 'table-row-even' : 'table-row-odd';
+          return isHighlighted ? `${baseClass} table-row-highlighted` : baseClass;
+        }}
         style={{
           borderRadius: '8px',
           overflow: 'hidden'
         }}
       />
+      <style>{`
+        /* 줄무늬 배경 */
+        .table-row-even td {
+          background-color: #ffffff !important;
+        }
+        .table-row-odd td {
+          background-color: #fafbfc !important;
+        }
+        /* 하이라이트 효과 */
+        .table-row-highlighted td {
+          background-color: #fff7e6 !important;
+          animation: highlight-pulse 1s ease-in-out 3;
+        }
+        @keyframes highlight-pulse {
+          0%, 100% { background-color: #fff7e6; }
+          50% { background-color: #ffe7ba; }
+        }
+        /* 호버 효과 강화 */
+        .ant-table-tbody > tr:hover > td {
+          background-color: #f5f5f5 !important;
+        }
+        /* 헤더 스타일 - 회색 계열로 통일 */
+        .ant-table-thead > tr > th {
+          background-color: #f5f7fa !important;
+          font-weight: 600 !important;
+          color: #1f2937 !important;
+          border-bottom: 2px solid #d9d9d9 !important;
+        }
+        /* fixed 컬럼 헤더도 동일하게 */
+        .ant-table-thead > tr > th.ant-table-cell-fix-left,
+        .ant-table-thead > tr > th.ant-table-cell-fix-right {
+          background-color: #f5f7fa !important;
+        }
+        /* fixed 컬럼 바디 셀 - 줄무늬 유지 */
+        .table-row-even td.ant-table-cell-fix-left,
+        .table-row-even td.ant-table-cell-fix-right {
+          background-color: #ffffff !important;
+        }
+        .table-row-odd td.ant-table-cell-fix-left,
+        .table-row-odd td.ant-table-cell-fix-right {
+          background-color: #fafbfc !important;
+        }
+        /* 하이라이트된 fixed 컬럼 */
+        .table-row-highlighted td.ant-table-cell-fix-left,
+        .table-row-highlighted td.ant-table-cell-fix-right {
+          background-color: #fff7e6 !important;
+          animation: highlight-pulse 1s ease-in-out 3;
+        }
+        /* fixed 컬럼 호버 */
+        .ant-table-tbody > tr:hover > td.ant-table-cell-fix-left,
+        .ant-table-tbody > tr:hover > td.ant-table-cell-fix-right {
+          background-color: #f5f5f5 !important;
+        }
+        /* 셀 패딩 증가 */
+        .ant-table-tbody > tr > td {
+          padding: 14px 12px !important;
+        }
+        /* 행 구분선 */
+        .ant-table-tbody > tr > td {
+          border-bottom: 1px solid #f0f0f0 !important;
+        }
+      `}</style>
     </Card>
   );
 }

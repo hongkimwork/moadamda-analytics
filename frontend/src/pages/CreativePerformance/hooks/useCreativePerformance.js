@@ -62,20 +62,39 @@ export const useCreativePerformance = () => {
   // 요약 통계 계산
   const summaryStats = useMemo(() => {
     if (!data || data.length === 0) {
-      return { totalRevenue: 0, totalOrders: 0, totalUV: 0, maxRevenue: 0 };
+      return { 
+        totalRevenue: 0, 
+        totalOrders: 0, 
+        totalUV: 0, 
+        maxRevenue: 0,
+        totalLastTouchRevenue: 0,
+        totalAttributedRevenue: 0,
+        totalLastTouchCount: 0
+      };
     }
 
     return data.reduce((acc, curr) => {
       acc.totalRevenue += (curr.total_contributed_revenue || 0);
       acc.totalOrders += (curr.contributed_orders_count || 0);
       acc.totalUV += (curr.unique_visitors || 0);
+      acc.totalLastTouchRevenue += (curr.total_revenue || 0);
+      acc.totalAttributedRevenue += (curr.attributed_revenue || 0);
+      acc.totalLastTouchCount += (curr.last_touch_count || 0);
       acc.maxRevenue = Math.max(
         acc.maxRevenue,
         curr.total_contributed_revenue || 0,
         curr.attributed_revenue || 0
       );
       return acc;
-    }, { totalRevenue: 0, totalOrders: 0, totalUV: 0, maxRevenue: 0 });
+    }, { 
+      totalRevenue: 0, 
+      totalOrders: 0, 
+      totalUV: 0, 
+      maxRevenue: 0,
+      totalLastTouchRevenue: 0,
+      totalAttributedRevenue: 0,
+      totalLastTouchCount: 0
+    });
   }, [data]);
 
   // 데이터 조회

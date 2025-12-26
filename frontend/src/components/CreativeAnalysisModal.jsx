@@ -19,7 +19,7 @@ const API_URL = import.meta.env.VITE_API_URL || '';
 function CreativeAnalysisModal({ visible, onClose, creative, dateRange }) {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState(null);
-  const [chartMetric, setChartMetric] = useState('uv');
+  const [chartMetric, setChartMetric] = useState('revenue');
 
   // 모달이 열릴 때 데이터 조회
   useEffect(() => {
@@ -284,9 +284,9 @@ function CreativeAnalysisModal({ visible, onClose, creative, dateRange }) {
                     value={chartMetric}
                     onChange={setChartMetric}
                     options={[
-                      { label: 'UV', value: 'uv' },
+                      { label: '매출', value: 'revenue' },
                       { label: '전환', value: 'orders' },
-                      { label: '매출', value: 'revenue' }
+                      { label: 'UV', value: 'uv' }
                     ]}
                   />
                 </div>

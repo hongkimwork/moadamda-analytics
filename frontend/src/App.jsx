@@ -37,6 +37,7 @@ const DataTables = lazy(() => import('./pages/DataTables'));
 const PageMapping = lazy(() => import('./pages/PageMapping'));
 const CreativePerformance = lazy(() => import('./pages/CreativePerformance/index'));
 const MyDashboard = lazy(() => import('./pages/MyDashboard/index'));
+const MetaInsights = lazy(() => import('./pages/MetaInsights/index'));
 
 const { Sider, Content } = Layout;
 
@@ -54,6 +55,7 @@ function AppLayout() {
     const path = location.pathname;
     if (path === '/creative-performance') return ['creative-performance'];
     if (path === '/my-dashboard') return ['my-dashboard'];
+    if (path === '/meta-insights') return ['meta-insights'];
     if (path === '/page-mapping') return ['page-mapping'];
     if (path.startsWith('/order/')) return ['orders'];
     if (path === '/' || path.startsWith('/order')) return ['orders'];
@@ -79,6 +81,12 @@ function AppLayout() {
           icon: <BarChartOutlined />,
           label: '광고 소재 분석',
           onClick: () => navigate('/creative-performance')
+        },
+        {
+          key: 'meta-insights',
+          icon: <GlobalOutlined />,
+          label: '메타 성과 조회',
+          onClick: () => navigate('/meta-insights')
         },
         {
           key: 'my-dashboard',
@@ -221,6 +229,9 @@ function AppLayout() {
               
               {/* 나만의 대시보드 */}
               <Route path="/my-dashboard" element={<MyDashboard />} />
+              
+              {/* 메타 성과 조회 */}
+              <Route path="/meta-insights" element={<MetaInsights />} />
               
               {/* 페이지 매핑 */}
               <Route path="/page-mapping" element={<PageMapping />} />

@@ -1,24 +1,123 @@
 // ============================================================================
 // 광고 소재 퍼포먼스 필터 섹션
+// 검색/날짜 필터는 주문 분석 스타일, UTM 필터는 기존 유지
 // ============================================================================
 
-import React from 'react';
-import { Card, Divider } from 'antd';
-import { Search, Layers } from 'lucide-react';
-import SearchFilterBar from '../../../components/SearchFilterBar';
+import { useState, useEffect } from 'react';
+import { Card, Divider, DatePicker } from 'antd';
+import { Search, X, RotateCcw, Calendar, Layers } from 'lucide-react';
+import dayjs from 'dayjs';
+import 'dayjs/locale/ko';
 import DynamicUtmFilterBar from '../../../components/DynamicUtmFilterBar';
 import UtmSourceQuickFilter from '../../../components/UtmSourceQuickFilter';
 
+const { RangePicker } = DatePicker;
+
+/**
+ * Segmented Button - 높이 36px 통일
+ */
+const SegmentedButton = ({ options, value, onChange, disabled }) => (
+  <div style={{
+    display: 'inline-flex',
+    borderRadius: '8px',
+    border: '1px solid #dadce0',
+    overflow: 'hidden',
+    background: '#fff'
+  }}>
+    {options.map((option, index) => {
+      const isSelected = value === option.value;
+      const isFirst = index === 0;
+      const isLast = index === options.length - 1;
+      
+      return (
+        <button
+          key={option.value}
+          onClick={() => !disabled && onChange(option.value)}
+          disabled={disabled}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '36px',
+            padding: '0 16px',
+            border: 'none',
+            borderLeft: !isFirst ? '1px solid #dadce0' : 'none',
+            background: isSelected ? '#e8f0fe' : 'transparent',
+            color: isSelected ? '#1a73e8' : '#5f6368',
+            fontSize: '13px',
+            fontWeight: isSelected ? 600 : 500,
+            cursor: disabled ? 'not-allowed' : 'pointer',
+            transition: 'all 150ms ease',
+            opacity: disabled ? 0.5 : 1,
+            borderRadius: isFirst ? '8px 0 0 8px' : isLast ? '0 8px 8px 0' : 0
+          }}
+        >
+          {option.label}
+        </button>
+      );
+    })}
+  </div>
+);
+
+/**
+ * Search Input - 높이 36px, Enter로 검색
+ */
+const SearchInput = ({ value, onChange, onSearch, disabled, placeholder }) => (
+  <div style={{
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    height: '36px',
+    padding: '0 14px',
+    background: '#f8f9fa',
+    border: '1px solid transparent',
+    borderRadius: '8px',
+    minWidth: '350px',
+    width: '450px',
+    transition: 'all 150ms ease'
+  }}>
+    <Search size={16} style={{ color: '#5f6368', flexShrink: 0 }} />
+    <input
+      type="text"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      onKeyDown={(e) => e.key === 'Enter' && onSearch()}
+      disabled={disabled}
+      placeholder={placeholder}
+      style={{
+        flex: 1,
+        border: 'none',
+        outline: 'none',
+        background: 'transparent',
+        fontSize: '14px',
+        color: '#202124'
+      }}
+    />
+    {value && (
+      <button
+        onClick={() => { onChange(''); onSearch(); }}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: '20px',
+          height: '20px',
+          padding: 0,
+          border: 'none',
+          background: '#dadce0',
+          borderRadius: '50%',
+          cursor: 'pointer',
+          color: '#5f6368'
+        }}
+      >
+        <X size={12} />
+      </button>
+    )}
+  </div>
+);
+
 /**
  * 퍼포먼스 필터 섹션 컴포넌트
- * @param {Object} props
- * @param {Function} props.onSearch - 검색 핸들러
- * @param {Function} props.onFilterChange - 필터 변경 핸들러
- * @param {Function} props.onReset - 초기화 핸들러
- * @param {Object} props.filters - 현재 필터 상태
- * @param {Function} props.onQuickFilterChange - 퀵 필터 변경 핸들러
- * @param {Function} props.onUtmFilterChange - UTM 필터 변경 핸들러
- * @param {boolean} props.loading - 로딩 상태
  */
 function PerformanceFilters({
   onSearch,
@@ -29,26 +128,161 @@ function PerformanceFilters({
   onUtmFilterChange,
   loading
 }) {
+  const defaultQuickDate = '30days';
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeQuickDate, setActiveQuickDate] = useState(defaultQuickDate);
+  const [customDateRange, setCustomDateRange] = useState(null);
+
+  const getDateRange = (type) => {
+    const now = dayjs();
+    switch (type) {
+      case 'today': return [now.startOf('day'), now.endOf('day')];
+      case 'yesterday': return [now.subtract(1, 'day').startOf('day'), now.subtract(1, 'day').endOf('day')];
+      case '7days': return [now.subtract(6, 'day').startOf('day'), now.endOf('day')];
+      case '30days': return [now.subtract(29, 'day').startOf('day'), now.endOf('day')];
+      default: return [now.subtract(29, 'day').startOf('day'), now.endOf('day')];
+    }
+  };
+
+  useEffect(() => {
+    if (defaultQuickDate && onFilterChange) {
+      onFilterChange({ dateRange: getDateRange(defaultQuickDate) });
+    }
+  }, []);
+
+  const handleSearchSubmit = () => onSearch?.(searchTerm.trim());
+
+  const handleQuickDateChange = (value) => {
+    setActiveQuickDate(value);
+    setCustomDateRange(null);
+    onFilterChange?.({ dateRange: getDateRange(value) });
+  };
+
+  const handleCustomDateChange = (dates) => {
+    if (!dates || dates.length === 0) {
+      setActiveQuickDate(defaultQuickDate);
+      setCustomDateRange(null);
+      onFilterChange?.({ dateRange: getDateRange(defaultQuickDate) });
+      return;
+    }
+    setCustomDateRange(dates);
+    setActiveQuickDate('custom');
+    onFilterChange?.({ dateRange: dates });
+  };
+
+  const handleReset = () => {
+    setSearchTerm('');
+    setActiveQuickDate(defaultQuickDate);
+    setCustomDateRange(null);
+    onFilterChange?.({ dateRange: getDateRange(defaultQuickDate) });
+    onReset?.();
+  };
+
+  const isDefaultState = () => !searchTerm && activeQuickDate === defaultQuickDate;
+
+  const dateOptions = [
+    { label: '오늘', value: 'today' },
+    { label: '어제', value: 'yesterday' },
+    { label: '7일', value: '7days' },
+    { label: '30일', value: '30days' }
+  ];
+
+  const displayDateRange = customDateRange || (activeQuickDate !== 'custom' ? getDateRange(activeQuickDate) : null);
+
   return (
     <>
-      {/* 검색 및 필터 */}
-      <SearchFilterBar
-        searchPlaceholder="광고 소재 이름으로 검색..."
-        onSearch={onSearch}
-        onFilterChange={onFilterChange}
-        onReset={onReset}
-        filters={filters}
-        showDeviceFilter={false}
-        showBrowserFilter={false}
-        showOsFilter={false}
-        showBouncedFilter={false}
-        showConvertedFilter={false}
-        showUtmFilter={false}
-        defaultActiveQuickDate="30days"
-        loading={loading}
-      />
+      {/* 검색 및 날짜 필터 (주문 분석 스타일) */}
+      <Card
+        style={{
+          marginBottom: '16px',
+          borderRadius: '16px',
+          border: '1px solid #e8eaed',
+          background: '#fff',
+          boxShadow: 'none'
+        }}
+        styles={{ body: { padding: '14px 20px' } }}
+      >
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '16px',
+          flexWrap: 'wrap'
+        }}>
+          {/* 검색 */}
+          <SearchInput
+            value={searchTerm}
+            onChange={setSearchTerm}
+            onSearch={handleSearchSubmit}
+            disabled={loading}
+            placeholder="광고 소재 이름으로 검색..."
+          />
 
-      {/* UTM 필터 영역 (퀵 필터 + 동적 필터) */}
+          {/* 날짜 선택 */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            height: '36px',
+            padding: '0 14px',
+            background: '#f8f9fa',
+            borderRadius: '8px',
+            border: '1px solid #dadce0'
+          }}>
+            <Calendar size={16} style={{ color: '#5f6368', flexShrink: 0 }} />
+            <span style={{ fontSize: '13px', color: '#5f6368', fontWeight: 500 }}>기간</span>
+            <RangePicker
+              value={displayDateRange}
+              onChange={handleCustomDateChange}
+              format="M월 D일"
+              placeholder={['시작일', '종료일']}
+              disabled={loading}
+              size="middle"
+              locale={dayjs.locale('ko')}
+              style={{ 
+                width: 200,
+                height: '28px'
+              }}
+              bordered={false}
+              allowClear={activeQuickDate === 'custom'}
+            />
+          </div>
+
+          <SegmentedButton
+            options={dateOptions}
+            value={activeQuickDate === 'custom' ? null : activeQuickDate}
+            onChange={handleQuickDateChange}
+            disabled={loading}
+          />
+
+          {/* 초기화 */}
+          {!isDefaultState() && (
+            <button
+              onClick={handleReset}
+              disabled={loading}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                height: '36px',
+                padding: '0 14px',
+                borderRadius: '8px',
+                border: 'none',
+                background: '#fce8e6',
+                color: '#c5221f',
+                fontSize: '13px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                transition: 'all 150ms ease'
+              }}
+            >
+              <RotateCcw size={14} />
+              초기화
+            </button>
+          )}
+        </div>
+      </Card>
+
+      {/* UTM 필터 영역 (기존 유지) */}
       <Card 
         size="small" 
         style={{ 
