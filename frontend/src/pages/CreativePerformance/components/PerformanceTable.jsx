@@ -483,7 +483,7 @@ function PerformanceTable({
       <Table
         columns={columns}
         dataSource={data}
-        rowKey={(record) => `${record.creative_name}-${record.utm_source}-${record.utm_campaign}`}
+        rowKey={(record) => getRowKey(record)}
         loading={loading}
         onChange={onTableChange}
         scroll={{ x: 1350 }}
