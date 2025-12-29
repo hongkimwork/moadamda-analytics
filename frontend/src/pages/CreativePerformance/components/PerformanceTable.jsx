@@ -482,6 +482,7 @@ function PerformanceTable({
       }}
     >
       <Table
+        className="creative-performance-table"
         columns={columns}
         dataSource={data}
         rowKey={(record) => getRowKey(record)}
@@ -514,66 +515,74 @@ function PerformanceTable({
         }}
       />
       <style>{`
+        /* 테이블 wrapper */
+        .creative-performance-table .ant-table-tbody > tr {
+          position: relative;
+        }
         /* 줄무늬 배경 */
-        .table-row-even td {
+        .creative-performance-table .table-row-even td {
           background-color: #ffffff !important;
         }
-        .table-row-odd td {
+        .creative-performance-table .table-row-odd td {
           background-color: #fafbfc !important;
         }
         /* 하이라이트 효과 */
-        .table-row-highlighted td {
+        .creative-performance-table .table-row-highlighted td {
           background-color: #fff7e6 !important;
         }
-        .table-highlight-v0 td, .table-highlight-v1 td {
-          animation: highlight-pulse 1s ease-in-out 3;
+        .creative-performance-table .table-highlight-v0 td, .creative-performance-table .table-highlight-v1 td {
+          animation: creative-highlight-pulse 1s ease-in-out 3;
         }
-        @keyframes highlight-pulse {
+        @keyframes creative-highlight-pulse {
           0%, 100% { background-color: #fff7e6; }
           50% { background-color: #ffe7ba; }
         }
-        /* 호버 효과 강화 */
-        .ant-table-tbody > tr:hover > td {
+        /* 호버 효과 */
+        .creative-performance-table .ant-table-tbody > tr:hover > td {
           background-color: #f5f5f5 !important;
         }
-        /* 헤더 스타일 - 회색 계열로 통일 */
-        .ant-table-thead > tr > th {
+        /* 호버 시 왼쪽 파란 라인 */
+        .creative-performance-table .ant-table-tbody > tr:hover > td:first-child {
+          box-shadow: inset 3px 0 0 0 #1890ff;
+        }
+        /* 헤더 스타일 */
+        .creative-performance-table .ant-table-thead > tr > th {
           background-color: #f5f7fa !important;
           font-weight: 600 !important;
           color: #1f2937 !important;
           border-bottom: 2px solid #d9d9d9 !important;
         }
-        /* fixed 컬럼 헤더도 동일하게 */
-        .ant-table-thead > tr > th.ant-table-cell-fix-left,
-        .ant-table-thead > tr > th.ant-table-cell-fix-right {
+        /* fixed 컬럼 헤더 */
+        .creative-performance-table .ant-table-thead > tr > th.ant-table-cell-fix-left,
+        .creative-performance-table .ant-table-thead > tr > th.ant-table-cell-fix-right {
           background-color: #f5f7fa !important;
         }
         /* fixed 컬럼 바디 셀 - 줄무늬 유지 */
-        .table-row-even td.ant-table-cell-fix-left,
-        .table-row-even td.ant-table-cell-fix-right {
+        .creative-performance-table .table-row-even td.ant-table-cell-fix-left,
+        .creative-performance-table .table-row-even td.ant-table-cell-fix-right {
           background-color: #ffffff !important;
         }
-        .table-row-odd td.ant-table-cell-fix-left,
-        .table-row-odd td.ant-table-cell-fix-right {
+        .creative-performance-table .table-row-odd td.ant-table-cell-fix-left,
+        .creative-performance-table .table-row-odd td.ant-table-cell-fix-right {
           background-color: #fafbfc !important;
         }
         /* 하이라이트된 fixed 컬럼 */
-        .table-row-highlighted td.ant-table-cell-fix-left,
-        .table-row-highlighted td.ant-table-cell-fix-right {
+        .creative-performance-table .table-row-highlighted td.ant-table-cell-fix-left,
+        .creative-performance-table .table-row-highlighted td.ant-table-cell-fix-right {
           background-color: #fff7e6 !important;
-          animation: highlight-pulse 1s ease-in-out 3;
+          animation: creative-highlight-pulse 1s ease-in-out 3;
         }
         /* fixed 컬럼 호버 */
-        .ant-table-tbody > tr:hover > td.ant-table-cell-fix-left,
-        .ant-table-tbody > tr:hover > td.ant-table-cell-fix-right {
+        .creative-performance-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-left,
+        .creative-performance-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-right {
           background-color: #f5f5f5 !important;
         }
-        /* 셀 패딩 증가 */
-        .ant-table-tbody > tr > td {
+        /* 셀 패딩 */
+        .creative-performance-table .ant-table-tbody > tr > td {
           padding: 14px 12px !important;
         }
         /* 행 구분선 */
-        .ant-table-tbody > tr > td {
+        .creative-performance-table .ant-table-tbody > tr > td {
           border-bottom: 1px solid #f0f0f0 !important;
         }
       `}</style>

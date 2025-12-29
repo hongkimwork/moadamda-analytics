@@ -466,6 +466,57 @@ export function OrderListPage() {
             overflow: 'hidden'
           }}
         />
+        <style>{`
+          /* 줄무늬 배경 */
+          .order-analysis-table .table-row-even td {
+            background-color: #ffffff !important;
+          }
+          .order-analysis-table .table-row-odd td {
+            background-color: #fafbfc !important;
+          }
+          /* 호버 효과 */
+          .order-analysis-table .ant-table-tbody > tr:hover > td {
+            background-color: #f5f5f5 !important;
+          }
+          /* 호버 시 왼쪽 파란 라인 */
+          .order-analysis-table .ant-table-tbody > tr:hover > td:first-child {
+            box-shadow: inset 3px 0 0 0 #1890ff;
+          }
+          /* 헤더 스타일 */
+          .order-analysis-table .ant-table-thead > tr > th {
+            background-color: #f5f7fa !important;
+            font-weight: 600 !important;
+            color: #1f2937 !important;
+            border-bottom: 2px solid #d9d9d9 !important;
+          }
+          /* fixed 컬럼 헤더 */
+          .order-analysis-table .ant-table-thead > tr > th.ant-table-cell-fix-left,
+          .order-analysis-table .ant-table-thead > tr > th.ant-table-cell-fix-right {
+            background-color: #f5f7fa !important;
+          }
+          /* fixed 컬럼 바디 셀 - 줄무늬 유지 */
+          .order-analysis-table .table-row-even td.ant-table-cell-fix-left,
+          .order-analysis-table .table-row-even td.ant-table-cell-fix-right {
+            background-color: #ffffff !important;
+          }
+          .order-analysis-table .table-row-odd td.ant-table-cell-fix-left,
+          .order-analysis-table .table-row-odd td.ant-table-cell-fix-right {
+            background-color: #fafbfc !important;
+          }
+          /* fixed 컬럼 호버 */
+          .order-analysis-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-left,
+          .order-analysis-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-right {
+            background-color: #f5f5f5 !important;
+          }
+          /* 셀 패딩 */
+          .order-analysis-table .ant-table-tbody > tr > td {
+            padding: 14px 12px !important;
+          }
+          /* 행 구분선 */
+          .order-analysis-table .ant-table-tbody > tr > td {
+            border-bottom: 1px solid #f0f0f0 !important;
+          }
+        `}</style>
       </Card>
 
       {/* 주문 상세 모달 */}
