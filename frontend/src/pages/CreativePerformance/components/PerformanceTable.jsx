@@ -21,6 +21,7 @@ function PerformanceTable({
   summaryStats,
   selectedCreatives,
   highlightedKey,
+  highlightVersion,
   onTableChange,
   onPageChange,
   onSelectCreative,
@@ -484,6 +485,9 @@ function PerformanceTable({
         columns={columns}
         dataSource={data}
         rowKey={(record) => getRowKey(record)}
+        onRow={(record) => ({
+          id: `row-${getRowKey(record)}`
+        })}
         loading={loading}
         onChange={onTableChange}
         scroll={{ x: 1350 }}
@@ -501,7 +505,8 @@ function PerformanceTable({
           const key = getRowKey(record);
           const isHighlighted = highlightedKey === key;
           const baseClass = index % 2 === 0 ? 'table-row-even' : 'table-row-odd';
-          return isHighlighted ? `${baseClass} table-row-highlighted` : baseClass;
+          const highlightClass = isHighlighted ? `table-row-highlighted table-highlight-v${highlightVersion % 2}` : '';
+          return `${baseClass} ${highlightClass}`.trim();
         }}
         style={{
           borderRadius: '8px',
@@ -519,6 +524,8 @@ function PerformanceTable({
         /* 하이라이트 효과 */
         .table-row-highlighted td {
           background-color: #fff7e6 !important;
+        }
+        .table-highlight-v0 td, .table-highlight-v1 td {
           animation: highlight-pulse 1s ease-in-out 3;
         }
         @keyframes highlight-pulse {

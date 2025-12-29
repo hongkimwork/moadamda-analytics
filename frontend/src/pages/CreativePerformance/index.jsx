@@ -25,8 +25,12 @@ function CreativePerformance() {
   const [lastUpdated, setLastUpdated] = useState(dayjs());
   // 테이블 ref (카드 클릭 시 스크롤용)
   const tableRef = useRef(null);
+  // 하이라이트용 타이머 ref
+  const highlightTimeoutRef = useRef(null);
   // 하이라이트할 소재 키
   const [highlightedKey, setHighlightedKey] = useState(null);
+  // 하이라이트 버전 (연속 클릭 시 애니메이션 리셋용)
+  const [highlightVersion, setHighlightVersion] = useState(0);
 
   const {
     // 데이터
@@ -173,15 +177,34 @@ function CreativePerformance() {
   const handleInsightCardClick = (creative) => {
     if (!creative) return;
     const key = getRowKey(creative);
-    setHighlightedKey(key);
     
-    // 테이블로 스크롤
-    if (tableRef.current) {
-      tableRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // 이전 타이머가 있으면 제거
+    if (highlightTimeoutRef.current) {
+      clearTimeout(highlightTimeoutRef.current);
     }
     
-    // 3초 후 하이라이트 해제
-    setTimeout(() => setHighlightedKey(null), 3000);
+    // 하이라이트 설정
+    setHighlightedKey(key);
+    setHighlightVersion(prev => prev + 1);
+    
+    // 해당 행 찾아서 스크롤
+    setTimeout(() => {
+      const rowElement = document.getElementById(`row-${key}`);
+      if (rowElement) {
+        rowElement.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'center' 
+        });
+      } else if (tableRef.current) {
+        tableRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 50);
+    
+    // 3초 후 하이라이트 해제 타이머 설정
+    highlightTimeoutRef.current = setTimeout(() => {
+      setHighlightedKey(null);
+      highlightTimeoutRef.current = null;
+    }, 3000);
   };
 
   return (
@@ -237,6 +260,7 @@ function CreativePerformance() {
           summaryStats={summaryStats}
           selectedCreatives={selectedCreatives}
           highlightedKey={highlightedKey}
+          highlightVersion={highlightVersion}
           onTableChange={handleTableChange}
           onPageChange={handlePageChange}
           onSelectCreative={handleSelectCreative}

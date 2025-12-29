@@ -83,11 +83,19 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
       title: '주문번호',
       dataIndex: 'order_id',
       key: 'order_id',
-      width: 140,
+      width: 175,
+      align: 'center',
       render: (text) => (
         <Text 
           copyable={{ text }}
-          style={{ fontFamily: 'monospace', fontSize: '12px' }}
+          style={{ 
+            fontFamily: 'monospace', 
+            fontSize: '12px',
+            whiteSpace: 'nowrap',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px'
+          }}
         >
           {text}
         </Text>
@@ -98,6 +106,7 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
       dataIndex: 'order_date',
       key: 'order_date',
       width: 150,
+      align: 'center',
       render: (date) => (
         <Text style={{ fontSize: '12px' }}>
           {dayjs(date).format('YYYY-MM-DD HH:mm')}
@@ -109,6 +118,7 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
       dataIndex: 'product_name',
       key: 'product_name',
       ellipsis: true,
+      align: 'center',
       render: (text) => (
         <Text 
           ellipsis={{ tooltip: text }}
@@ -133,7 +143,7 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
       dataIndex: 'final_payment',
       key: 'final_payment',
       width: 110,
-      align: 'right',
+      align: 'center',
       render: (amount) => (
         <Text strong style={{ color: '#0958d9', fontSize: '13px' }}>
           {formatCurrency(amount)}
@@ -148,7 +158,7 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
       ),
       dataIndex: 'is_last_touch',
       key: 'is_last_touch',
-      width: 60,
+      width: 85,
       align: 'center',
       render: (isLastTouch) => (
         isLastTouch ? (

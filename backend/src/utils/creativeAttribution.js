@@ -41,7 +41,7 @@ async function calculateCreativeAttribution(creatives, startDate, endDate) {
   // 단일 쿼리로 모든 광고-방문자 매핑 조회
   const bulkVisitorQuery = `
     SELECT 
-      utm_params->>'utm_content' as utm_content,
+      REPLACE(utm_params->>'utm_content', '+', ' ') as utm_content,
       COALESCE(NULLIF(utm_params->>'utm_source', ''), '-') as utm_source,
       COALESCE(NULLIF(utm_params->>'utm_medium', ''), '-') as utm_medium,
       COALESCE(NULLIF(utm_params->>'utm_campaign', ''), '-') as utm_campaign,
@@ -96,7 +96,7 @@ async function calculateCreativeAttribution(creatives, startDate, endDate) {
   const journeyQuery = `
     SELECT 
       visitor_id,
-      utm_params->>'utm_content' as utm_content,
+      REPLACE(utm_params->>'utm_content', '+', ' ') as utm_content,
       COALESCE(NULLIF(utm_params->>'utm_source', ''), '-') as utm_source,
       COALESCE(NULLIF(utm_params->>'utm_medium', ''), '-') as utm_medium,
       COALESCE(NULLIF(utm_params->>'utm_campaign', ''), '-') as utm_campaign,

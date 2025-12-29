@@ -17,6 +17,11 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-12-29 | 주문번호 레이아웃 수정 | CreativeOrdersModal.jsx |
+| 2025-12-29 | 주문 목록 정렬 수정 | CreativeOrdersModal.jsx |
+| 2025-12-29 | 막타 버튼 잘림 수정 | CreativeOrdersModal.jsx |
+| 2025-12-29 | 인사이트 제목 크기 확대 | InsightCards.jsx |
+| 2025-12-29 | 인사이트 카드 UI 개선 | InsightCards.jsx |
 | 2025-12-26 | 추이 탭 순서 변경 | CreativeAnalysisModal.jsx |
 | 2025-12-24 | 타임라인아이콘수정 | TimelineItem.jsx |
 | 2025-12-24 | 날짜라벨 추가 | OrderDetailPage.jsx |
@@ -27,11 +32,6 @@
 | 2025-12-17 | 그리드 레이아웃 전환 | index.jsx |
 | 2025-12-17 | 매핑 모달 위치 조정 | MappingModal.jsx |
 | 2025-12-17 | 드래그 가이드 파란색 | index.css |
-| 2025-12-17 | 소재성과 아이콘 통일 | CreativeAnalysisModal.jsx |
-| 2025-12-17 | 성과분석 아이콘 통일 | PerformanceTable.jsx |
-| 2025-12-17 | 소재비교 컬럼명 추가 | PerformanceTable.jsx |
-| 2025-12-17 | 날짜선택기 제거 | index.jsx |
-| 2025-12-16 | 기간비교 증감률 제거 | DashboardWidget.jsx |
 
 ---
 

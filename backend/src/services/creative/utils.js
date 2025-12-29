@@ -47,6 +47,9 @@ function safeDecodeURIComponent(str) {
   // 정상적인 한글 완성형이 아닌 문자가 끝에 있으면 제거
   result = result.replace(/[\u1100-\u11FF\u3130-\u318F]$/g, '');
   
+  // '+' 기호를 공백으로 치환 (광고 플랫폼마다 다르게 인코딩되는 이슈 해결)
+  result = result.replace(/\+/g, ' ');
+  
   return result;
 }
 

@@ -5,7 +5,7 @@
 
 import { useMemo } from 'react';
 import { Typography, Tooltip, Skeleton } from 'antd';
-import { Trophy, Target, Magnet, AlertTriangle, Lightbulb } from 'lucide-react';
+import { Trophy, Target, Gem, AlertCircle, Sparkles } from 'lucide-react';
 
 const { Text } = Typography;
 
@@ -101,11 +101,11 @@ const InsightCard = ({
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <Text style={{ 
-          fontSize: '13px', 
+          fontSize: '15px', 
           display: 'block', 
           marginBottom: '4px', 
           color: '#6b7280',
-          fontWeight: 500
+          fontWeight: 700
         }}>
           {title}
         </Text>
@@ -202,7 +202,8 @@ function InsightCards({ data, loading, onCardClick }) {
       })
       .sort((a, b) => calcConversionRate(b) - calcConversionRate(a))[0] || null;
 
-    return { mvp, bestAOV, bestConversion, needsAttention, hiddenGem, avgConversionRate };
+    const result = { mvp, bestAOV, bestConversion, needsAttention, hiddenGem, avgConversionRate };
+    return result;
   }, [data]);
 
   if (loading) {
@@ -230,7 +231,7 @@ function InsightCards({ data, loading, onCardClick }) {
       <InsightCard
         icon={Trophy}
         iconColor="#f59e0b"
-        title="🏆 이번 기간 MVP"
+        title="이번 기간 MVP"
         creativeName={mvp ? truncateName(mvp.creative_name) : '데이터 없음'}
         mainValue={mvp ? `₩${formatMoney(mvp.total_revenue || 0)}` : '-'}
         mainLabel="매출"
@@ -243,9 +244,9 @@ function InsightCards({ data, loading, onCardClick }) {
 
       {/* 2. 객단가 최고 */}
       <InsightCard
-        icon={Target}
+        icon={Gem}
         iconColor="#8b5cf6"
-        title="💎 객단가 최고"
+        title="객단가 최고"
         creativeName={bestAOV ? truncateName(bestAOV.creative_name) : '데이터 없음'}
         mainValue={bestAOV ? `₩${formatMoney(calcAOV(bestAOV))}` : '-'}
         mainLabel="객단가"
@@ -260,7 +261,7 @@ function InsightCards({ data, loading, onCardClick }) {
       <InsightCard
         icon={Target}
         iconColor="#10b981"
-        title="🎯 전환율 최고"
+        title="전환율 최고"
         creativeName={bestConversion ? truncateName(bestConversion.creative_name) : '데이터 없음'}
         mainValue={bestConversion ? `${calcConversionRate(bestConversion).toFixed(1)}%` : '-'}
         mainLabel={`(평균 ${avgConversionRate.toFixed(1)}%)`}
@@ -271,26 +272,11 @@ function InsightCards({ data, loading, onCardClick }) {
         isEmpty={!bestConversion}
       />
 
-      {/* 4. 점검 필요 */}
+      {/* 4. 숨은 보석 */}
       <InsightCard
-        icon={AlertTriangle}
-        iconColor="#ef4444"
-        title="⚠️ 점검 필요"
-        creativeName={needsAttention ? truncateName(needsAttention.creative_name) : '없음 👍'}
-        mainValue={needsAttention ? `${calcConversionRate(needsAttention).toFixed(1)}%` : '-'}
-        mainLabel="전환율"
-        subValue={needsAttention ? `${needsAttention.unique_visitors?.toLocaleString()}명 방문` : null}
-        subLabel=""
-        tooltip={needsAttention ? `${needsAttention.creative_name}\n방문자는 많은데 구매가 적습니다. 랜딩페이지나 상품을 점검해보세요` : '점검이 필요한 소재가 없습니다'}
-        onClick={() => needsAttention && onCardClick?.(needsAttention)}
-        isEmpty={!needsAttention}
-      />
-
-      {/* 5. 숨은 보석 */}
-      <InsightCard
-        icon={Lightbulb}
+        icon={Sparkles}
         iconColor="#3b82f6"
-        title="💡 숨은 보석"
+        title="숨은 보석"
         creativeName={hiddenGem ? truncateName(hiddenGem.creative_name) : '없음'}
         mainValue={hiddenGem ? `${calcConversionRate(hiddenGem).toFixed(1)}%` : '-'}
         mainLabel="전환율"
@@ -299,6 +285,21 @@ function InsightCards({ data, loading, onCardClick }) {
         tooltip={hiddenGem ? `${hiddenGem.creative_name}\n방문자는 적지만 전환율이 높습니다. 예산을 늘려보세요!` : '숨은 보석 소재가 없습니다'}
         onClick={() => hiddenGem && onCardClick?.(hiddenGem)}
         isEmpty={!hiddenGem}
+      />
+
+      {/* 5. 점검 필요 */}
+      <InsightCard
+        icon={AlertCircle}
+        iconColor="#ef4444"
+        title="점검 필요"
+        creativeName={needsAttention ? truncateName(needsAttention.creative_name) : '없음 👍'}
+        mainValue={needsAttention ? `${calcConversionRate(needsAttention).toFixed(1)}%` : '-'}
+        mainLabel="전환율"
+        subValue={needsAttention ? `${needsAttention.unique_visitors?.toLocaleString()}명 방문` : null}
+        subLabel=""
+        tooltip={needsAttention ? `${needsAttention.creative_name}\n방문자는 많은데 구매가 적습니다. 랜딩페이지나 상품을 점검해보세요` : '점검이 필요한 소재가 없습니다'}
+        onClick={() => needsAttention && onCardClick?.(needsAttention)}
+        isEmpty={!needsAttention}
       />
     </div>
   );
