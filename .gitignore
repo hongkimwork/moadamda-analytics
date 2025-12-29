@@ -16,3 +16,4 @@ backend/build/
 *~
 *.pem
 *.zip
+.kiro/

@@ -17,6 +17,8 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2025-12-29 | URL정규화 버그 수정 | urlCleaner.js |
+| 2025-12-29 | 테이블 스타일 개선 | PerformanceTable.jsx |
 | 2025-12-29 | 주문번호 레이아웃 수정 | CreativeOrdersModal.jsx |
 | 2025-12-29 | 주문 목록 정렬 수정 | CreativeOrdersModal.jsx |
 | 2025-12-29 | 막타 버튼 잘림 수정 | CreativeOrdersModal.jsx |
@@ -30,8 +32,6 @@
 | 2025-12-17 | 위젯 여백 조정 | DashboardWidget.jsx |
 | 2025-12-17 | 취소주문 필터 로직 수정 | ordersRepository.js |
 | 2025-12-17 | 그리드 레이아웃 전환 | index.jsx |
-| 2025-12-17 | 매핑 모달 위치 조정 | MappingModal.jsx |
-| 2025-12-17 | 드래그 가이드 파란색 | index.css |
 
 ---
 

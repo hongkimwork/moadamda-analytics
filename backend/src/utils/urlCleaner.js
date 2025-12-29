@@ -172,7 +172,13 @@ function cleanUrl(url) {
     // Convert /product/상품명/146/ to /product/146/
     // This consolidates all product URL variations into one canonical form
     // Use [\s\S] to match any character including Korean characters
-    const productPathMatch = urlObj.pathname.match(/\/product\/[\s\S]+?\/(\d+)\/?$/);
+    // BUGFIX: First remove /category/N/display/N/ pattern before extracting product ID
+    // Without this, /product/상품명/136/category/80/display/1/ would extract "1" instead of "136"
+    let productPathname = urlObj.pathname;
+    productPathname = productPathname.replace(/\/category\/\d+\/display\/\d+\/?$/, '/');
+    productPathname = productPathname.replace(/\/category\/\d+\/?$/, '/');
+    
+    const productPathMatch = productPathname.match(/\/product\/[\s\S]+?\/(\d+)\/?$/);
     if (productPathMatch) {
       const productId = productPathMatch[1];
       return `${cleanOrigin}/product/${productId}/`;
