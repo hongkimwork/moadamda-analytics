@@ -28,39 +28,42 @@ async function calculateCreativeAttribution(creatives, startDate, endDate) {
     };
   });
 
-  // 모든 광고를 본 visitor_id 수집 (성능 최적화)
+  // [최적화] 모든 광고의 visitor를 단일 쿼리로 조회 (N+1 문제 해결)
   const allVisitorIds = new Set();
-  const creativeVisitorMap = {}; // { creative_key: [visitor_ids] }
-
-  for (const creative of creatives) {
+  const creativeVisitorMap = {}; // { creative_key: Set<visitor_ids> }
+  
+  // 결과 키 초기화
+  creatives.forEach(creative => {
     const key = getCreativeKey(creative);
-    
-    const visitorQuery = `
-      SELECT DISTINCT visitor_id
-      FROM utm_sessions
-      WHERE utm_params->>'utm_content' = $1
-        AND COALESCE(NULLIF(utm_params->>'utm_source', ''), '-') = $2
-        AND COALESCE(NULLIF(utm_params->>'utm_medium', ''), '-') = $3
-        AND COALESCE(NULLIF(utm_params->>'utm_campaign', ''), '-') = $4
-        AND entry_timestamp >= $5
-        AND entry_timestamp <= $6
-    `;
-    
-    const visitorResult = await db.query(visitorQuery, [
-      creative.creative_name,
-      creative.utm_source,
-      creative.utm_medium,
-      creative.utm_campaign,
-      startDate,
-      endDate
-    ]);
+    creativeVisitorMap[key] = new Set();
+  });
 
-    const visitorIds = visitorResult.rows.map(r => r.visitor_id);
-    creativeVisitorMap[key] = visitorIds;
-    visitorIds.forEach(id => allVisitorIds.add(id));
-  }
+  // 단일 쿼리로 모든 광고-방문자 매핑 조회
+  const bulkVisitorQuery = `
+    SELECT 
+      utm_params->>'utm_content' as utm_content,
+      COALESCE(NULLIF(utm_params->>'utm_source', ''), '-') as utm_source,
+      COALESCE(NULLIF(utm_params->>'utm_medium', ''), '-') as utm_medium,
+      COALESCE(NULLIF(utm_params->>'utm_campaign', ''), '-') as utm_campaign,
+      visitor_id
+    FROM utm_sessions
+    WHERE utm_params->>'utm_content' IS NOT NULL
+      AND entry_timestamp >= $1
+      AND entry_timestamp <= $2
+  `;
+  
+  const bulkVisitorResult = await db.query(bulkVisitorQuery, [startDate, endDate]);
+  
+  // 조회 결과를 광고별로 매핑
+  bulkVisitorResult.rows.forEach(row => {
+    const key = `${row.utm_content}||${row.utm_source}||${row.utm_medium}||${row.utm_campaign}`;
+    if (creativeVisitorMap[key]) {
+      creativeVisitorMap[key].add(row.visitor_id);
+      allVisitorIds.add(row.visitor_id);
+    }
+  });
 
-  // 모든 visitor의 구매 내역 한 번에 조회 (성능 최적화)
+  // 모든 visitor의 구매 내역 한 번에 조회
   if (allVisitorIds.size === 0) {
     return result;
   }
@@ -142,7 +145,7 @@ async function calculateCreativeAttribution(creatives, startDate, endDate) {
     const isSingleTouch = uniqueCreatives.size === 1; // 하나의 광고만 봤는지
 
     // 막타 제외한 터치 목록 (막타 터치 하나만 제외, 같은 이름이어도 다른 터치는 포함)
-    const nonLastTouches = journey.filter((touch, index) => 
+    const nonLastTouches = journey.filter((touch) => 
       !(touch.sequence_order === lastTouch.sequence_order && 
         touch.utm_content === lastTouch.utm_content)
     );
