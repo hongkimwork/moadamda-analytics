@@ -17,6 +17,7 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2026-01-05 | 광고소재 분석 배포완료 | creative-performance.js |
 | 2026-01-05 | Raw Data 검증 기능 추가 | RawDataModal.jsx |
 | 2026-01-05 | 기여매출액 계산버그 수정 | creativeAttribution.js |
 | 2026-01-05 | 유입가치 툴팁 개선 | PerformanceTable.jsx |
@@ -31,7 +32,6 @@
 | 2025-12-29 | 인사이트 제목 크기 확대 | InsightCards.jsx |
 | 2025-12-29 | 인사이트 카드 UI 개선 | InsightCards.jsx |
 | 2025-12-26 | 추이 탭 순서 변경 | CreativeAnalysisModal.jsx |
-| 2025-12-24 | 타임라인아이콘수정 | TimelineItem.jsx |
 
 ---
 
