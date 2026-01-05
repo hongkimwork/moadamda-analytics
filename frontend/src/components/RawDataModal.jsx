@@ -221,6 +221,7 @@ function RawDataModal({ visible, onClose, creative, dateRange }) {
       onCancel={onClose}
       footer={null}
       width={1000}
+      destroyOnClose={true}
       style={{ top: '2vh' }}
       styles={{
         body: { 
