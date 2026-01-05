@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { Card, Typography, Button } from 'antd';
-import { BarChart3, RefreshCw, GitCompare, Clock } from 'lucide-react';
+import { BarChart3, RefreshCw, Clock } from 'lucide-react';
 import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
@@ -13,16 +13,12 @@ const { Title, Text } = Typography;
 /**
  * 퍼포먼스 페이지 헤더 컴포넌트
  * @param {Object} props
- * @param {Array} props.selectedCreatives - 선택된 광고 소재 목록
  * @param {Function} props.onRefresh - 새로고침 핸들러
- * @param {Function} props.onCompare - 소재 비교 핸들러
  * @param {boolean} props.loading - 로딩 상태
  * @param {Object} props.lastUpdated - 마지막 갱신 시간 (dayjs 객체)
  */
 function PerformanceHeader({ 
-  selectedCreatives, 
   onRefresh, 
-  onCompare, 
   loading,
   lastUpdated
 }) {
@@ -64,25 +60,6 @@ function PerformanceHeader({
         {/* 우측: 버튼 + 갱신 시간 */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
           <div style={{ display: 'flex', gap: '8px' }}>
-            {selectedCreatives.length > 0 && (
-              <Button
-                type="primary"
-                icon={<GitCompare size={16} />}
-                onClick={onCompare}
-                disabled={selectedCreatives.length < 2}
-                style={{
-                  height: '40px',
-                  borderRadius: '8px',
-                  fontWeight: 500,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: selectedCreatives.length >= 2 ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : undefined
-                }}
-              >
-                소재 비교 ({selectedCreatives.length}개)
-              </Button>
-            )}
             <Button
               icon={<RefreshCw size={16} className={loading ? 'spin-animation' : ''} />}
               onClick={onRefresh}

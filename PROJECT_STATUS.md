@@ -17,6 +17,12 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2026-01-05 | Raw Data 검증 기능 추가 | RawDataModal.jsx |
+| 2026-01-05 | 기여매출액 계산버그 수정 | creativeAttribution.js |
+| 2026-01-05 | 유입가치 툴팁 개선 | PerformanceTable.jsx |
+| 2026-01-05 | UTM 컬럼 너비 축소 | PerformanceTable.jsx |
+| 2026-01-05 | 소재 비교 기능 제거 | PerformanceTable.jsx |
+| 2026-01-05 | 1명당 유입가치 컬럼 추가 | PerformanceTable.jsx |
 | 2025-12-29 | URL정규화 버그 수정 | urlCleaner.js |
 | 2025-12-29 | 테이블 스타일 개선 | PerformanceTable.jsx |
 | 2025-12-29 | 주문번호 레이아웃 수정 | CreativeOrdersModal.jsx |
@@ -26,12 +32,6 @@
 | 2025-12-29 | 인사이트 카드 UI 개선 | InsightCards.jsx |
 | 2025-12-26 | 추이 탭 순서 변경 | CreativeAnalysisModal.jsx |
 | 2025-12-24 | 타임라인아이콘수정 | TimelineItem.jsx |
-| 2025-12-24 | 날짜라벨 추가 | OrderDetailPage.jsx |
-| 2025-12-24 | 여정분석 헤더 조정 | OrderDetailPage.jsx |
-| 2025-12-17 | 위젯 편집 모달 추가 | EditWidgetModal.jsx |
-| 2025-12-17 | 위젯 여백 조정 | DashboardWidget.jsx |
-| 2025-12-17 | 취소주문 필터 로직 수정 | ordersRepository.js |
-| 2025-12-17 | 그리드 레이아웃 전환 | index.jsx |
 
 ---
 

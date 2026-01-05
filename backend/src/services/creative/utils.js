@@ -120,6 +120,7 @@ function validateSortColumn(sortBy, sortOrder) {
     'utm_medium',
     'utm_campaign',
     'unique_visitors',
+    'total_views',
     'avg_pageviews',
     'avg_duration_seconds'
   ];

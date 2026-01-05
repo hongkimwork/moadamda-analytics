@@ -2,20 +2,17 @@
 // 광고 소재 퍼포먼스 페이지 (리팩토링)
 // ============================================================================
 
-import { useState, useEffect, useRef } from 'react';
-import { Alert, message } from 'antd';
+import { useState, useEffect } from 'react';
+import { Alert } from 'antd';
 import dayjs from 'dayjs';
 import { useCreativePerformance } from './hooks/useCreativePerformance';
-import { getRowKey } from './utils/helpers';
 import PerformanceHeader from './components/PerformanceHeader';
+import InsightCards from './components/InsightCards';
 import PerformanceFilters from './components/PerformanceFilters';
 import PerformanceTable from './components/PerformanceTable';
-import InsightCards from './components/InsightCards';
 import CreativeOrdersModal from '../../components/CreativeOrdersModal';
-import CreativeAnalysisModal from '../../components/CreativeAnalysisModal';
 import CreativeJourneyModal from '../../components/CreativeJourneyModal';
-import CreativeLandingModal from '../../components/CreativeLandingModal';
-import CreativeCompareModal from '../../components/CreativeCompareModal';
+import RawDataModal from '../../components/RawDataModal';
 
 /**
  * 광고 소재 퍼포먼스 페이지
@@ -23,14 +20,6 @@ import CreativeCompareModal from '../../components/CreativeCompareModal';
 function CreativePerformance() {
   // 마지막 갱신 시간 state
   const [lastUpdated, setLastUpdated] = useState(dayjs());
-  // 테이블 ref (카드 클릭 시 스크롤용)
-  const tableRef = useRef(null);
-  // 하이라이트용 타이머 ref
-  const highlightTimeoutRef = useRef(null);
-  // 하이라이트할 소재 키
-  const [highlightedKey, setHighlightedKey] = useState(null);
-  // 하이라이트 버전 (연속 클릭 시 애니메이션 리셋용)
-  const [highlightVersion, setHighlightVersion] = useState(0);
 
   const {
     // 데이터
@@ -48,26 +37,18 @@ function CreativePerformance() {
     // 모달 상태
     ordersModalVisible,
     selectedCreative,
-    analysisModalVisible,
-    analysisCreative,
     journeyModalVisible,
     journeyCreative,
-    landingModalVisible,
-    landingCreative,
-    selectedCreatives,
-    compareModalVisible,
+    rawDataModalVisible,
+    rawDataCreative,
     
     // 상태 변경 함수
     setOrdersModalVisible,
     setSelectedCreative,
-    setAnalysisModalVisible,
-    setAnalysisCreative,
     setJourneyModalVisible,
     setJourneyCreative,
-    setLandingModalVisible,
-    setLandingCreative,
-    setSelectedCreatives,
-    setCompareModalVisible,
+    setRawDataModalVisible,
+    setRawDataCreative,
     setActiveUtmFilters,
     setQuickFilterSources,
     setError,
@@ -105,17 +86,6 @@ function CreativePerformance() {
     setOrdersModalVisible(true);
   };
 
-  // 성과 분석 버튼 클릭 핸들러
-  const handleViewAnalysis = (record) => {
-    setAnalysisCreative({
-      creative_name: record.creative_name,
-      utm_source: record.utm_source,
-      utm_medium: record.utm_medium,
-      utm_campaign: record.utm_campaign
-    });
-    setAnalysisModalVisible(true);
-  };
-
   // 고객 여정 버튼 클릭 핸들러
   const handleViewJourney = (record) => {
     setJourneyCreative({
@@ -127,103 +97,28 @@ function CreativePerformance() {
     setJourneyModalVisible(true);
   };
 
-  // 페이지 분석 버튼 클릭 핸들러
-  const handleViewLanding = (record) => {
-    setLandingCreative({
+  // Raw Data 검증 버튼 클릭 핸들러
+  const handleViewRawData = (record) => {
+    setRawDataCreative({
       creative_name: record.creative_name,
       utm_source: record.utm_source,
       utm_medium: record.utm_medium,
       utm_campaign: record.utm_campaign
     });
-    setLandingModalVisible(true);
-  };
-
-  // 소재 선택 핸들러 (비교용)
-  const handleSelectCreative = (record, checked) => {
-    const key = getRowKey(record);
-    if (checked) {
-      if (selectedCreatives.length < 5) {
-        setSelectedCreatives([...selectedCreatives, { key, ...record }]);
-      } else {
-        message.warning('최대 5개까지 선택할 수 있습니다');
-      }
-    } else {
-      setSelectedCreatives(selectedCreatives.filter(item => item.key !== key));
-    }
-  };
-
-  const handleSelectAll = (checked) => {
-    if (checked) {
-      const firstFive = data.slice(0, 5).map(record => ({ key: getRowKey(record), ...record }));
-      setSelectedCreatives(firstFive);
-      if (data.length > 5) {
-        message.info('최대 5개까지 선택되었습니다');
-      }
-    } else {
-      setSelectedCreatives([]);
-    }
-  };
-
-  // 소재 비교 모달 열기
-  const handleOpenCompare = () => {
-    if (selectedCreatives.length < 2) {
-      message.warning('비교하려면 최소 2개 이상 선택해주세요');
-      return;
-    }
-    setCompareModalVisible(true);
-  };
-
-  // 인사이트 카드 클릭 핸들러 (해당 소재로 스크롤 + 하이라이트)
-  const handleInsightCardClick = (creative) => {
-    if (!creative) return;
-    const key = getRowKey(creative);
-    
-    // 이전 타이머가 있으면 제거
-    if (highlightTimeoutRef.current) {
-      clearTimeout(highlightTimeoutRef.current);
-    }
-    
-    // 하이라이트 설정
-    setHighlightedKey(key);
-    setHighlightVersion(prev => prev + 1);
-    
-    // 해당 행 찾아서 스크롤
-    setTimeout(() => {
-      const rowElement = document.getElementById(`row-${key}`);
-      if (rowElement) {
-        rowElement.scrollIntoView({ 
-          behavior: 'smooth', 
-          block: 'center' 
-        });
-      } else if (tableRef.current) {
-        tableRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    }, 50);
-    
-    // 3초 후 하이라이트 해제 타이머 설정
-    highlightTimeoutRef.current = setTimeout(() => {
-      setHighlightedKey(null);
-      highlightTimeoutRef.current = null;
-    }, 3000);
+    setRawDataModalVisible(true);
   };
 
   return (
     <div style={{ padding: '24px', background: '#f5f7fa', minHeight: '100vh' }}>
       {/* 헤더 */}
       <PerformanceHeader
-        selectedCreatives={selectedCreatives}
         onRefresh={handleRefresh}
-        onCompare={handleOpenCompare}
         loading={loading}
         lastUpdated={lastUpdated}
       />
 
-      {/* 인사이트 카드 영역 */}
-      <InsightCards 
-        data={data} 
-        loading={loading} 
-        onCardClick={handleInsightCardClick}
-      />
+      {/* 인사이트 카드 (Top 5 랭킹) */}
+      <InsightCards data={data} />
 
       {/* 검색 및 필터 */}
       <PerformanceFilters
@@ -250,27 +145,19 @@ function CreativePerformance() {
       )}
 
       {/* 테이블 */}
-      <div ref={tableRef}>
-        <PerformanceTable
-          data={data}
-          loading={loading}
-          total={total}
-          currentPage={currentPage}
-          pageSize={pageSize}
-          summaryStats={summaryStats}
-          selectedCreatives={selectedCreatives}
-          highlightedKey={highlightedKey}
-          highlightVersion={highlightVersion}
-          onTableChange={handleTableChange}
-          onPageChange={handlePageChange}
-          onSelectCreative={handleSelectCreative}
-          onSelectAll={handleSelectAll}
-          onViewOrders={handleViewOrders}
-          onViewAnalysis={handleViewAnalysis}
-          onViewJourney={handleViewJourney}
-          onViewLanding={handleViewLanding}
-        />
-      </div>
+      <PerformanceTable
+        data={data}
+        loading={loading}
+        total={total}
+        currentPage={currentPage}
+        pageSize={pageSize}
+        summaryStats={summaryStats}
+        onTableChange={handleTableChange}
+        onPageChange={handlePageChange}
+        onViewOrders={handleViewOrders}
+        onViewJourney={handleViewJourney}
+        onViewRawData={handleViewRawData}
+      />
 
       {/* 주문 보기 모달 */}
       <CreativeOrdersModal
@@ -280,20 +167,6 @@ function CreativePerformance() {
           setSelectedCreative(null);
         }}
         creative={selectedCreative}
-        dateRange={{
-          start: filters.dateRange[0],
-          end: filters.dateRange[1]
-        }}
-      />
-
-      {/* 성과 분석 모달 */}
-      <CreativeAnalysisModal
-        visible={analysisModalVisible}
-        onClose={() => {
-          setAnalysisModalVisible(false);
-          setAnalysisCreative(null);
-        }}
-        creative={analysisCreative}
         dateRange={{
           start: filters.dateRange[0],
           end: filters.dateRange[1]
@@ -314,25 +187,14 @@ function CreativePerformance() {
         }}
       />
 
-      {/* 페이지 분석 모달 */}
-      <CreativeLandingModal
-        visible={landingModalVisible}
+      {/* Raw Data 검증 모달 */}
+      <RawDataModal
+        visible={rawDataModalVisible}
         onClose={() => {
-          setLandingModalVisible(false);
-          setLandingCreative(null);
+          setRawDataModalVisible(false);
+          setRawDataCreative(null);
         }}
-        creative={landingCreative}
-        dateRange={{
-          start: filters.dateRange[0],
-          end: filters.dateRange[1]
-        }}
-      />
-
-      {/* 소재 비교 모달 */}
-      <CreativeCompareModal
-        visible={compareModalVisible}
-        onClose={() => setCompareModalVisible(false)}
-        creatives={selectedCreatives}
+        creative={rawDataCreative}
         dateRange={{
           start: filters.dateRange[0],
           end: filters.dateRange[1]

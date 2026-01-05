@@ -48,16 +48,10 @@ export const useCreativePerformance = () => {
   // 모달 state
   const [ordersModalVisible, setOrdersModalVisible] = useState(false);
   const [selectedCreative, setSelectedCreative] = useState(null);
-  const [analysisModalVisible, setAnalysisModalVisible] = useState(false);
-  const [analysisCreative, setAnalysisCreative] = useState(null);
   const [journeyModalVisible, setJourneyModalVisible] = useState(false);
   const [journeyCreative, setJourneyCreative] = useState(null);
-  const [landingModalVisible, setLandingModalVisible] = useState(false);
-  const [landingCreative, setLandingCreative] = useState(null);
-
-  // 소재 비교 선택 state
-  const [selectedCreatives, setSelectedCreatives] = useState([]);
-  const [compareModalVisible, setCompareModalVisible] = useState(false);
+  const [rawDataModalVisible, setRawDataModalVisible] = useState(false);
+  const [rawDataCreative, setRawDataCreative] = useState(null);
 
   // 요약 통계 계산
   const summaryStats = useMemo(() => {
@@ -74,7 +68,7 @@ export const useCreativePerformance = () => {
     }
 
     return data.reduce((acc, curr) => {
-      acc.totalRevenue += (curr.total_contributed_revenue || 0);
+      acc.totalRevenue += (curr.attributed_revenue || 0);
       acc.totalOrders += (curr.contributed_orders_count || 0);
       acc.totalUV += (curr.unique_visitors || 0);
       acc.totalLastTouchRevenue += (curr.total_revenue || 0);
@@ -82,7 +76,7 @@ export const useCreativePerformance = () => {
       acc.totalLastTouchCount += (curr.last_touch_count || 0);
       acc.maxRevenue = Math.max(
         acc.maxRevenue,
-        curr.total_contributed_revenue || 0,
+        curr.total_revenue || 0,
         curr.attributed_revenue || 0
       );
       return acc;
@@ -228,26 +222,18 @@ export const useCreativePerformance = () => {
     // 모달 상태
     ordersModalVisible,
     selectedCreative,
-    analysisModalVisible,
-    analysisCreative,
     journeyModalVisible,
     journeyCreative,
-    landingModalVisible,
-    landingCreative,
-    selectedCreatives,
-    compareModalVisible,
+    rawDataModalVisible,
+    rawDataCreative,
     
     // 상태 변경 함수
     setOrdersModalVisible,
     setSelectedCreative,
-    setAnalysisModalVisible,
-    setAnalysisCreative,
     setJourneyModalVisible,
     setJourneyCreative,
-    setLandingModalVisible,
-    setLandingCreative,
-    setSelectedCreatives,
-    setCompareModalVisible,
+    setRawDataModalVisible,
+    setRawDataCreative,
     setActiveUtmFilters,
     setQuickFilterSources,
     setError,

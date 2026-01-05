@@ -5,6 +5,10 @@
 
 const db = require('../../utils/database');
 
+// 이상치 필터링 기준값 (초 단위)
+// 2시간 이상의 체류시간은 비정상적인 데이터로 판단하여 평균 계산에서 제외
+const MAX_DURATION_SECONDS = 7200; // 2시간 = 7200초
+
 /**
  * 광고 소재별 집계 데이터 조회
  * @param {Object} params - 쿼리 파라미터
@@ -36,6 +40,9 @@ async function getCreativeAggregation({
       -- 순방문자수 (UV)
       COUNT(DISTINCT us.visitor_id) as unique_visitors,
       
+      -- 총 조회수 (View) - 중복 포함
+      COUNT(*) as total_views,
+      
       -- 평균 페이지뷰 (방문자당 평균, 소수점 1자리)
       ROUND(
         COALESCE(SUM(us.pageview_count)::FLOAT / NULLIF(COUNT(DISTINCT us.visitor_id), 0), 0)::NUMERIC,
@@ -43,8 +50,13 @@ async function getCreativeAggregation({
       ) as avg_pageviews,
       
       -- 평균 체류시간 (방문자당 평균, 초 단위, 소수점 1자리)
+      -- 이상치 제외: 2시간(7200초) 이상의 체류시간은 비정상으로 판단하여 제외
       ROUND(
-        COALESCE(SUM(us.duration_seconds)::FLOAT / NULLIF(COUNT(DISTINCT us.visitor_id), 0), 0)::NUMERIC,
+        COALESCE(
+          SUM(CASE WHEN us.duration_seconds < ${MAX_DURATION_SECONDS} THEN us.duration_seconds ELSE 0 END)::FLOAT 
+          / NULLIF(COUNT(DISTINCT CASE WHEN us.duration_seconds < ${MAX_DURATION_SECONDS} THEN us.visitor_id END), 0), 
+          0
+        )::NUMERIC,
         1
       ) as avg_duration_seconds
 

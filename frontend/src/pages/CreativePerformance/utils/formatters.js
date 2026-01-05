@@ -44,3 +44,67 @@ export const formatNumber = (num) => {
   if (!num || num === 0) return '0';
   return parseInt(num).toLocaleString();
 };
+
+/**
+ * 모수 평가 점수 계산 (상대 순위 기반)
+ * UV 60% + 평균PV 20% + 평균체류시간 20%
+ * @param {Array} data - 전체 광고 데이터 배열
+ * @returns {Map} 각 광고의 고유키 → 점수 매핑
+ */
+export const calculateTrafficScores = (data) => {
+  if (!data || data.length === 0) return new Map();
+
+  // 각 지표별 정렬된 배열 생성 (내림차순 - 높을수록 좋음)
+  const sortedByUV = [...data].sort((a, b) => (b.unique_visitors || 0) - (a.unique_visitors || 0));
+  const sortedByPV = [...data].sort((a, b) => (b.avg_pageviews || 0) - (a.avg_pageviews || 0));
+  const sortedByDuration = [...data].sort((a, b) => (b.avg_duration_seconds || 0) - (a.avg_duration_seconds || 0));
+
+  const totalCount = data.length;
+  const scoreMap = new Map();
+
+  // 각 광고에 대해 순위 기반 점수 계산
+  data.forEach((item) => {
+    const key = `${item.utm_source || ''}_${item.utm_campaign || ''}_${item.utm_medium || ''}_${item.creative_name || ''}`;
+
+    // 순위 찾기 (0-based index)
+    const uvRank = sortedByUV.findIndex(d => 
+      d.utm_source === item.utm_source && 
+      d.utm_campaign === item.utm_campaign && 
+      d.utm_medium === item.utm_medium && 
+      d.creative_name === item.creative_name
+    );
+    const pvRank = sortedByPV.findIndex(d => 
+      d.utm_source === item.utm_source && 
+      d.utm_campaign === item.utm_campaign && 
+      d.utm_medium === item.utm_medium && 
+      d.creative_name === item.creative_name
+    );
+    const durationRank = sortedByDuration.findIndex(d => 
+      d.utm_source === item.utm_source && 
+      d.utm_campaign === item.utm_campaign && 
+      d.utm_medium === item.utm_medium && 
+      d.creative_name === item.creative_name
+    );
+
+    // 순위를 점수로 변환 (1등 = 100점, 꼴등 = 0점에 가까움)
+    const uvScore = totalCount > 1 ? ((totalCount - 1 - uvRank) / (totalCount - 1)) * 100 : 100;
+    const pvScore = totalCount > 1 ? ((totalCount - 1 - pvRank) / (totalCount - 1)) * 100 : 100;
+    const durationScore = totalCount > 1 ? ((totalCount - 1 - durationRank) / (totalCount - 1)) * 100 : 100;
+
+    // 가중치 적용: UV 60%, 평균PV 20%, 체류시간 20%
+    const finalScore = Math.round(uvScore * 0.6 + pvScore * 0.2 + durationScore * 0.2);
+
+    scoreMap.set(key, {
+      score: finalScore,
+      uvScore: Math.round(uvScore),
+      pvScore: Math.round(pvScore),
+      durationScore: Math.round(durationScore),
+      uvRank: uvRank + 1,
+      pvRank: pvRank + 1,
+      durationRank: durationRank + 1,
+      totalCount
+    });
+  });
+
+  return scoreMap;
+};

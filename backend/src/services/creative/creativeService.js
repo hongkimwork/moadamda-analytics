@@ -87,6 +87,7 @@ async function getCreativePerformance(params) {
     utm_medium: safeDecodeURIComponent(row.utm_medium || '-'),
     utm_campaign: safeDecodeURIComponent(row.utm_campaign || '-'),
     unique_visitors: parseInt(row.unique_visitors) || 0,
+    total_views: parseInt(row.total_views) || 0,
     avg_pageviews: parseFloat(row.avg_pageviews) || 0,
     avg_duration_seconds: parseFloat(row.avg_duration_seconds) || 0,
     // 구매 데이터는 아래에서 병합
@@ -105,6 +106,8 @@ async function getCreativePerformance(params) {
       const existing = mergedDataMap.get(key);
       // UV 합산
       existing.unique_visitors += row.unique_visitors;
+      // View 합산
+      existing.total_views += row.total_views;
       // 총 페이지뷰, 총 체류시간 합산 (나중에 평균 재계산용)
       existing._total_pageviews += row.unique_visitors * row.avg_pageviews;
       existing._total_duration += row.unique_visitors * row.avg_duration_seconds;
@@ -153,6 +156,7 @@ async function getCreativePerformance(params) {
         if (isTruncated(shortName, longName)) {
           // 짧은 것의 데이터를 긴 것에 병합
           longRow.unique_visitors += shortRow.unique_visitors;
+          longRow.total_views += shortRow.total_views;
           longRow._total_pageviews += shortRow._total_pageviews;
           longRow._total_duration += shortRow._total_duration;
           
@@ -174,6 +178,7 @@ async function getCreativePerformance(params) {
     utm_medium: row.utm_medium,
     utm_campaign: row.utm_campaign,
     unique_visitors: row.unique_visitors,
+    total_views: row.total_views,
     avg_pageviews: row.unique_visitors > 0 
       ? Math.round((row._total_pageviews / row.unique_visitors) * 10) / 10 
       : 0,

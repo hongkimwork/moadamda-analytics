@@ -762,10 +762,197 @@ async function compareCreatives(params) {
   };
 }
 
+/**
+ * Raw Data 검증: 트래픽 지표 + 세션 목록
+ */
+async function getRawTrafficData(params) {
+  const { creative_name, utm_source, utm_medium, utm_campaign, start, end } = params;
+  
+  // 파라미터 검증
+  validateCreativeParams(params);
+  
+  const { startDate, endDate } = parseDates(start, end);
+  
+  // 트래픽 요약 및 세션 목록 조회
+  const [summary, sessions] = await Promise.all([
+    repository.getRawTrafficSummary({ creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate }),
+    repository.getRawSessions({ creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate })
+  ]);
+  
+  // 세션 데이터 가공
+  const formattedSessions = sessions.map(s => ({
+    id: s.id,
+    visitor_id: s.visitor_id,
+    entry_timestamp: s.entry_timestamp,
+    duration_seconds: parseInt(s.duration_seconds) || 0,
+    pageview_count: parseInt(s.pageview_count) || 0,
+    device_type: s.device_type || 'unknown',
+    browser: s.browser || 'unknown'
+  }));
+  
+  return {
+    success: true,
+    creative: { creative_name, utm_source, utm_medium, utm_campaign },
+    period: { start, end },
+    summary: {
+      total_views: parseInt(summary.total_views) || 0,
+      unique_visitors: parseInt(summary.unique_visitors) || 0,
+      avg_pageviews: parseFloat(summary.avg_pageviews) || 0,
+      avg_duration_seconds: parseFloat(summary.avg_duration_seconds) || 0
+    },
+    sessions: formattedSessions
+  };
+}
+
+/**
+ * Raw Data 검증: 매출 지표 + 기여 주문 상세
+ */
+async function getRawAttributionData(params) {
+  const { creative_name, utm_source, utm_medium, utm_campaign, start, end } = params;
+  
+  // 파라미터 검증
+  validateCreativeParams(params);
+  
+  const { startDate, endDate } = parseDates(start, end);
+  const targetCreativeKey = `${creative_name}||${utm_source}||${utm_medium}||${utm_campaign}`;
+  
+  // visitor 조회
+  const visitorIds = await repository.getCreativeVisitors({
+    creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate
+  });
+  
+  if (visitorIds.length === 0) {
+    return {
+      success: true,
+      creative: { creative_name, utm_source, utm_medium, utm_campaign },
+      period: { start, end },
+      summary: {
+        contributed_orders_count: 0,
+        last_touch_count: 0,
+        last_touch_revenue: 0,
+        attributed_revenue: 0
+      },
+      orders: []
+    };
+  }
+  
+  // 주문 및 여정 조회
+  const [allOrders, journeyRows] = await Promise.all([
+    repository.getVisitorOrders({ visitorIds, startDate, endDate }),
+    repository.getVisitorJourneys({ visitorIds })
+  ]);
+  
+  if (allOrders.length === 0) {
+    return {
+      success: true,
+      creative: { creative_name, utm_source, utm_medium, utm_campaign },
+      period: { start, end },
+      summary: {
+        contributed_orders_count: 0,
+        last_touch_count: 0,
+        last_touch_revenue: 0,
+        attributed_revenue: 0
+      },
+      orders: []
+    };
+  }
+  
+  // visitor별 여정 그룹화
+  const visitorJourneys = groupJourneysByVisitor(journeyRows);
+  
+  // 기여도 상세 계산
+  const attributionDetails = [];
+  let totalContributedOrders = 0;
+  let totalLastTouchCount = 0;
+  let totalLastTouchRevenue = 0;
+  let totalAttributedRevenue = 0;
+  
+  allOrders.forEach(order => {
+    const journey = visitorJourneys[order.visitor_id] || [];
+    if (journey.length === 0) return;
+    
+    // 고유 광고 조합 수집
+    const uniqueCreativesMap = new Map();
+    journey.forEach(touch => {
+      const touchKey = `${touch.utm_content}||${touch.utm_source}||${touch.utm_medium}||${touch.utm_campaign}`;
+      if (!uniqueCreativesMap.has(touchKey) || touch.sequence_order > uniqueCreativesMap.get(touchKey).sequence_order) {
+        uniqueCreativesMap.set(touchKey, touch);
+      }
+    });
+    
+    const uniqueCreativeKeys = Array.from(uniqueCreativesMap.keys());
+    
+    // 이 광고가 여정에 포함되어 있는지 확인
+    if (!uniqueCreativeKeys.includes(targetCreativeKey)) return;
+    
+    // 막타 찾기
+    const lastTouch = journey.reduce((max, current) => 
+      current.sequence_order > max.sequence_order ? current : max
+    );
+    const lastTouchKey = `${lastTouch.utm_content}||${lastTouch.utm_source}||${lastTouch.utm_medium}||${lastTouch.utm_campaign}`;
+    
+    const finalPayment = parseFloat(order.final_payment) || 0;
+    const isLastTouch = lastTouchKey === targetCreativeKey;
+    const assistCreativeKeys = uniqueCreativeKeys.filter(key => key !== lastTouchKey);
+    const assistCount = assistCreativeKeys.length;
+    
+    // 기여도 계산
+    let role = '';
+    let contributionRatio = 0;
+    let attributedAmount = 0;
+    
+    if (isLastTouch) {
+      role = '막타';
+      if (assistCount === 0) {
+        contributionRatio = 100;
+        attributedAmount = finalPayment;
+      } else {
+        contributionRatio = 50;
+        attributedAmount = finalPayment * 0.5;
+      }
+      totalLastTouchCount++;
+      totalLastTouchRevenue += finalPayment;
+    } else {
+      role = '어시';
+      contributionRatio = assistCount > 0 ? Math.round(50 / assistCount) : 0;
+      attributedAmount = assistCount > 0 ? (finalPayment * 0.5) / assistCount : 0;
+    }
+    
+    totalContributedOrders++;
+    totalAttributedRevenue += attributedAmount;
+    
+    attributionDetails.push({
+      order_id: order.order_id,
+      order_date: order.order_date,
+      final_payment: Math.round(finalPayment),
+      role: role,
+      journey_count: uniqueCreativeKeys.length,
+      contribution_ratio: contributionRatio,
+      attributed_amount: Math.round(attributedAmount),
+      product_name: order.product_name || '-'
+    });
+  });
+  
+  return {
+    success: true,
+    creative: { creative_name, utm_source, utm_medium, utm_campaign },
+    period: { start, end },
+    summary: {
+      contributed_orders_count: totalContributedOrders,
+      last_touch_count: totalLastTouchCount,
+      last_touch_revenue: Math.round(totalLastTouchRevenue),
+      attributed_revenue: Math.round(totalAttributedRevenue)
+    },
+    orders: attributionDetails.sort((a, b) => new Date(b.order_date) - new Date(a.order_date))
+  };
+}
+
 module.exports = {
   getCreativeOrders,
   getCreativeAnalysis,
   getCreativeJourney,
   getCreativeLandingPages,
-  compareCreatives
+  compareCreatives,
+  getRawTrafficData,
+  getRawAttributionData
 };

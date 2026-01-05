@@ -1,307 +1,264 @@
 // ============================================================================
-// 인사이트 카드 컴포넌트
-// 광고 소재 분석 페이지 상단에 표시되는 5가지 핵심 인사이트
+// 광고 소재 성과 분석 - 인사이트 카드 (Top 5 랭킹)
 // ============================================================================
 
-import { useMemo } from 'react';
-import { Typography, Tooltip, Skeleton } from 'antd';
-import { Trophy, Target, Gem, AlertCircle, Sparkles } from 'lucide-react';
+import React, { useMemo } from 'react';
+import { Card, Row, Col, Typography, Empty, Badge } from 'antd';
+import { Trophy, TrendingUp } from 'lucide-react';
+import { calculateTrafficScores, formatCurrency } from '../utils/formatters';
 
-const { Text } = Typography;
-
-/**
- * 전환율 계산 (구매건수 / 방문자수 * 100)
- */
-const calcConversionRate = (row) => {
-  if (!row.unique_visitors || row.unique_visitors === 0) return 0;
-  const purchases = row.last_touch_count || 0;
-  return (purchases / row.unique_visitors) * 100;
-};
+const { Text, Title } = Typography;
 
 /**
- * 객단가 계산 (매출 / 구매건수)
+ * Top 5 랭킹 리스트 아이템 컴포넌트
  */
-const calcAOV = (row) => {
-  const purchases = row.last_touch_count || 0;
-  if (purchases === 0) return 0;
-  return (row.total_revenue || 0) / purchases;
-};
+const RankingItem = ({ rank, title, subText, score, value, type, maxValue }) => {
+  // 점수에 따른 색상 (트래픽 품질용)
+  const getScoreColor = (s) => {
+    if (s >= 80) return '#389e0d'; // 녹색 (우수)
+    if (s >= 60) return '#1890ff'; // 파란색 (양호)
+    if (s >= 40) return '#faad14'; // 주황색 (보통)
+    return '#ff4d4f'; // 빨간색 (개선 필요)
+  };
 
-/**
- * 소재명 줄임 처리
- */
-const truncateName = (name, maxLength = 20) => {
-  if (!name || name === '-') return '데이터 없음';
-  if (name.length <= maxLength) return name;
-  return name.substring(0, maxLength) + '...';
-};
-
-/**
- * 금액 포맷팅 (원화 표기법 준수)
- */
-const formatMoney = (value) => {
-  return Math.round(value).toLocaleString();
-};
-
-/**
- * 개별 인사이트 카드 (주문 분석 페이지 스타일)
- */
-const InsightCard = ({ 
-  icon: Icon, 
-  iconColor, 
-  title, 
-  creativeName, 
-  mainValue, 
-  mainLabel,
-  subValue,
-  subLabel,
-  tooltip,
-  onClick,
-  isEmpty
-}) => (
-  <Tooltip title={tooltip} placement="bottom">
-    <div 
-      onClick={onClick}
-      style={{
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: '16px',
-        padding: '20px 24px',
-        background: '#fff',
-        borderRadius: '12px',
-        border: '1px solid #e8eaed',
-        flex: 1,
-        minWidth: '200px',
-        cursor: isEmpty ? 'default' : 'pointer',
-        transition: 'all 0.2s ease',
-        opacity: isEmpty ? 0.6 : 1
-      }}
-      onMouseEnter={(e) => {
-        if (!isEmpty) {
-          e.currentTarget.style.borderColor = '#d9d9d9';
-          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)';
-        }
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = '#e8eaed';
-        e.currentTarget.style.boxShadow = 'none';
-      }}
-    >
-      <div style={{
-        width: '48px',
-        height: '48px',
-        borderRadius: '12px',
-        background: isEmpty ? '#f5f5f5' : `${iconColor}15`,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexShrink: 0
-      }}>
-        <Icon size={24} style={{ color: isEmpty ? '#9ca3af' : iconColor }} />
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <Text style={{ 
-          fontSize: '15px', 
-          display: 'block', 
-          marginBottom: '4px', 
-          color: '#6b7280',
-          fontWeight: 700
-        }}>
-          {title}
-        </Text>
-        <div style={{ 
-          fontSize: '14px', 
-          fontWeight: 600, 
-          color: isEmpty ? '#9ca3af' : '#1a1a1a',
-          marginBottom: '8px',
-          lineHeight: 1.4,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap'
-        }}>
-          {creativeName}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-          <span style={{ 
-            fontSize: '22px', 
-            fontWeight: 700, 
-            color: isEmpty ? '#9ca3af' : '#1a1a1a' 
-          }}>
-            {mainValue}
-          </span>
-          <span style={{ 
-            fontSize: '13px', 
-            color: '#6b7280',
-            fontWeight: 500
-          }}>
-            {mainLabel}
-          </span>
-        </div>
-        {subValue && (
-          <Text style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px', display: 'block' }}>
-            {subLabel} {subValue}
-          </Text>
-        )}
-      </div>
-    </div>
-  </Tooltip>
-);
-
-/**
- * 인사이트 카드 영역 컴포넌트
- */
-function InsightCards({ data, loading, onCardClick }) {
-  // 5가지 인사이트 계산
-  const insights = useMemo(() => {
-    if (!data || data.length === 0) {
-      return {
-        mvp: null,
-        bestAOV: null,
-        bestConversion: null,
-        needsAttention: null,
-        hiddenGem: null,
-        avgConversionRate: 0
-      };
-    }
-
-    // 전체 평균 전환율 계산
-    const totalVisitors = data.reduce((sum, r) => sum + (r.unique_visitors || 0), 0);
-    const totalPurchases = data.reduce((sum, r) => sum + (r.last_touch_count || 0), 0);
-    const avgConversionRate = totalVisitors > 0 ? (totalPurchases / totalVisitors) * 100 : 0;
-
-    // 1. MVP: 매출 1위 (막타 매출 기준)
-    const mvp = [...data]
-      .filter(r => (r.total_revenue || 0) > 0)
-      .sort((a, b) => (b.total_revenue || 0) - (a.total_revenue || 0))[0] || null;
-
-    // 2. 객단가 최고: 구매 3건 이상 중 객단가 1위
-    const bestAOV = [...data]
-      .filter(r => (r.last_touch_count || 0) >= 3)
-      .sort((a, b) => calcAOV(b) - calcAOV(a))[0] || null;
-
-    // 3. 전환율 최고: 방문자 50명 이상 중 전환율 1위
-    const bestConversion = [...data]
-      .filter(r => (r.unique_visitors || 0) >= 50 && (r.last_touch_count || 0) > 0)
-      .sort((a, b) => calcConversionRate(b) - calcConversionRate(a))[0] || null;
-
-    // 4. 점검 필요: 방문자 100명 이상인데 전환율이 평균의 50% 미만
-    const needsAttention = [...data]
-      .filter(r => {
-        const visitors = r.unique_visitors || 0;
-        const convRate = calcConversionRate(r);
-        return visitors >= 100 && convRate < avgConversionRate * 0.5;
-      })
-      .sort((a, b) => (b.unique_visitors || 0) - (a.unique_visitors || 0))[0] || null;
-
-    // 5. 숨은 보석: 방문자 30~200명 사이, 전환율이 평균의 2배 이상
-    const hiddenGem = [...data]
-      .filter(r => {
-        const visitors = r.unique_visitors || 0;
-        const convRate = calcConversionRate(r);
-        return visitors >= 30 && visitors <= 200 && convRate >= avgConversionRate * 2;
-      })
-      .sort((a, b) => calcConversionRate(b) - calcConversionRate(a))[0] || null;
-
-    const result = { mvp, bestAOV, bestConversion, needsAttention, hiddenGem, avgConversionRate };
-    return result;
-  }, [data]);
-
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginBottom: '20px' }}>
-        {[1, 2, 3, 4, 5].map(i => (
-          <div key={i} style={{ flex: 1, minWidth: '200px' }}>
-            <Skeleton.Button active block style={{ height: '160px', borderRadius: '16px' }} />
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  const { mvp, bestAOV, bestConversion, needsAttention, hiddenGem, avgConversionRate } = insights;
+  // 등급 텍스트
+  const getGradeText = (s) => {
+    if (s >= 80) return '매우 우수';
+    if (s >= 60) return '우수';
+    if (s >= 40) return '보통';
+    return '개선 필요';
+  };
 
   return (
     <div style={{ 
       display: 'flex', 
-      gap: '16px',
-      flexWrap: 'wrap',
-      marginBottom: '20px'
+      alignItems: 'center', 
+      padding: '12px 0', 
+      borderBottom: '1px solid #f0f0f0',
+      lastChild: { borderBottom: 'none' }
     }}>
-      {/* 1. MVP */}
-      <InsightCard
-        icon={Trophy}
-        iconColor="#f59e0b"
-        title="이번 기간 MVP"
-        creativeName={mvp ? truncateName(mvp.creative_name) : '데이터 없음'}
-        mainValue={mvp ? `₩${formatMoney(mvp.total_revenue || 0)}` : '-'}
-        mainLabel="매출"
-        subValue={mvp ? `${calcConversionRate(mvp).toFixed(1)}%` : null}
-        subLabel="전환율"
-        tooltip={mvp ? `${mvp.creative_name}\n가장 많은 매출을 만든 소재입니다` : '매출 데이터가 없습니다'}
-        onClick={() => mvp && onCardClick?.(mvp)}
-        isEmpty={!mvp}
-      />
+      {/* 순위 뱃지 */}
+      <div style={{ 
+        width: '24px', 
+        height: '24px', 
+        borderRadius: '50%', 
+        background: rank === 1 ? '#1890ff' : rank === 2 ? '#52c41a' : rank === 3 ? '#faad14' : '#f0f0f0', 
+        color: rank <= 3 ? '#fff' : '#8c8c8c',
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        fontWeight: 'bold',
+        fontSize: '12px',
+        marginRight: '12px',
+        flexShrink: 0
+      }}>
+        {rank}
+      </div>
 
-      {/* 2. 객단가 최고 */}
-      <InsightCard
-        icon={Gem}
-        iconColor="#8b5cf6"
-        title="객단가 최고"
-        creativeName={bestAOV ? truncateName(bestAOV.creative_name) : '데이터 없음'}
-        mainValue={bestAOV ? `₩${formatMoney(calcAOV(bestAOV))}` : '-'}
-        mainLabel="객단가"
-        subValue={bestAOV ? `${bestAOV.last_touch_count}건` : null}
-        subLabel="구매"
-        tooltip={bestAOV ? `${bestAOV.creative_name}\n고가 상품 구매를 유도하는 소재입니다` : '구매 3건 이상인 소재가 없습니다'}
-        onClick={() => bestAOV && onCardClick?.(bestAOV)}
-        isEmpty={!bestAOV}
-      />
+      {/* 내용 */}
+      <div style={{ flex: 1, overflow: 'hidden' }}>
+        <div style={{ 
+          whiteSpace: 'nowrap', 
+          overflow: 'hidden', 
+          textOverflow: 'ellipsis', 
+          fontWeight: 500
+        }}>
+          {title}
+        </div>
+        {/* subText (현재 사용 안함, 필요시 부활 가능) */}
+        {subText && (
+          <div style={{ fontSize: '12px', color: '#8c8c8c', marginTop: '2px' }}>
+            {subText}
+          </div>
+        )}
+      </div>
 
-      {/* 3. 전환율 최고 */}
-      <InsightCard
-        icon={Target}
-        iconColor="#10b981"
-        title="전환율 최고"
-        creativeName={bestConversion ? truncateName(bestConversion.creative_name) : '데이터 없음'}
-        mainValue={bestConversion ? `${calcConversionRate(bestConversion).toFixed(1)}%` : '-'}
-        mainLabel={`(평균 ${avgConversionRate.toFixed(1)}%)`}
-        subValue={bestConversion ? `${bestConversion.unique_visitors?.toLocaleString()}명` : null}
-        subLabel="방문자"
-        tooltip={bestConversion ? `${bestConversion.creative_name}\n방문자를 구매자로 가장 잘 바꾸는 소재입니다` : '방문자 50명 이상인 소재가 없습니다'}
-        onClick={() => bestConversion && onCardClick?.(bestConversion)}
-        isEmpty={!bestConversion}
-      />
-
-      {/* 4. 숨은 보석 */}
-      <InsightCard
-        icon={Sparkles}
-        iconColor="#3b82f6"
-        title="숨은 보석"
-        creativeName={hiddenGem ? truncateName(hiddenGem.creative_name) : '없음'}
-        mainValue={hiddenGem ? `${calcConversionRate(hiddenGem).toFixed(1)}%` : '-'}
-        mainLabel="전환율"
-        subValue={hiddenGem ? `${hiddenGem.unique_visitors?.toLocaleString()}명 방문` : null}
-        subLabel=""
-        tooltip={hiddenGem ? `${hiddenGem.creative_name}\n방문자는 적지만 전환율이 높습니다. 예산을 늘려보세요!` : '숨은 보석 소재가 없습니다'}
-        onClick={() => hiddenGem && onCardClick?.(hiddenGem)}
-        isEmpty={!hiddenGem}
-      />
-
-      {/* 5. 점검 필요 */}
-      <InsightCard
-        icon={AlertCircle}
-        iconColor="#ef4444"
-        title="점검 필요"
-        creativeName={needsAttention ? truncateName(needsAttention.creative_name) : '없음 👍'}
-        mainValue={needsAttention ? `${calcConversionRate(needsAttention).toFixed(1)}%` : '-'}
-        mainLabel="전환율"
-        subValue={needsAttention ? `${needsAttention.unique_visitors?.toLocaleString()}명 방문` : null}
-        subLabel=""
-        tooltip={needsAttention ? `${needsAttention.creative_name}\n방문자는 많은데 구매가 적습니다. 랜딩페이지나 상품을 점검해보세요` : '점검이 필요한 소재가 없습니다'}
-        onClick={() => needsAttention && onCardClick?.(needsAttention)}
-        isEmpty={!needsAttention}
-      />
+      {/* 우측 값 영역 */}
+      <div style={{ marginLeft: '12px', flexShrink: 0, minWidth: '80px', textAlign: 'right' }}>
+        {type === 'traffic' ? (
+          // 모수 품질: 점수 뱃지 (테이블과 동일한 스타일)
+          <div style={{ 
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '4px 10px',
+            borderRadius: '12px',
+            backgroundColor: `${getScoreColor(score)}15`,
+            border: `1px solid ${getScoreColor(score)}40`
+          }}>
+            <span style={{ 
+              fontSize: '12px', 
+              fontWeight: 700,
+              color: getScoreColor(score) 
+            }}>
+              {score}
+            </span>
+          </div>
+        ) : (
+          // 유입당 가치: 막대 그래프 + 금액 (테이블 스타일)
+          <div style={{ position: 'relative', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
+            {/* 배경 그래프 막대 */}
+            <div
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: '4px',
+                height: '20px',
+                width: `${maxValue > 0 ? (value / maxValue) * 100 : 0}%`,
+                background: 'linear-gradient(90deg, rgba(9, 88, 217, 0.12) 0%, rgba(22, 119, 255, 0.18) 100%)', // 파란색 계열 (막타 결제액 색상)
+                borderRadius: '4px',
+                transition: 'width 0.3s ease',
+                zIndex: 0
+              }}
+            />
+            {/* 금액 텍스트 */}
+            <span style={{
+              color: '#0958d9', // 파란색 (막타 결제액 색상)
+              fontWeight: 600,
+              fontSize: '13px',
+              position: 'relative',
+              zIndex: 1,
+              paddingLeft: '4px',
+              fontFamily: 'system-ui, -apple-system, sans-serif'
+            }}>
+              {formatCurrency(value)}
+            </span>
+          </div>
+        )}
+      </div>
     </div>
+  );
+};
+
+/**
+ * 인사이트 카드 컴포넌트
+ * @param {Array} data - 전체 광고 데이터
+ */
+function InsightCards({ data }) {
+  // Top 5 데이터 계산
+  const { trafficTop5, valueTop5, maxValue } = useMemo(() => {
+    if (!data || data.length === 0) {
+      return { trafficTop5: [], valueTop5: [], maxValue: 0 };
+    }
+
+    // 1. 모수 품질 Top 5 계산
+    const trafficScores = calculateTrafficScores(data);
+    const trafficData = data.map(item => {
+      const key = `${item.utm_source || ''}_${item.utm_campaign || ''}_${item.utm_medium || ''}_${item.creative_name || ''}`;
+      const scoreInfo = trafficScores.get(key);
+      return {
+        ...item,
+        trafficScore: scoreInfo ? scoreInfo.score : 0
+      };
+    });
+
+    // 점수 내림차순 정렬 후 상위 5개
+    const trafficSorted = [...trafficData].sort((a, b) => b.trafficScore - a.trafficScore);
+    const trafficTop5 = trafficSorted.slice(0, 5);
+
+    // 2. 유입당 가치 Top 5 계산
+    // 유입당 가치 = (직접 매출 + 기여 매출) / 방문자 수
+    // 방문자 수가 너무 적으면(예: 10명 미만) 통계적 의미가 적으므로 제외하거나 후순위로 밀 수 있음 -> 여기선 단순 계산
+    const valueData = data.map(item => {
+      const totalRevenue = (item.total_revenue || 0) + (item.attributed_revenue || 0);
+      const visitors = item.unique_visitors || 0;
+      const valuePerVisitor = visitors > 0 ? Math.round(totalRevenue / visitors) : 0;
+      
+      return {
+        ...item,
+        valuePerVisitor
+      };
+    });
+
+    // 가치 내림차순 정렬 (단, 매출이 0인 경우는 제외)
+    const valueSorted = valueData
+      .filter(item => item.valuePerVisitor > 0)
+      .sort((a, b) => b.valuePerVisitor - a.valuePerVisitor);
+    
+    const valueTop5 = valueSorted.slice(0, 5);
+    
+    // 그래프 비율 계산을 위한 최대값 (Top 1의 값)
+    const maxValue = valueTop5.length > 0 ? valueTop5[0].valuePerVisitor : 0;
+
+    return { trafficTop5, valueTop5, maxValue };
+  }, [data]);
+
+  if (!data || data.length === 0) return null;
+
+  const getDisplayName = (item) => {
+    // 광고 이름이 있으면 사용, 없으면 캠페인명, 없으면 소스/매체 조합
+    if (item.creative_name && item.creative_name !== '-') return item.creative_name;
+    if (item.utm_campaign && item.utm_campaign !== '-') return item.utm_campaign;
+    return `${item.utm_source} / ${item.utm_medium}`;
+  };
+
+  return (
+    <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
+      {/* 1. 모수 품질 Top 5 */}
+      <Col xs={24} md={12}>
+        <Card 
+          title={
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Trophy size={18} color="#faad14" />
+                <span>모수(트래픽) 품질 Top 5</span>
+              </div>
+              <span style={{ fontSize: '12px', color: '#8c8c8c', fontWeight: 'normal' }}>점수 기준</span>
+            </div>
+          }
+          bodyStyle={{ padding: '0 24px 12px' }}
+          bordered={false}
+          style={{ height: '100%', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}
+        >
+          {trafficTop5.length > 0 ? (
+            trafficTop5.map((item, index) => (
+              <RankingItem
+                key={index}
+                rank={index + 1}
+                title={getDisplayName(item)}
+                type="traffic"
+                score={item.trafficScore}
+              />
+            ))
+          ) : (
+            <Empty description="데이터가 없습니다" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          )}
+        </Card>
+      </Col>
+
+      {/* 2. 유입당 가치 Top 5 */}
+      <Col xs={24} md={12}>
+        <Card 
+          title={
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <TrendingUp size={18} color="#1890ff" />
+                <span>유입당 가치(객단가) Top 5</span>
+              </div>
+              <span style={{ fontSize: '12px', color: '#8c8c8c', fontWeight: 'normal' }}>방문자 1명당</span>
+            </div>
+          }
+          bodyStyle={{ padding: '0 24px 12px' }}
+          bordered={false}
+          style={{ height: '100%', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}
+        >
+          {valueTop5.length > 0 ? (
+            valueTop5.map((item, index) => (
+              <RankingItem
+                key={index}
+                rank={index + 1}
+                title={getDisplayName(item)}
+                type="value"
+                value={item.valuePerVisitor}
+                maxValue={maxValue}
+              />
+            ))
+          ) : (
+            <Empty description="매출 데이터가 없습니다" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          )}
+        </Card>
+      </Col>
+    </Row>
   );
 }
 

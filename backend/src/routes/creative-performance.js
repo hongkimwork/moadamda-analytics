@@ -249,5 +249,81 @@ router.post('/creative-performance/compare', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/creative-performance/raw-traffic
+ * Raw Data 검증: 트래픽 지표 + 세션 목록
+ * 
+ * Request Body:
+ *  - creative_name: 광고 소재 이름 (utm_content) - 필수
+ *  - utm_source: UTM Source - 필수
+ *  - utm_medium: UTM Medium - 필수
+ *  - utm_campaign: UTM Campaign - 필수
+ *  - start: 시작일 (YYYY-MM-DD) - 필수
+ *  - end: 종료일 (YYYY-MM-DD) - 필수
+ * 
+ * Response:
+ *  - summary: View, UV, 평균 PV, 평균 체류시간
+ *  - sessions: 세션 목록 (최대 500건)
+ */
+router.post('/creative-performance/raw-traffic', async (req, res) => {
+  try {
+    const result = await detailService.getRawTrafficData(req.body);
+    res.json(result);
+  } catch (error) {
+    console.error('Raw traffic API error:', error);
+    
+    if (error.message.includes('required')) {
+      return res.status(400).json({ 
+        success: false,
+        error: error.message 
+      });
+    }
+    
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch raw traffic data',
+      message: error.message 
+    });
+  }
+});
+
+/**
+ * POST /api/creative-performance/raw-attribution
+ * Raw Data 검증: 매출 지표 + 기여 주문 상세
+ * 
+ * Request Body:
+ *  - creative_name: 광고 소재 이름 (utm_content) - 필수
+ *  - utm_source: UTM Source - 필수
+ *  - utm_medium: UTM Medium - 필수
+ *  - utm_campaign: UTM Campaign - 필수
+ *  - start: 시작일 (YYYY-MM-DD) - 필수
+ *  - end: 종료일 (YYYY-MM-DD) - 필수
+ * 
+ * Response:
+ *  - summary: 영향 준 주문 수, 막타 횟수, 막타 결제액, 기여한 매출액
+ *  - orders: 주문별 기여도 상세 (역할, 기여 비율, 기여 금액)
+ */
+router.post('/creative-performance/raw-attribution', async (req, res) => {
+  try {
+    const result = await detailService.getRawAttributionData(req.body);
+    res.json(result);
+  } catch (error) {
+    console.error('Raw attribution API error:', error);
+    
+    if (error.message.includes('required')) {
+      return res.status(400).json({ 
+        success: false,
+        error: error.message 
+      });
+    }
+    
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch raw attribution data',
+      message: error.message 
+    });
+  }
+});
+
 module.exports = router;
 

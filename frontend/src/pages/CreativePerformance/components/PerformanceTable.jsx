@@ -2,10 +2,10 @@
 // 광고 소재 퍼포먼스 테이블
 // ============================================================================
 
-import React from 'react';
-import { Card, Table, Checkbox, Tooltip, Dropdown, Button, message } from 'antd';
-import { ShoppingCart, BarChart3, Network, FileSearch, Settings } from 'lucide-react';
-import { formatDuration, formatCurrency, formatNumber } from '../utils/formatters';
+import React, { useMemo } from 'react';
+import { Card, Table, Tooltip, Dropdown, Button, message } from 'antd';
+import { ShoppingCart, Network, Database } from 'lucide-react';
+import { formatDuration, formatCurrency, formatNumber, calculateTrafficScores } from '../utils/formatters';
 import { getRowKey } from '../utils/helpers';
 
 /**
@@ -19,42 +19,37 @@ function PerformanceTable({
   currentPage,
   pageSize,
   summaryStats,
-  selectedCreatives,
-  highlightedKey,
-  highlightVersion,
   onTableChange,
   onPageChange,
-  onSelectCreative,
-  onSelectAll,
   onViewOrders,
-  onViewAnalysis,
   onViewJourney,
-  onViewLanding
+  onViewRawData
 }) {
-  const isSelected = (record) => {
-    const key = getRowKey(record);
-    return selectedCreatives.some(item => item.key === key);
+  // 모수 평가 점수 계산 (필터된 데이터 기준)
+  const trafficScores = useMemo(() => calculateTrafficScores(data), [data]);
+
+  // 점수에 따른 색상 반환
+  const getScoreColor = (score) => {
+    if (score >= 80) return '#389e0d'; // 녹색 (우수)
+    if (score >= 60) return '#1890ff'; // 파란색 (양호)
+    if (score >= 40) return '#faad14'; // 주황색 (보통)
+    return '#ff4d4f'; // 빨간색 (개선 필요)
+  };
+
+  // 점수에 따른 등급 텍스트
+  const getScoreGrade = (score) => {
+    if (score >= 80) return '우수';
+    if (score >= 60) return '양호';
+    if (score >= 40) return '보통';
+    return '개선필요';
   };
 
   const columns = [
     {
-      title: <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>소재<br />비교</div>,
-      key: 'select',
-      width: 60,
-      align: 'center',
-      fixed: 'left',
-      render: (_, record) => (
-        <Checkbox
-          checked={isSelected(record)}
-          onChange={(e) => onSelectCreative(record, e.target.checked)}
-        />
-      )
-    },
-    {
       title: <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>UTM<br />Source</div>,
       dataIndex: 'utm_source',
       key: 'utm_source',
-      width: 100,
+      width: 80,
       align: 'center',
       ellipsis: true,
       render: (text) => (
@@ -69,7 +64,7 @@ function PerformanceTable({
       title: <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>UTM<br />Campaign</div>,
       dataIndex: 'utm_campaign',
       key: 'utm_campaign',
-      width: 120,
+      width: 90,
       align: 'center',
       ellipsis: true,
       render: (text) => (
@@ -84,7 +79,7 @@ function PerformanceTable({
       title: <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>UTM<br />Medium</div>,
       dataIndex: 'utm_medium',
       key: 'utm_medium',
-      width: 100,
+      width: 80,
       align: 'center',
       ellipsis: true,
       render: (text) => (
@@ -100,6 +95,7 @@ function PerformanceTable({
       dataIndex: 'creative_name',
       key: 'creative_name',
       width: 250,
+      align: 'center',
       fixed: 'left',
       render: (text) => (
         <span
@@ -110,7 +106,7 @@ function PerformanceTable({
             display: 'block',
             wordBreak: 'break-all',
             lineHeight: '1.5',
-            textAlign: 'left',
+            textAlign: 'center',
             color: '#1a1a1a',
             transition: 'color 0.2s ease'
           }}
@@ -129,11 +125,21 @@ function PerformanceTable({
       showSorterTooltip: false
     },
     {
+      title: 'View',
+      dataIndex: 'total_views',
+      key: 'total_views',
+      width: 70,
+      align: 'center',
+      render: (num) => <span style={{ fontWeight: 500, fontSize: '13px', color: '#6b7280' }}>{formatNumber(num)}</span>,
+      sorter: true,
+      showSorterTooltip: false
+    },
+    {
       title: 'UV',
       dataIndex: 'unique_visitors',
       key: 'unique_visitors',
       width: 70,
-      align: 'right',
+      align: 'center',
       render: (num) => <span style={{ fontWeight: 600, fontSize: '13px', color: '#374151' }}>{formatNumber(num)}</span>,
       sorter: true,
       showSorterTooltip: false
@@ -143,7 +149,7 @@ function PerformanceTable({
       dataIndex: 'avg_pageviews',
       key: 'avg_pageviews',
       width: 75,
-      align: 'right',
+      align: 'center',
       render: (num) => <span style={{ fontSize: '13px', color: '#4b5563', fontWeight: 500 }}>{num ? num.toFixed(1) : '0.0'}</span>,
       sorter: true,
       showSorterTooltip: false
@@ -153,9 +159,109 @@ function PerformanceTable({
       dataIndex: 'avg_duration_seconds',
       key: 'avg_duration_seconds',
       width: 80,
-      align: 'right',
+      align: 'center',
       render: (seconds) => <span style={{ fontSize: '13px', color: '#4b5563', fontWeight: 500 }}>{formatDuration(seconds)}</span>,
       sorter: true,
+      showSorterTooltip: false
+    },
+    {
+      title: (
+        <Tooltip
+          title={
+            <div style={{ padding: '4px' }}>
+              <div style={{ marginBottom: '12px', fontWeight: 600, fontSize: '14px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '8px' }}>
+                📊 모수 평가 점수 기준
+              </div>
+              
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: '12px', marginBottom: '6px' }}>계산 방식 (상대 평가)</div>
+                <table style={{ width: '100%', fontSize: '13px', borderCollapse: 'collapse' }}>
+                  <tbody>
+                    <tr>
+                      <td style={{ padding: '2px 12px 2px 0' }}>• UV (방문자)</td>
+                      <td style={{ padding: '2px 0', fontWeight: 700, textAlign: 'right', color: '#ffc069' }}>60%</td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: '2px 12px 2px 0' }}>• 평균 PV</td>
+                      <td style={{ padding: '2px 0', fontWeight: 700, textAlign: 'right', color: '#bae7ff' }}>20%</td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: '2px 12px 2px 0' }}>• 체류시간</td>
+                      <td style={{ padding: '2px 0', fontWeight: 700, textAlign: 'right', color: '#d9f7be' }}>20%</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div>
+                <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: '12px', marginBottom: '6px' }}>등급 가이드</div>
+                <table style={{ width: '100%', fontSize: '13px', borderCollapse: 'collapse' }}>
+                  <tbody>
+                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                      <td style={{ padding: '6px 0' }}><span style={{ color: '#52c41a', marginRight: '6px' }}>●</span> 우수</td>
+                      <td style={{ padding: '6px 0', textAlign: 'right' }}>80점 ~</td>
+                    </tr>
+                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                      <td style={{ padding: '6px 0' }}><span style={{ color: '#1890ff', marginRight: '6px' }}>●</span> 양호</td>
+                      <td style={{ padding: '6px 0', textAlign: 'right' }}>60점 ~</td>
+                    </tr>
+                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                      <td style={{ padding: '6px 0' }}><span style={{ color: '#faad14', marginRight: '6px' }}>●</span> 보통</td>
+                      <td style={{ padding: '6px 0', textAlign: 'right' }}>40점 ~</td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: '6px 0' }}><span style={{ color: '#ff4d4f', marginRight: '6px' }}>●</span> 개선</td>
+                      <td style={{ padding: '6px 0', textAlign: 'right' }}>~ 39점</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          }
+          overlayStyle={{ maxWidth: '300px' }}
+        >
+          <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3', cursor: 'help' }}>
+            모수<br />평가점수
+          </div>
+        </Tooltip>
+      ),
+      key: 'traffic_score',
+      width: 85,
+      align: 'center',
+      render: (_, record) => {
+        const key = `${record.utm_source || ''}_${record.utm_campaign || ''}_${record.utm_medium || ''}_${record.creative_name || ''}`;
+        const scoreData = trafficScores.get(key);
+        const score = scoreData?.score || 0;
+        const color = getScoreColor(score);
+        // const grade = getScoreGrade(score); // 미사용 변수 제거
+
+        return (
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '4px 10px',
+            borderRadius: '12px',
+            backgroundColor: `${color}15`,
+            border: `1px solid ${color}40`
+          }}>
+            <span style={{
+              fontSize: '13px',
+              fontWeight: 700,
+              color: color
+            }}>
+              {score}
+            </span>
+          </div>
+        );
+      },
+      sorter: (a, b) => {
+        const keyA = `${a.utm_source || ''}_${a.utm_campaign || ''}_${a.utm_medium || ''}_${a.creative_name || ''}`;
+        const keyB = `${b.utm_source || ''}_${b.utm_campaign || ''}_${b.utm_medium || ''}_${b.creative_name || ''}`;
+        const scoreA = trafficScores.get(keyA)?.score || 0;
+        const scoreB = trafficScores.get(keyB)?.score || 0;
+        return scoreA - scoreB;
+      },
       showSorterTooltip: false
     },
     {
@@ -184,11 +290,11 @@ function PerformanceTable({
       dataIndex: 'total_revenue',
       key: 'total_revenue',
       width: 95,
-      align: 'right',
+      align: 'center',
       render: (amount) => {
         const percent = summaryStats.maxRevenue > 0 ? (amount / summaryStats.maxRevenue) * 100 : 0;
         return (
-          <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+          <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div
               style={{
                 position: 'absolute',
@@ -243,7 +349,7 @@ function PerformanceTable({
       dataIndex: 'contributed_orders_count',
       key: 'contributed_orders_count',
       width: 85,
-      align: 'right',
+      align: 'center',
       render: (num) => (
         <span style={{
           color: num > 0 ? '#389e0d' : '#9ca3af',
@@ -282,7 +388,7 @@ function PerformanceTable({
       dataIndex: 'last_touch_count',
       key: 'last_touch_count',
       width: 75,
-      align: 'right',
+      align: 'center',
       render: (num) => (
         <span style={{
           color: num > 0 ? '#0958d9' : '#9ca3af',
@@ -324,11 +430,11 @@ function PerformanceTable({
       dataIndex: 'attributed_revenue',
       key: 'attributed_revenue',
       width: 95,
-      align: 'right',
+      align: 'center',
       render: (amount) => {
         const percent = summaryStats.maxRevenue > 0 ? (amount / summaryStats.maxRevenue) * 100 : 0;
         return (
-          <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+          <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div
               style={{
                 position: 'absolute',
@@ -361,69 +467,80 @@ function PerformanceTable({
       title: (
         <Tooltip
           title={
-            <div style={{ whiteSpace: 'pre-line' }}>
-              {`이 광고를 본 고객들이 결제한 금액의 총합입니다.
-기여도로 나누지 않고, 구매 금액 전체를 그대로 합산합니다.
+            <div style={{ padding: '4px' }}>
+              <div style={{ marginBottom: '12px', fontWeight: 600, fontSize: '14px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '8px' }}>
+                💎 1명당 유입 가치란?
+              </div>
+              
+              <div style={{ marginBottom: '16px', fontSize: '13px', lineHeight: '1.6' }}>
+                이 광고를 통해 유입된 방문자 1명당<br/>
+                기여한 <strong>평균 매출</strong>입니다.
+              </div>
 
-예시: 철수가 10만원 구매
-• 광고 여정: A 광고 → B 광고 → 구매
-• 결과: A 광고 +10만원, B 광고 +10만원 (둘 다 전액)
+              <div style={{ marginBottom: '16px', backgroundColor: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '4px' }}>
+                <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: '12px', marginBottom: '4px' }}>계산 방식</div>
+                <div style={{ fontSize: '13px', fontFamily: 'monospace' }}>기여한 매출액 ÷ UV (순 방문자)</div>
+              </div>
 
-💡 "기여한 매출액"과의 차이
-• 기여한 매출액: 나눠서 계산 (A 5만 + B 5만 = 10만원)
-• 영향 준 주문 총액: 전액 합산 (A 10만 + B 10만 = 20만원)
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: '12px', marginBottom: '6px' }}>예시</div>
+                <div style={{ fontSize: '13px', paddingLeft: '8px', borderLeft: '2px solid rgba(255,255,255,0.2)' }}>
+                  매출 100만원 / 방문자 100명<br/>
+                  = <span style={{ color: '#bae7ff', fontWeight: 600 }}>1명당 10,000원 가치</span>
+                </div>
+              </div>
 
-💡 이 숫자가 높으면?
-→ 이 광고를 본 고객들의 전체 구매력이 크다는 의미`}
+              <div>
+                <div style={{ color: '#d9f7be', fontWeight: 600, fontSize: '13px', marginBottom: '4px' }}>
+                  💡 핵심 포인트
+                </div>
+                <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.9)' }}>
+                  이 숫자가 높을수록 적은 방문자로도<br/>
+                  높은 매출을 만드는 <strong>효율적인 광고</strong>입니다.
+                </div>
+              </div>
             </div>
           }
-          overlayStyle={{ maxWidth: '420px' }}
+          overlayStyle={{ maxWidth: '400px' }}
         >
           <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>
-            영향 준<br />주문 총액
+            1명당<br />유입 가치
           </div>
         </Tooltip>
       ),
-      dataIndex: 'total_contributed_revenue',
-      key: 'total_contributed_revenue',
-      width: 100,
-      align: 'right',
-      render: (amount) => {
-        const percent = summaryStats.maxRevenue > 0 ? (amount / summaryStats.maxRevenue) * 100 : 0;
+      key: 'value_per_visitor',
+      width: 95,
+      align: 'center',
+      render: (_, record) => {
+        const uv = record.unique_visitors || 0;
+        const revenue = record.attributed_revenue || 0;
+        const valuePerVisitor = uv > 0 ? Math.round(revenue / uv) : 0;
+        
         return (
-          <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-            <div
-              style={{
-                position: 'absolute',
-                left: 0,
-                top: '10%',
-                height: '80%',
-                width: `${percent}%`,
-                background: 'linear-gradient(90deg, rgba(0, 80, 179, 0.12) 0%, rgba(0, 105, 214, 0.18) 100%)',
-                borderRadius: '4px',
-                transition: 'width 0.3s ease'
-              }}
-            />
-            <span style={{
-              color: amount > 0 ? '#0050b3' : '#9ca3af',
-              fontWeight: amount > 0 ? 600 : 400,
-              fontSize: '13px',
-              position: 'relative',
-              zIndex: 1,
-              fontFamily: 'system-ui, -apple-system, sans-serif'
-            }}>
-              {formatCurrency(amount)}
-            </span>
-          </div>
+          <span style={{
+            color: valuePerVisitor > 0 ? '#722ed1' : '#9ca3af',
+            fontWeight: valuePerVisitor > 0 ? 600 : 400,
+            fontSize: '13px'
+          }}>
+            {formatCurrency(valuePerVisitor)}
+          </span>
         );
       },
-      sorter: true,
+      sorter: (a, b) => {
+        const uvA = a.unique_visitors || 0;
+        const uvB = b.unique_visitors || 0;
+        const revenueA = a.attributed_revenue || 0;
+        const revenueB = b.attributed_revenue || 0;
+        const valueA = uvA > 0 ? revenueA / uvA : 0;
+        const valueB = uvB > 0 ? revenueB / uvB : 0;
+        return valueA - valueB;
+      },
       showSorterTooltip: false
     },
     {
-      title: '상세 분석',
+      title: '상세',
       key: 'action',
-      width: 130,
+      width: 80,
       align: 'center',
       fixed: 'right',
       render: (_, record) => {
@@ -436,25 +553,17 @@ function PerformanceTable({
             onClick: () => onViewOrders(record)
           },
           {
-            key: 'analysis',
-            label: '성과 분석',
-            icon: <BarChart3 size={16} />,
-            onClick: () => onViewAnalysis(record)
-          },
-          {
-            type: 'divider'
-          },
-          {
             key: 'journey',
             label: '고객 여정',
             icon: <Network size={16} />,
             onClick: () => onViewJourney(record)
           },
+          { type: 'divider' },
           {
-            key: 'landing',
-            label: '페이지 분석',
-            icon: <FileSearch size={16} />,
-            onClick: () => onViewLanding(record)
+            key: 'rawdata',
+            label: 'Raw Data 검증',
+            icon: <Database size={16} />,
+            onClick: () => onViewRawData(record)
           }
         ];
 
@@ -464,8 +573,8 @@ function PerformanceTable({
             trigger={['click']}
             placement="bottomRight"
           >
-            <Button icon={<Settings size={16} />}>
-              상세 분석
+            <Button>
+              보기
             </Button>
           </Dropdown>
         );
@@ -491,7 +600,7 @@ function PerformanceTable({
         })}
         loading={loading}
         onChange={onTableChange}
-        scroll={{ x: 1350 }}
+        scroll={{ x: 1530 }}
         pagination={{
           current: currentPage,
           pageSize: pageSize,
@@ -503,11 +612,7 @@ function PerformanceTable({
         }}
         size="middle"
         rowClassName={(record, index) => {
-          const key = getRowKey(record);
-          const isHighlighted = highlightedKey === key;
-          const baseClass = index % 2 === 0 ? 'table-row-even' : 'table-row-odd';
-          const highlightClass = isHighlighted ? `table-row-highlighted table-highlight-v${highlightVersion % 2}` : '';
-          return `${baseClass} ${highlightClass}`.trim();
+          return index % 2 === 0 ? 'table-row-even' : 'table-row-odd';
         }}
         style={{
           borderRadius: '8px',
@@ -525,17 +630,6 @@ function PerformanceTable({
         }
         .creative-performance-table .table-row-odd td {
           background-color: #fafbfc !important;
-        }
-        /* 하이라이트 효과 */
-        .creative-performance-table .table-row-highlighted td {
-          background-color: #fff7e6 !important;
-        }
-        .creative-performance-table .table-highlight-v0 td, .creative-performance-table .table-highlight-v1 td {
-          animation: creative-highlight-pulse 1s ease-in-out 3;
-        }
-        @keyframes creative-highlight-pulse {
-          0%, 100% { background-color: #fff7e6; }
-          50% { background-color: #ffe7ba; }
         }
         /* 호버 효과 */
         .creative-performance-table .ant-table-tbody > tr:hover > td {
@@ -565,12 +659,6 @@ function PerformanceTable({
         .creative-performance-table .table-row-odd td.ant-table-cell-fix-left,
         .creative-performance-table .table-row-odd td.ant-table-cell-fix-right {
           background-color: #fafbfc !important;
-        }
-        /* 하이라이트된 fixed 컬럼 */
-        .creative-performance-table .table-row-highlighted td.ant-table-cell-fix-left,
-        .creative-performance-table .table-row-highlighted td.ant-table-cell-fix-right {
-          background-color: #fff7e6 !important;
-          animation: creative-highlight-pulse 1s ease-in-out 3;
         }
         /* fixed 컬럼 호버 */
         .creative-performance-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-left,

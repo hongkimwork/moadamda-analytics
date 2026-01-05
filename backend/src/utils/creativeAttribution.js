@@ -1,7 +1,12 @@
 const db = require('./database');
 
 /**
- * 광고 소재별 기여도 계산 (Last Touch 50% + Weighted 50%)
+ * 광고 소재별 기여도 계산 (Last Touch 50% + 어시 균등 분배 50%)
+ * 
+ * 계산 방식:
+ * - 광고 1개만 봤으면: 해당 광고가 100% 기여
+ * - 여러 광고를 봤으면: 막타 50% + 나머지 어시 광고들이 50%를 균등 분배
+ * - 같은 광고를 여러 번 봤어도 1개로 카운트 (고유 조합 기준)
  * 
  * @param {Array} creatives - 광고 소재 목록 [{ creative_name, utm_source, utm_medium, utm_campaign, ... }]
  * @param {String} startDate - 시작일
@@ -134,50 +139,38 @@ async function calculateCreativeAttribution(creatives, startDate, endDate) {
 
     const finalPayment = parseFloat(purchase.final_payment) || 0;
 
-    // 순수 전환(막타) 체크: 이 광고만 보고 구매했는지 확인
-    // 여정에 있는 고유한 광고 조합 수를 계산
-    const uniqueCreatives = new Set();
+    // 여정에 있는 고유한 광고 조합 수집 (같은 광고를 여러 번 봤어도 1개로 카운트)
+    const uniqueCreativesMap = new Map(); // key -> touch 정보
     journey.forEach(touch => {
       const touchKey = `${touch.utm_content}||${touch.utm_source}||${touch.utm_medium}||${touch.utm_campaign}`;
-      uniqueCreatives.add(touchKey);
+      // 가장 마지막 sequence_order를 저장 (막타 판별용)
+      if (!uniqueCreativesMap.has(touchKey) || touch.sequence_order > uniqueCreativesMap.get(touchKey).sequence_order) {
+        uniqueCreativesMap.set(touchKey, touch);
+      }
     });
     
-    const isSingleTouch = uniqueCreatives.size === 1; // 하나의 광고만 봤는지
+    const uniqueCreativeKeys = Array.from(uniqueCreativesMap.keys());
+    const isSingleTouch = uniqueCreativeKeys.length === 1; // 하나의 광고 조합만 봤는지
 
-    // 막타 제외한 터치 목록 (막타 터치 하나만 제외, 같은 이름이어도 다른 터치는 포함)
-    const nonLastTouches = journey.filter((touch) => 
-      !(touch.sequence_order === lastTouch.sequence_order && 
-        touch.utm_content === lastTouch.utm_content)
-    );
+    // 막타 키 생성
+    const lastTouchKey = `${lastTouch.utm_content}||${lastTouch.utm_source}||${lastTouch.utm_medium}||${lastTouch.utm_campaign}`;
 
-    // 막타 제외한 광고별 터치 횟수 계산
-    const nonLastTouchCounts = {};
-    nonLastTouches.forEach(touch => {
-      const creativeName = touch.utm_content;
-      nonLastTouchCounts[creativeName] = (nonLastTouchCounts[creativeName] || 0) + 1;
-    });
-
-    const totalNonLastTouches = nonLastTouches.length;
+    // 막타 제외한 고유 광고 조합 목록 (어시 광고들)
+    const assistCreativeKeys = uniqueCreativeKeys.filter(key => key !== lastTouchKey);
+    const assistCount = assistCreativeKeys.length;
 
     // 막타 광고 기여도 계산
-    const lastTouchCreative = lastTouch.utm_content;
     let lastTouchAttributedAmount;
 
     // 광고 1개만 봤으면 100% 기여
-    if (totalNonLastTouches === 0) {
+    if (assistCount === 0) {
       lastTouchAttributedAmount = finalPayment; // 100%
     } else {
-      // 여러 광고를 봤으면: 막타 50% + 비막타 50% 분배
-      lastTouchAttributedAmount = finalPayment * 0.5; // 막타 기본 50%
-      
-      // 막타 광고가 중간에도 있었다면 추가 기여
-      if (nonLastTouchCounts[lastTouchCreative]) {
-        lastTouchAttributedAmount += finalPayment * 0.5 * (nonLastTouchCounts[lastTouchCreative] / totalNonLastTouches);
-      }
+      // 여러 광고를 봤으면: 막타 50% + 어시들이 50%를 균등 분배
+      lastTouchAttributedAmount = finalPayment * 0.5; // 막타 고정 50%
     }
 
     // 막타 광고 기여도 누적 (정확한 조합에만 누적)
-    const lastTouchKey = `${lastTouch.utm_content}||${lastTouch.utm_source}||${lastTouch.utm_medium}||${lastTouch.utm_campaign}`;
     const contributedKeys = new Set(); // 이 구매에서 이미 기여도 받은 조합들
     
     if (result[lastTouchKey]) {
@@ -197,41 +190,20 @@ async function calculateCreativeAttribution(creatives, startDate, endDate) {
       contributedKeys.add(lastTouchKey); // 막타는 이미 처리했음을 표시
     }
 
-    // 막타가 아닌 터치들의 기여도 계산 (조합별로 정확하게 계산)
-    const processedKeys = new Set(); // 중복 처리 방지
+    // 어시 광고들의 기여도 계산 (균등 분배)
+    // 50%를 어시 광고 수로 나눔
+    const assistAttributedAmount = assistCount > 0 ? (finalPayment * 0.5) / assistCount : 0;
     
-    nonLastTouches.forEach(touch => {
-      const touchKey = `${touch.utm_content}||${touch.utm_source}||${touch.utm_medium}||${touch.utm_campaign}`;
-      
-      // 이미 이 구매에서 기여도를 받은 조합은 스킵 (막타든 중간이든 1번만!)
-      if (contributedKeys.has(touchKey) || processedKeys.has(touchKey)) {
-        return;
-      }
-      
+    assistCreativeKeys.forEach(assistKey => {
       // 이 조합이 result에 있는지 확인
-      if (!result[touchKey]) {
+      if (!result[assistKey]) {
         return;
       }
 
-      // 이 조합의 터치 횟수 계산
-      const touchCount = nonLastTouches.filter(t => 
-        t.utm_content === touch.utm_content &&
-        t.utm_source === touch.utm_source &&
-        t.utm_medium === touch.utm_medium &&
-        t.utm_campaign === touch.utm_campaign
-      ).length;
-
-      // 기여도 계산: 결제금액 × 50% × (이 조합 터치 횟수 / 총 비막타 터치 횟수)
-      const attributedAmount = totalNonLastTouches > 0 
-        ? finalPayment * 0.5 * (touchCount / totalNonLastTouches)
-        : 0;
-
-      // 기여도 누적
-      result[touchKey].contributed_orders_count += 1;
-      result[touchKey].attributed_revenue += attributedAmount;
-      result[touchKey].total_contributed_revenue += finalPayment;
-      
-      processedKeys.add(touchKey);
+      // 기여도 누적 (균등 분배)
+      result[assistKey].contributed_orders_count += 1;
+      result[assistKey].attributed_revenue += assistAttributedAmount;
+      result[assistKey].total_contributed_revenue += finalPayment;
     });
   });
 

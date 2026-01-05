@@ -535,6 +535,65 @@ async function getDailyTrends({ creative_name, utm_source, utm_medium, utm_campa
   return result.rows;
 }
 
+/**
+ * Raw Data 검증용: 세션 목록 조회
+ * 특정 광고 소재로 유입된 모든 세션 조회
+ */
+async function getRawSessions({ creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate }) {
+  const query = `
+    SELECT 
+      us.id,
+      us.visitor_id,
+      us.entry_timestamp,
+      us.exit_timestamp,
+      us.duration_seconds,
+      us.pageview_count,
+      us.sequence_order,
+      v.device_type,
+      v.browser
+    FROM utm_sessions us
+    LEFT JOIN visitors v ON us.visitor_id = v.visitor_id
+    WHERE us.utm_params->>'utm_content' = $1
+      AND COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2
+      AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
+      AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
+      AND us.entry_timestamp >= $5
+      AND us.entry_timestamp <= $6
+    ORDER BY us.entry_timestamp DESC
+    LIMIT 500
+  `;
+  
+  const result = await db.query(query, [creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate]);
+  return result.rows;
+}
+
+/**
+ * Raw Data 검증용: 트래픽 지표 요약 조회
+ */
+async function getRawTrafficSummary({ creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate }) {
+  const query = `
+    SELECT 
+      COUNT(*) as total_views,
+      COUNT(DISTINCT visitor_id) as unique_visitors,
+      ROUND(COALESCE(SUM(pageview_count)::FLOAT / NULLIF(COUNT(DISTINCT visitor_id), 0), 0)::NUMERIC, 1) as avg_pageviews,
+      ROUND(COALESCE(
+        SUM(CASE WHEN duration_seconds < 7200 THEN duration_seconds ELSE 0 END)::FLOAT 
+        / NULLIF(COUNT(DISTINCT CASE WHEN duration_seconds < 7200 THEN visitor_id END), 0), 
+        0
+      )::NUMERIC, 1) as avg_duration_seconds
+    FROM utm_sessions
+    WHERE utm_params->>'utm_content' = $1
+      AND COALESCE(NULLIF(utm_params->>'utm_source', ''), '-') = $2
+      AND COALESCE(NULLIF(utm_params->>'utm_medium', ''), '-') = $3
+      AND COALESCE(NULLIF(utm_params->>'utm_campaign', ''), '-') = $4
+      AND entry_timestamp >= $5
+      AND entry_timestamp <= $6
+  `;
+  
+  const result = await db.query(query, [creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate]);
+  return result.rows[0];
+}
+
 module.exports = {
   getCreativeVisitors,
   getVisitorOrders,
@@ -555,5 +614,7 @@ module.exports = {
   getBounceRate,
   getConversionStats,
   getLastTouchRevenue,
-  getDailyTrends
+  getDailyTrends,
+  getRawSessions,
+  getRawTrafficSummary
 };
