@@ -63,12 +63,6 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
     assist_contribution: { count: 0, revenue: 0 },
     total_attributed: 0
   });
-  const [trafficStats, setTrafficStats] = useState({
-    total_views: 0,
-    unique_visitors: 0,
-    avg_pageviews: 0,
-    avg_duration_seconds: 0
-  });
   const [activeTab, setActiveTab] = useState('orders');
   
   // 고객 여정 분석 모달 state
@@ -79,7 +73,6 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
   useEffect(() => {
     if (visible && creative) {
       fetchOrders();
-      fetchTrafficStats();
       setActiveTab('orders');
     }
   }, [visible, creative]);
@@ -109,41 +102,9 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
     }
   };
 
-  const fetchTrafficStats = async () => {
-    if (!creative || !dateRange) return;
-    try {
-      const response = await axios.post(`${API_URL}/api/creative-performance/raw-traffic`, {
-        creative_name: creative.creative_name,
-        utm_source: creative.utm_source,
-        utm_medium: creative.utm_medium,
-        utm_campaign: creative.utm_campaign,
-        start: dateRange.start,
-        end: dateRange.end
-      });
-      if (response.data.success) {
-        setTrafficStats(response.data.summary || {});
-      }
-    } catch (error) {
-      console.error('트래픽 통계 조회 실패:', error);
-    }
-  };
-
   const formatCurrency = (amount) => {
     if (!amount) return '0원';
     return `${parseInt(amount).toLocaleString()}원`;
-  };
-
-  const formatDuration = (seconds) => {
-    if (!seconds || seconds <= 0) return '0초';
-    if (seconds < 60) return `${Math.round(seconds)}초`;
-    if (seconds < 3600) {
-      const mins = Math.floor(seconds / 60);
-      const secs = Math.round(seconds % 60);
-      return secs > 0 ? `${mins}분 ${secs}초` : `${mins}분`;
-    }
-    const hours = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    return mins > 0 ? `${hours}시간 ${mins}분` : `${hours}시간`;
   };
 
   // 주문 목록 테이블 컬럼
@@ -234,82 +195,6 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
       width: 95,
       align: 'center',
       render: (amount) => <Text strong style={{ fontSize: 13 }}>{formatCurrency(amount)}</Text>
-    },
-    {
-      title: (
-        <Tooltip title="이 광고로 유입 시 방문자가 본 페이지 수">
-          <span>세션PV <QuestionCircleOutlined style={{ fontSize: 11, color: '#8c8c8c' }} /></span>
-        </Tooltip>
-      ),
-      dataIndex: 'session_pageviews',
-      key: 'session_pageviews',
-      width: 70,
-      align: 'center',
-      render: (pv) => (
-        <Text style={{ 
-          fontSize: 12, 
-          color: pv >= 5 ? '#389e0d' : pv >= 2 ? '#1677ff' : '#8c8c8c',
-          fontWeight: pv >= 5 ? 600 : 400 
-        }}>
-          {pv || 0}
-        </Text>
-      )
-    },
-    {
-      title: (
-        <Tooltip title="이 광고로 유입 시 머문 시간">
-          <span>체류시간 <QuestionCircleOutlined style={{ fontSize: 11, color: '#8c8c8c' }} /></span>
-        </Tooltip>
-      ),
-      dataIndex: 'session_duration',
-      key: 'session_duration',
-      width: 80,
-      align: 'center',
-      render: (seconds) => (
-        <Text style={{ 
-          fontSize: 11, 
-          color: seconds >= 120 ? '#389e0d' : seconds >= 30 ? '#1677ff' : '#8c8c8c',
-          fontWeight: seconds >= 120 ? 600 : 400 
-        }}>
-          {formatDuration(seconds)}
-        </Text>
-      )
-    },
-    {
-      title: (
-        <Tooltip title="이 구매자가 이 광고를 총 몇 번 봤는지">
-          <span>광고접촉 <QuestionCircleOutlined style={{ fontSize: 11, color: '#8c8c8c' }} /></span>
-        </Tooltip>
-      ),
-      dataIndex: 'ad_touch_count',
-      key: 'ad_touch_count',
-      width: 70,
-      align: 'center',
-      render: (count) => (
-        <Tag color={count >= 3 ? 'purple' : count >= 2 ? 'blue' : 'default'} style={{ margin: 0 }}>
-          {count || 0}회
-        </Tag>
-      )
-    },
-    {
-      title: (
-        <Tooltip title="이 구매자의 전체 방문 횟수 (구매 결정 과정 맥락)">
-          <span>총방문 <QuestionCircleOutlined style={{ fontSize: 11, color: '#8c8c8c' }} /></span>
-        </Tooltip>
-      ),
-      dataIndex: 'total_visits',
-      key: 'total_visits',
-      width: 65,
-      align: 'center',
-      render: (count) => (
-        <Text style={{ 
-          fontSize: 12, 
-          color: count >= 5 ? '#722ed1' : '#8c8c8c',
-          fontWeight: count >= 5 ? 600 : 400 
-        }}>
-          {count || 0}
-        </Text>
-      )
     },
     {
       title: (
@@ -445,61 +330,31 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
         </Col>
       </Row>
 
-      {/* 추가 지표 (기존 + 트래픽 지표) */}
+      {/* 추가 지표 */}
       <Row gutter={[12, 12]} style={{ marginBottom: 20 }}>
-        <Col span={4}>
+        <Col span={8}>
           <Card size="small">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 11, color: '#8c8c8c' }}>순수 전환</span>
+              <span style={{ fontSize: 12, color: '#8c8c8c' }}>순수 전환 (이 광고만 보고 구매)</span>
               <Text strong style={{ color: '#d48806' }}>{summary.single_touch_orders}건</Text>
             </div>
           </Card>
         </Col>
-        <Col span={4}>
+        <Col span={8}>
           <Card size="small">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 11, color: '#8c8c8c' }}>평균 기여율</span>
+              <span style={{ fontSize: 12, color: '#8c8c8c' }}>평균 기여율</span>
               <Text strong style={{ color: '#1677ff' }}>{summary.avg_contribution_rate}%</Text>
             </div>
           </Card>
         </Col>
-        <Col span={4}>
+        <Col span={8}>
           <Card size="small">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 11, color: '#8c8c8c' }}>유입 방문자</span>
+              <span style={{ fontSize: 12, color: '#8c8c8c' }}>유입 방문자</span>
               <Text strong>{summary.unique_visitors}명</Text>
             </div>
           </Card>
-        </Col>
-        <Col span={4}>
-          <Tooltip title="이 광고를 통해 유입된 순 방문자 수">
-            <Card size="small" style={{ background: '#f0f0f0' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 11, color: '#8c8c8c' }}>UV</span>
-                <Text strong style={{ color: '#722ed1' }}>{trafficStats.unique_visitors?.toLocaleString() || 0}</Text>
-              </div>
-            </Card>
-          </Tooltip>
-        </Col>
-        <Col span={4}>
-          <Tooltip title="이 광고 유입 시 평균 페이지뷰">
-            <Card size="small" style={{ background: '#f0f0f0' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 11, color: '#8c8c8c' }}>평균 PV</span>
-                <Text strong style={{ color: '#722ed1' }}>{trafficStats.avg_pageviews || 0}</Text>
-              </div>
-            </Card>
-          </Tooltip>
-        </Col>
-        <Col span={4}>
-          <Tooltip title="이 광고 유입 시 평균 체류시간">
-            <Card size="small" style={{ background: '#f0f0f0' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 11, color: '#8c8c8c' }}>평균 체류</span>
-                <Text strong style={{ color: '#722ed1' }}>{formatDuration(trafficStats.avg_duration_seconds || 0)}</Text>
-              </div>
-            </Card>
-          </Tooltip>
         </Col>
       </Row>
 
@@ -511,7 +366,7 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
           rowKey="order_id"
           size="small"
           pagination={{ pageSize: 10, showTotal: (total) => `총 ${total}건`, showSizeChanger: false }}
-          scroll={{ x: 1500 }}
+          scroll={{ x: false }}
         />
       ) : !loading && (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="해당 광고 소재로 발생한 주문이 없습니다" />
@@ -654,13 +509,13 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <ShoppingCartOutlined style={{ fontSize: 20, color: '#1890ff' }} />
-          <span>주문 보기</span>
+          <span>광고 소재 기여 주문 상세</span>
         </div>
       }
       open={visible}
       onCancel={onClose}
       footer={null}
-      width={1650}
+      width={1350}
       style={{ top: '2.5vh' }}
       styles={{ body: { padding: '16px 24px', height: 'calc(95vh - 60px)', overflowY: 'auto' } }}
     >

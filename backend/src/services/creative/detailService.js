@@ -241,26 +241,6 @@ async function getCreativeOrders(params) {
     });
   });
   
-  // 기여 주문의 visitor들에 대한 추가 정보 조회
-  const contributedVisitorArray = Array.from(contributedVisitorIds);
-  const [sessionInfoMap, touchCountMap, visitCountMap] = await Promise.all([
-    repository.getVisitorSessionInfoForCreative({
-      visitorIds: contributedVisitorArray,
-      creative_name,
-      utm_source,
-      utm_medium,
-      utm_campaign
-    }),
-    repository.getCreativeTouchCounts({
-      visitorIds: contributedVisitorArray,
-      creative_name,
-      utm_source,
-      utm_medium,
-      utm_campaign
-    }),
-    repository.getVisitorTotalVisits({ visitorIds: contributedVisitorArray })
-  ]);
-  
   // 요약 통계 계산
   const lastTouchOrders = contributedOrders.filter(o => o.is_last_touch).length;
   const assistOrders = contributedOrders.filter(o => !o.is_last_touch).length;
@@ -273,33 +253,22 @@ async function getCreativeOrders(params) {
     : 0;
   
   // 응답 데이터 가공
-  const formattedOrders = contributedOrders.map(order => {
-    const sessionInfo = sessionInfoMap[order.visitor_id] || { pageview_count: 0, duration_seconds: 0 };
-    const touchCount = touchCountMap[order.visitor_id] || 0;
-    const totalVisits = visitCountMap[order.visitor_id] || 0;
-    
-    return {
-      order_id: order.order_id,
-      order_date: order.order_date,
-      final_payment: Math.round(parseFloat(order.final_payment) || 0),
-      total_amount: Math.round(parseFloat(order.total_amount) || 0),
-      product_name: order.product_name || '-',
-      product_count: parseInt(order.product_count) || 1,
-      discount_amount: Math.round(parseFloat(order.discount_amount) || 0),
-      is_last_touch: order.is_last_touch,
-      is_single_touch: order.is_single_touch,
-      role: order.role,
-      journey_creative_count: order.journey_creative_count,
-      contribution_rate: order.contribution_rate,
-      attributed_amount: order.attributed_amount,
-      journey: order.journey,
-      // 추가 지표
-      session_pageviews: sessionInfo.pageview_count,
-      session_duration: sessionInfo.duration_seconds,
-      ad_touch_count: touchCount,
-      total_visits: totalVisits
-    };
-  });
+  const formattedOrders = contributedOrders.map(order => ({
+    order_id: order.order_id,
+    order_date: order.order_date,
+    final_payment: Math.round(parseFloat(order.final_payment) || 0),
+    total_amount: Math.round(parseFloat(order.total_amount) || 0),
+    product_name: order.product_name || '-',
+    product_count: parseInt(order.product_count) || 1,
+    discount_amount: Math.round(parseFloat(order.discount_amount) || 0),
+    is_last_touch: order.is_last_touch,
+    is_single_touch: order.is_single_touch,
+    role: order.role,
+    journey_creative_count: order.journey_creative_count,
+    contribution_rate: order.contribution_rate,
+    attributed_amount: order.attributed_amount,
+    journey: order.journey
+  }));
   
   return {
     success: true,

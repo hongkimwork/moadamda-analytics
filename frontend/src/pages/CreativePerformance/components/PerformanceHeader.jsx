@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { Card, Typography, Button } from 'antd';
-import { BarChart3, RefreshCw, Clock } from 'lucide-react';
+import { BarChart3, RefreshCw, Clock, FlaskConical } from 'lucide-react';
 import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
@@ -16,11 +16,13 @@ const { Title, Text } = Typography;
  * @param {Function} props.onRefresh - 새로고침 핸들러
  * @param {boolean} props.loading - 로딩 상태
  * @param {Object} props.lastUpdated - 마지막 갱신 시간 (dayjs 객체)
+ * @param {Function} props.onTestResult - 테스트 결과 버튼 클릭 핸들러
  */
 function PerformanceHeader({ 
   onRefresh, 
   loading,
-  lastUpdated
+  lastUpdated,
+  onTestResult
 }) {
   return (
     <Card 
@@ -59,21 +61,40 @@ function PerformanceHeader({
         
         {/* 우측: 버튼 + 갱신 시간 */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
-          <Button
-            icon={<RefreshCw size={16} className={loading ? 'spin-animation' : ''} />}
-            onClick={onRefresh}
-            loading={loading}
-            style={{
-              height: '40px',
-              borderRadius: '8px',
-              fontWeight: 500,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}
-          >
-            새로고침
-          </Button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <Button
+              icon={<FlaskConical size={16} />}
+              onClick={onTestResult}
+              style={{
+                height: '40px',
+                borderRadius: '8px',
+                fontWeight: 500,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: '#f0f5ff',
+                borderColor: '#adc6ff',
+                color: '#2f54eb'
+              }}
+            >
+              테스트 결과
+            </Button>
+            <Button
+              icon={<RefreshCw size={16} className={loading ? 'spin-animation' : ''} />}
+              onClick={onRefresh}
+              loading={loading}
+              style={{
+                height: '40px',
+                borderRadius: '8px',
+                fontWeight: 500,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              새로고침
+            </Button>
+          </div>
           <div style={{ 
             display: 'flex', 
             alignItems: 'center', 
