@@ -34,6 +34,7 @@ function CreativePerformance() {
     
     // 필터 상태
     filters,
+    activeUtmFilters,
     currentPage,
     pageSize,
     
@@ -80,7 +81,10 @@ function CreativePerformance() {
       creative_name: record.creative_name,
       utm_source: record.utm_source,
       utm_medium: record.utm_medium,
-      utm_campaign: record.utm_campaign
+      utm_campaign: record.utm_campaign,
+      unique_visitors: record.unique_visitors,
+      avg_pageviews: record.avg_pageviews,
+      avg_duration_seconds: record.avg_duration_seconds
     });
     setOrdersModalVisible(true);
   };
@@ -106,8 +110,15 @@ function CreativePerformance() {
         onTestResult={() => setTestResultModalVisible(true)}
       />
 
-      {/* 인사이트 카드 (Top 5 랭킹) */}
-      <InsightCards data={data} />
+      {/* 인사이트 카드 (Top 5 랭킹 + 체류시간 분포) */}
+      <InsightCards 
+        data={data} 
+        dateRange={{
+          start: filters.dateRange[0],
+          end: filters.dateRange[1]
+        }}
+        utmFilters={activeUtmFilters}
+      />
 
       {/* 검색 및 필터 */}
       <PerformanceFilters

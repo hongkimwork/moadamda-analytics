@@ -613,6 +613,356 @@ async function getRawTrafficSummary({ creative_name, utm_source, utm_medium, utm
   return result.rows[0];
 }
 
+/**
+ * 특정 광고로 유입된 visitor별 세션 정보 조회 (PV, 체류시간)
+ * 
+ * FIX (2026-01-06): 체류시간 계산 방식 변경
+ * - 기존: utm_sessions.duration_seconds 사용 → 세션 종료 이벤트 필요, 자주 0초
+ * - 수정: pageviews 테이블에서 직접 계산 (여정 상세와 동일한 방식)
+ *   → 다음 페이지뷰와의 시간 차이로 체류시간 계산 (최대 600초=10분 제한)
+ */
+async function getVisitorSessionInfoForCreative({ visitorIds, creative_name, utm_source, utm_medium, utm_campaign }) {
+  if (visitorIds.length === 0) return {};
+  
+  // 1단계: 해당 광고로 유입된 UTM 세션의 session_id 목록 조회
+  const sessionQuery = `
+    SELECT visitor_id, session_id
+    FROM utm_sessions
+    WHERE visitor_id = ANY($1)
+      AND REPLACE(utm_params->>'utm_content', '+', ' ') = $2
+      AND COALESCE(NULLIF(utm_params->>'utm_source', ''), '-') = $3
+      AND COALESCE(NULLIF(utm_params->>'utm_medium', ''), '-') = $4
+      AND COALESCE(NULLIF(utm_params->>'utm_campaign', ''), '-') = $5
+  `;
+  
+  const sessionResult = await db.query(sessionQuery, [visitorIds, creative_name, utm_source, utm_medium, utm_campaign]);
+  
+  if (sessionResult.rows.length === 0) {
+    return {};
+  }
+  
+  // visitor_id별 session_id 목록 구성
+  const visitorSessionMap = {};
+  const allSessionIds = [];
+  sessionResult.rows.forEach(row => {
+    if (!visitorSessionMap[row.visitor_id]) {
+      visitorSessionMap[row.visitor_id] = [];
+    }
+    visitorSessionMap[row.visitor_id].push(row.session_id);
+    allSessionIds.push(row.session_id);
+  });
+  
+  // 2단계: 해당 세션들의 pageviews에서 체류시간 계산 (여정 상세와 동일한 로직)
+  const pageviewQuery = `
+    WITH page_times AS (
+      SELECT 
+        p.session_id,
+        p.visitor_id,
+        p.timestamp,
+        LEAD(p.timestamp) OVER (PARTITION BY p.session_id ORDER BY p.timestamp) as next_timestamp
+      FROM pageviews p
+      WHERE p.session_id = ANY($1)
+    )
+    SELECT
+      visitor_id,
+      COUNT(*) as pageview_count,
+      SUM(
+        CASE
+          WHEN next_timestamp IS NOT NULL THEN
+            LEAST(EXTRACT(EPOCH FROM (next_timestamp - timestamp))::INTEGER, 600)
+          ELSE 0
+        END
+      ) as total_duration
+    FROM page_times
+    GROUP BY visitor_id
+  `;
+  
+  const pageviewResult = await db.query(pageviewQuery, [allSessionIds]);
+  
+  // visitor_id를 키로 하는 객체로 변환
+  const sessionInfoMap = {};
+  pageviewResult.rows.forEach(row => {
+    sessionInfoMap[row.visitor_id] = {
+      pageview_count: parseInt(row.pageview_count) || 0,
+      duration_seconds: parseInt(row.total_duration) || 0
+    };
+  });
+  
+  // pageviews가 없는 visitor는 utm_sessions의 pageview_count 사용
+  Object.keys(visitorSessionMap).forEach(visitorId => {
+    if (!sessionInfoMap[visitorId]) {
+      sessionInfoMap[visitorId] = {
+        pageview_count: visitorSessionMap[visitorId].length,
+        duration_seconds: 0
+      };
+    }
+  });
+  
+  return sessionInfoMap;
+}
+
+/**
+ * visitor별 특정 광고 접촉 횟수 조회
+ */
+async function getCreativeTouchCounts({ visitorIds, creative_name, utm_source, utm_medium, utm_campaign }) {
+  if (visitorIds.length === 0) return {};
+  
+  const query = `
+    SELECT 
+      visitor_id,
+      COUNT(*) as touch_count
+    FROM utm_sessions
+    WHERE visitor_id = ANY($1)
+      AND REPLACE(utm_params->>'utm_content', '+', ' ') = $2
+      AND COALESCE(NULLIF(utm_params->>'utm_source', ''), '-') = $3
+      AND COALESCE(NULLIF(utm_params->>'utm_medium', ''), '-') = $4
+      AND COALESCE(NULLIF(utm_params->>'utm_campaign', ''), '-') = $5
+    GROUP BY visitor_id
+  `;
+  
+  const result = await db.query(query, [visitorIds, creative_name, utm_source, utm_medium, utm_campaign]);
+  
+  const touchCountMap = {};
+  result.rows.forEach(row => {
+    touchCountMap[row.visitor_id] = parseInt(row.touch_count) || 0;
+  });
+  
+  return touchCountMap;
+}
+
+/**
+ * visitor별 총 방문 횟수 조회
+ */
+async function getVisitorTotalVisits({ visitorIds }) {
+  if (visitorIds.length === 0) return {};
+  
+  const query = `
+    SELECT 
+      visitor_id,
+      visit_count
+    FROM visitors
+    WHERE visitor_id = ANY($1)
+  `;
+  
+  const result = await db.query(query, [visitorIds]);
+  
+  const visitCountMap = {};
+  result.rows.forEach(row => {
+    visitCountMap[row.visitor_id] = parseInt(row.visit_count) || 0;
+  });
+  
+  return visitCountMap;
+}
+
+/**
+ * 체류시간 분포 계산 (주문 발생 건 기준)
+ * 주문이 발생한 visitor의 체류시간을 pageviews 테이블 기반으로 계산
+ * 
+ * @param {Object} params
+ * @param {Date} params.startDate - 시작일
+ * @param {Date} params.endDate - 종료일
+ * @param {string} params.utmFilterConditions - UTM 필터 조건 SQL (optional)
+ * @param {Array} params.queryParams - SQL 쿼리 파라미터 배열
+ * @returns {Object} - 체류시간 분포 및 통계
+ */
+async function getDurationDistribution({ startDate, endDate, utmFilterConditions = '', queryParams }) {
+  // 1단계: 해당 기간 내 주문이 발생한 visitor 조회
+  const purchaserQuery = `
+    SELECT DISTINCT c.visitor_id, c.order_id
+    FROM conversions c
+    WHERE c.order_id IS NOT NULL
+      AND c.paid = 'T'
+      AND c.final_payment > 0
+      AND c.timestamp >= $1
+      AND c.timestamp <= $2
+  `;
+  
+  const purchaserResult = await db.query(purchaserQuery, [queryParams[0], queryParams[1]]);
+  
+  if (purchaserResult.rows.length === 0) {
+    return {
+      distribution: {
+        range_0_30: 0,
+        range_30_60: 0,
+        range_60_180: 0,
+        range_180_300: 0,
+        range_300_600: 0,
+        range_600_900: 0,
+        range_900_1200: 0,
+        range_1200_1800: 0,
+        range_1800_2400: 0,
+        range_2400_3000: 0,
+        range_3000_3600: 0,
+        range_3600_7200: 0
+      },
+      stats: {
+        total_orders: 0,
+        avg_duration: 0,
+        median_duration: 0
+      }
+    };
+  }
+  
+  const purchaserIds = [...new Set(purchaserResult.rows.map(r => r.visitor_id))];
+  
+  // 2단계: 해당 purchaser들이 UTM 광고를 통해 유입된 세션 조회
+  let sessionQuery = `
+    SELECT DISTINCT us.session_id, us.visitor_id
+    FROM utm_sessions us
+    WHERE us.visitor_id = ANY($1)
+      AND us.utm_params->>'utm_content' IS NOT NULL
+      AND us.entry_timestamp >= $2
+      AND us.entry_timestamp <= $3
+  `;
+  
+  // UTM 필터 조건 적용 (파라미터 인덱스 조정)
+  let adjustedUtmConditions = utmFilterConditions;
+  if (utmFilterConditions) {
+    // $3 이후의 파라미터 인덱스를 $4부터 시작하도록 조정
+    adjustedUtmConditions = utmFilterConditions.replace(/\$(\d+)/g, (match, num) => {
+      const newNum = parseInt(num) + 1; // $3 -> $4, $4 -> $5, ...
+      return `$${newNum}`;
+    });
+    sessionQuery += adjustedUtmConditions;
+  }
+  
+  const sessionParams = [purchaserIds, queryParams[0], queryParams[1], ...queryParams.slice(2)];
+  const sessionResult = await db.query(sessionQuery, sessionParams);
+  
+  if (sessionResult.rows.length === 0) {
+    return {
+      distribution: {
+        range_0_30: 0,
+        range_30_60: 0,
+        range_60_180: 0,
+        range_180_300: 0,
+        range_300_600: 0,
+        range_600_900: 0,
+        range_900_1200: 0,
+        range_1200_1800: 0,
+        range_1800_2400: 0,
+        range_2400_3000: 0,
+        range_3000_3600: 0,
+        range_3600_7200: 0
+      },
+      stats: {
+        total_orders: 0,
+        avg_duration: 0,
+        median_duration: 0
+      }
+    };
+  }
+  
+  const allSessionIds = sessionResult.rows.map(r => r.session_id);
+  
+  // 3단계: pageviews 기반 visitor별 체류시간 계산 (10분 제한 없이 계산)
+  const durationQuery = `
+    WITH page_times AS (
+      SELECT 
+        p.session_id,
+        p.visitor_id,
+        p.timestamp,
+        LEAD(p.timestamp) OVER (PARTITION BY p.session_id ORDER BY p.timestamp) as next_timestamp
+      FROM pageviews p
+      WHERE p.session_id = ANY($1)
+    ),
+    visitor_durations AS (
+      SELECT
+        visitor_id,
+        SUM(
+          CASE
+            WHEN next_timestamp IS NOT NULL THEN
+              LEAST(EXTRACT(EPOCH FROM (next_timestamp - timestamp))::INTEGER, 1800)
+            ELSE 0
+          END
+        ) as total_duration
+      FROM page_times
+      GROUP BY visitor_id
+    )
+    SELECT 
+      visitor_id,
+      total_duration
+    FROM visitor_durations
+    WHERE visitor_id = ANY($2)
+  `;
+  
+  const durationResult = await db.query(durationQuery, [allSessionIds, purchaserIds]);
+  
+  // 분포 계산 (초/분 단위 구간)
+  const distribution = {
+    range_0_30: 0,       // 0~30초
+    range_30_60: 0,      // 30초~1분
+    range_60_180: 0,     // 1~3분
+    range_180_300: 0,    // 3~5분
+    range_300_600: 0,    // 5~10분
+    range_600_900: 0,    // 10~15분
+    range_900_1200: 0,   // 15~20분
+    range_1200_1800: 0,  // 20~30분
+    range_1800_2400: 0,  // 30~40분
+    range_2400_3000: 0,  // 40~50분
+    range_3000_3600: 0,  // 50~60분
+    range_3600_7200: 0   // 60~120분
+  };
+  
+  const durations = [];
+  
+  durationResult.rows.forEach(row => {
+    const duration = parseInt(row.total_duration) || 0;
+    durations.push(duration);
+    
+    if (duration < 30) {
+      distribution.range_0_30++;
+    } else if (duration < 60) {
+      distribution.range_30_60++;
+    } else if (duration < 180) {
+      distribution.range_60_180++;
+    } else if (duration < 300) {
+      distribution.range_180_300++;
+    } else if (duration < 600) {
+      distribution.range_300_600++;
+    } else if (duration < 900) {
+      distribution.range_600_900++;
+    } else if (duration < 1200) {
+      distribution.range_900_1200++;
+    } else if (duration < 1800) {
+      distribution.range_1200_1800++;
+    } else if (duration < 2400) {
+      distribution.range_1800_2400++;
+    } else if (duration < 3000) {
+      distribution.range_2400_3000++;
+    } else if (duration < 3600) {
+      distribution.range_3000_3600++;
+    } else {
+      distribution.range_3600_7200++;
+    }
+  });
+  
+  // 통계 계산
+  const totalOrders = durations.length;
+  const avgDuration = totalOrders > 0 
+    ? Math.round(durations.reduce((sum, d) => sum + d, 0) / totalOrders)
+    : 0;
+  
+  // 중앙값 계산
+  let medianDuration = 0;
+  if (durations.length > 0) {
+    const sorted = [...durations].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    medianDuration = sorted.length % 2 !== 0
+      ? sorted[mid]
+      : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+  }
+  
+  return {
+    distribution,
+    stats: {
+      total_orders: totalOrders,
+      avg_duration: avgDuration,
+      median_duration: medianDuration
+    }
+  };
+}
+
 module.exports = {
   getAllVisitorsInPeriod,
   getCreativeVisitors,
@@ -636,5 +986,9 @@ module.exports = {
   getLastTouchRevenue,
   getDailyTrends,
   getRawSessions,
-  getRawTrafficSummary
+  getRawTrafficSummary,
+  getVisitorSessionInfoForCreative,
+  getCreativeTouchCounts,
+  getVisitorTotalVisits,
+  getDurationDistribution
 };

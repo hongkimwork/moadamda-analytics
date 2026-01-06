@@ -1,11 +1,12 @@
 // ============================================================================
-// 광고 소재 성과 분석 - 인사이트 카드 (Top 5 랭킹)
+// 광고 소재 성과 분석 - 인사이트 카드 (Top 5 랭킹 + 체류시간 분포)
 // ============================================================================
 
-import React, { useMemo } from 'react';
-import { Card, Row, Col, Typography, Empty, Badge } from 'antd';
-import { Trophy, TrendingUp } from 'lucide-react';
+import React, { useMemo, useEffect, useState } from 'react';
+import { Card, Row, Col, Typography, Empty, Spin } from 'antd';
+import { Trophy, TrendingUp, Clock } from 'lucide-react';
 import { calculateTrafficScores, formatCurrency } from '../utils/formatters';
+import { fetchDurationDistribution } from '../services/creativePerformanceApi';
 
 const { Text, Title } = Typography;
 
@@ -131,10 +132,186 @@ const RankingItem = ({ rank, title, subText, score, value, type, maxValue }) => 
 };
 
 /**
+ * 체류시간 분포 가로 막대 차트 컴포넌트 (주문 기준)
+ */
+const DurationDistributionChart = ({ distribution, stats, loading }) => {
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}>
+        <Spin />
+      </div>
+    );
+  }
+
+  if (!distribution || stats?.total_orders === 0) {
+    return <Empty description="주문 데이터가 없습니다" image={Empty.PRESENTED_IMAGE_SIMPLE} />;
+  }
+
+  // 차트 색상 (시간이 길수록 진한 보라색)
+  const colors = [
+    '#ffd6e7', '#ffadd2', '#ff85c0', '#f759ab', '#eb2f96',  // 핑크 계열 (짧은 시간)
+    '#d3adf7', '#b37feb', '#9254de', '#722ed1', '#531dab', '#391085', '#22075e'  // 보라 계열 (긴 시간)
+  ];
+  const ranges = [
+    'range_0_30', 'range_30_60', 'range_60_180', 'range_180_300', 'range_300_600',
+    'range_600_900', 'range_900_1200', 'range_1200_1800',
+    'range_1800_2400', 'range_2400_3000', 'range_3000_3600', 'range_3600_7200'
+  ];
+  
+  // 막대 차트 데이터 준비
+  const total = stats.total_orders;
+  const maxCount = Math.max(...ranges.map(r => distribution[r]?.count || 0));
+  
+  const bars = ranges.map((range, index) => {
+    const item = distribution[range];
+    return {
+      ...item,
+      range,
+      color: colors[index],
+      widthPercent: maxCount > 0 ? (item.count / maxCount) * 100 : 0
+    };
+  });
+
+  return (
+    <div style={{ padding: '8px 0' }}>
+      {/* 상단 요약 */}
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        marginBottom: '16px',
+        padding: '12px 16px',
+        background: 'linear-gradient(135deg, #f9f0ff 0%, #efdbff 100%)',
+        borderRadius: '8px'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '12px', color: '#8c8c8c' }}>총 주문수</div>
+          <div style={{ fontSize: '20px', fontWeight: 700, color: '#722ed1' }}>
+            {stats.total_orders.toLocaleString()}건
+          </div>
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '12px', color: '#8c8c8c' }}>평균 체류시간</div>
+          <div style={{ fontSize: '20px', fontWeight: 700, color: '#722ed1' }}>
+            {stats.avg_duration_formatted}
+          </div>
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '12px', color: '#8c8c8c' }}>중앙값</div>
+          <div style={{ fontSize: '20px', fontWeight: 700, color: '#722ed1' }}>
+            {stats.median_duration_formatted}
+          </div>
+        </div>
+      </div>
+
+      {/* 가로 막대 차트 */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {bars.map((bar, index) => (
+          <div 
+            key={bar.range}
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center',
+              gap: '12px'
+            }}
+          >
+            {/* 라벨 */}
+            <div style={{ 
+              width: '80px', 
+              fontSize: '13px', 
+              color: '#595959',
+              textAlign: 'right',
+              flexShrink: 0
+            }}>
+              {bar.label}
+            </div>
+            
+            {/* 막대 */}
+            <div style={{ 
+              flex: 1, 
+              height: '24px', 
+              background: '#f5f5f5', 
+              borderRadius: '4px',
+              overflow: 'hidden',
+              position: 'relative'
+            }}>
+              <div style={{
+                width: `${bar.widthPercent}%`,
+                height: '100%',
+                background: bar.color,
+                borderRadius: '4px',
+                transition: 'width 0.5s ease',
+                minWidth: bar.count > 0 ? '4px' : '0'
+              }} />
+            </div>
+            
+            {/* 건수 & 비율 */}
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '8px',
+              minWidth: '100px',
+              flexShrink: 0
+            }}>
+              <span style={{ 
+                fontSize: '14px', 
+                fontWeight: 600, 
+                color: '#262626',
+                minWidth: '50px',
+                textAlign: 'right'
+              }}>
+                {bar.count.toLocaleString()}건
+              </span>
+              <span style={{ 
+                fontSize: '12px', 
+                color: '#8c8c8c',
+                minWidth: '40px',
+                textAlign: 'right'
+              }}>
+                ({bar.ratio}%)
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+/**
  * 인사이트 카드 컴포넌트
  * @param {Array} data - 전체 광고 데이터
+ * @param {Object} dateRange - 날짜 범위 { start, end }
+ * @param {Array} utmFilters - UTM 필터 배열
  */
-function InsightCards({ data }) {
+function InsightCards({ data, dateRange, utmFilters }) {
+  // 체류시간 분포 데이터 상태
+  const [durationData, setDurationData] = useState(null);
+  const [durationLoading, setDurationLoading] = useState(false);
+
+  // 체류시간 분포 데이터 조회
+  useEffect(() => {
+    const loadDurationData = async () => {
+      if (!dateRange?.start || !dateRange?.end) return;
+      
+      setDurationLoading(true);
+      try {
+        const result = await fetchDurationDistribution({
+          start: dateRange.start,
+          end: dateRange.end,
+          utm_filters: JSON.stringify(utmFilters || [])
+        });
+        if (result.success) {
+          setDurationData(result);
+        }
+      } catch (error) {
+        console.error('Failed to fetch duration distribution:', error);
+      } finally {
+        setDurationLoading(false);
+      }
+    };
+
+    loadDurationData();
+  }, [dateRange?.start, dateRange?.end, utmFilters]);
   // Top 5 데이터 계산
   const { trafficTop5, valueTop5, maxValue } = useMemo(() => {
     if (!data || data.length === 0) {
@@ -256,6 +433,32 @@ function InsightCards({ data }) {
           ) : (
             <Empty description="매출 데이터가 없습니다" image={Empty.PRESENTED_IMAGE_SIMPLE} />
           )}
+        </Card>
+      </Col>
+
+      {/* 3. 구매자 체류시간 분포 (전체 너비) */}
+      <Col xs={24}>
+        <Card 
+          title={
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Clock size={18} color="#722ed1" />
+                <span>구매자 체류시간 분포</span>
+              </div>
+              <span style={{ fontSize: '12px', color: '#8c8c8c', fontWeight: 'normal' }}>
+                주문 건별 체류시간 기준
+              </span>
+            </div>
+          }
+          bodyStyle={{ padding: '16px 24px' }}
+          bordered={false}
+          style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}
+        >
+          <DurationDistributionChart 
+            distribution={durationData?.distribution}
+            stats={durationData?.stats}
+            loading={durationLoading}
+          />
         </Card>
       </Col>
     </Row>

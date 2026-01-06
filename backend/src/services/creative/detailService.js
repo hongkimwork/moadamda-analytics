@@ -241,6 +241,26 @@ async function getCreativeOrders(params) {
     });
   });
   
+  // 기여 주문의 visitor들에 대한 추가 정보 조회
+  const contributedVisitorArray = Array.from(contributedVisitorIds);
+  const [sessionInfoMap, touchCountMap, visitCountMap] = await Promise.all([
+    repository.getVisitorSessionInfoForCreative({
+      visitorIds: contributedVisitorArray,
+      creative_name,
+      utm_source,
+      utm_medium,
+      utm_campaign
+    }),
+    repository.getCreativeTouchCounts({
+      visitorIds: contributedVisitorArray,
+      creative_name,
+      utm_source,
+      utm_medium,
+      utm_campaign
+    }),
+    repository.getVisitorTotalVisits({ visitorIds: contributedVisitorArray })
+  ]);
+  
   // 요약 통계 계산
   const lastTouchOrders = contributedOrders.filter(o => o.is_last_touch).length;
   const assistOrders = contributedOrders.filter(o => !o.is_last_touch).length;
@@ -253,22 +273,33 @@ async function getCreativeOrders(params) {
     : 0;
   
   // 응답 데이터 가공
-  const formattedOrders = contributedOrders.map(order => ({
-    order_id: order.order_id,
-    order_date: order.order_date,
-    final_payment: Math.round(parseFloat(order.final_payment) || 0),
-    total_amount: Math.round(parseFloat(order.total_amount) || 0),
-    product_name: order.product_name || '-',
-    product_count: parseInt(order.product_count) || 1,
-    discount_amount: Math.round(parseFloat(order.discount_amount) || 0),
-    is_last_touch: order.is_last_touch,
-    is_single_touch: order.is_single_touch,
-    role: order.role,
-    journey_creative_count: order.journey_creative_count,
-    contribution_rate: order.contribution_rate,
-    attributed_amount: order.attributed_amount,
-    journey: order.journey
-  }));
+  const formattedOrders = contributedOrders.map(order => {
+    const sessionInfo = sessionInfoMap[order.visitor_id] || { pageview_count: 0, duration_seconds: 0 };
+    const touchCount = touchCountMap[order.visitor_id] || 0;
+    const totalVisits = visitCountMap[order.visitor_id] || 0;
+    
+    return {
+      order_id: order.order_id,
+      order_date: order.order_date,
+      final_payment: Math.round(parseFloat(order.final_payment) || 0),
+      total_amount: Math.round(parseFloat(order.total_amount) || 0),
+      product_name: order.product_name || '-',
+      product_count: parseInt(order.product_count) || 1,
+      discount_amount: Math.round(parseFloat(order.discount_amount) || 0),
+      is_last_touch: order.is_last_touch,
+      is_single_touch: order.is_single_touch,
+      role: order.role,
+      journey_creative_count: order.journey_creative_count,
+      contribution_rate: order.contribution_rate,
+      attributed_amount: order.attributed_amount,
+      journey: order.journey,
+      // 추가 지표
+      session_pageviews: sessionInfo.pageview_count,
+      session_duration: sessionInfo.duration_seconds,
+      ad_touch_count: touchCount,
+      total_visits: totalVisits
+    };
+  });
   
   return {
     success: true,
@@ -1103,6 +1134,155 @@ async function getRawAttributionData(params) {
   };
 }
 
+/**
+ * 체류시간 분포 조회
+ * 선택한 기간 내 주문이 발생한 구매자의 체류시간 분포
+ */
+async function getDurationDistribution(params) {
+  const { start, end, utm_filters = '[]' } = params;
+  
+  // 날짜 파라미터 검증
+  if (!start || !end) {
+    throw new Error('start, end are required');
+  }
+  
+  const { startDate, endDate } = parseDates(start, end);
+  
+  // UTM 필터 파싱
+  let utmFilterConditions = '';
+  const queryParams = [startDate, endDate];
+  let paramIndex = 3;
+  
+  try {
+    const filters = JSON.parse(utm_filters);
+    if (Array.isArray(filters) && filters.length > 0) {
+      filters.forEach(filter => {
+        if (filter.field && filter.value) {
+          const fieldMap = {
+            'utm_source': "us.utm_params->>'utm_source'",
+            'utm_medium': "us.utm_params->>'utm_medium'",
+            'utm_campaign': "us.utm_params->>'utm_campaign'",
+            'utm_content': "us.utm_params->>'utm_content'"
+          };
+          const dbField = fieldMap[filter.field];
+          if (dbField) {
+            utmFilterConditions += ` AND ${dbField} = $${paramIndex}`;
+            queryParams.push(filter.value);
+            paramIndex++;
+          }
+        }
+      });
+    }
+  } catch (e) {
+    // 파싱 실패 시 필터 무시
+  }
+  
+  // Repository에서 분포 데이터 조회
+  const result = await repository.getDurationDistribution({
+    startDate,
+    endDate,
+    utmFilterConditions,
+    queryParams
+  });
+  
+  // 응답 데이터 가공
+  const { distribution, stats } = result;
+  const totalOrders = stats.total_orders;
+  
+  // 비율 계산 (초/분 단위 구간)
+  const distributionWithRatio = {
+    range_0_30: {
+      count: distribution.range_0_30,
+      ratio: totalOrders > 0 ? Math.round(distribution.range_0_30 / totalOrders * 1000) / 10 : 0,
+      label: '0~30초'
+    },
+    range_30_60: {
+      count: distribution.range_30_60,
+      ratio: totalOrders > 0 ? Math.round(distribution.range_30_60 / totalOrders * 1000) / 10 : 0,
+      label: '30초~1분'
+    },
+    range_60_180: {
+      count: distribution.range_60_180,
+      ratio: totalOrders > 0 ? Math.round(distribution.range_60_180 / totalOrders * 1000) / 10 : 0,
+      label: '1~3분'
+    },
+    range_180_300: {
+      count: distribution.range_180_300,
+      ratio: totalOrders > 0 ? Math.round(distribution.range_180_300 / totalOrders * 1000) / 10 : 0,
+      label: '3~5분'
+    },
+    range_300_600: {
+      count: distribution.range_300_600,
+      ratio: totalOrders > 0 ? Math.round(distribution.range_300_600 / totalOrders * 1000) / 10 : 0,
+      label: '5~10분'
+    },
+    range_600_900: {
+      count: distribution.range_600_900,
+      ratio: totalOrders > 0 ? Math.round(distribution.range_600_900 / totalOrders * 1000) / 10 : 0,
+      label: '10~15분'
+    },
+    range_900_1200: {
+      count: distribution.range_900_1200,
+      ratio: totalOrders > 0 ? Math.round(distribution.range_900_1200 / totalOrders * 1000) / 10 : 0,
+      label: '15~20분'
+    },
+    range_1200_1800: {
+      count: distribution.range_1200_1800,
+      ratio: totalOrders > 0 ? Math.round(distribution.range_1200_1800 / totalOrders * 1000) / 10 : 0,
+      label: '20~30분'
+    },
+    range_1800_2400: {
+      count: distribution.range_1800_2400,
+      ratio: totalOrders > 0 ? Math.round(distribution.range_1800_2400 / totalOrders * 1000) / 10 : 0,
+      label: '30~40분'
+    },
+    range_2400_3000: {
+      count: distribution.range_2400_3000,
+      ratio: totalOrders > 0 ? Math.round(distribution.range_2400_3000 / totalOrders * 1000) / 10 : 0,
+      label: '40~50분'
+    },
+    range_3000_3600: {
+      count: distribution.range_3000_3600,
+      ratio: totalOrders > 0 ? Math.round(distribution.range_3000_3600 / totalOrders * 1000) / 10 : 0,
+      label: '50~60분'
+    },
+    range_3600_7200: {
+      count: distribution.range_3600_7200,
+      ratio: totalOrders > 0 ? Math.round(distribution.range_3600_7200 / totalOrders * 1000) / 10 : 0,
+      label: '60분 이상'
+    }
+  };
+  
+  // 평균 체류시간 포맷
+  const avgDurationFormatted = formatDuration(stats.avg_duration);
+  const medianDurationFormatted = formatDuration(stats.median_duration);
+  
+  return {
+    success: true,
+    period: { start, end },
+    distribution: distributionWithRatio,
+    stats: {
+      total_orders: stats.total_orders,
+      avg_duration_seconds: stats.avg_duration,
+      avg_duration_formatted: avgDurationFormatted,
+      median_duration_seconds: stats.median_duration,
+      median_duration_formatted: medianDurationFormatted
+    }
+  };
+}
+
+/**
+ * 초를 "X분 Y초" 형태로 포맷
+ */
+function formatDuration(seconds) {
+  if (seconds < 60) {
+    return `${seconds}초`;
+  }
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return secs > 0 ? `${mins}분 ${secs}초` : `${mins}분`;
+}
+
 module.exports = {
   getCreativeOrders,
   getCreativeAnalysis,
@@ -1110,5 +1290,6 @@ module.exports = {
   getCreativeLandingPages,
   compareCreatives,
   getRawTrafficData,
-  getRawAttributionData
+  getRawAttributionData,
+  getDurationDistribution
 };
