@@ -12,7 +12,6 @@ import PerformanceFilters from './components/PerformanceFilters';
 import PerformanceTable from './components/PerformanceTable';
 import CreativeOrdersModal from '../../components/CreativeOrdersModal';
 import CreativeJourneyModal from '../../components/CreativeJourneyModal';
-import TestResultModal from '../../components/TestResultModal';
 
 /**
  * 광고 소재 퍼포먼스 페이지
@@ -20,9 +19,6 @@ import TestResultModal from '../../components/TestResultModal';
 function CreativePerformance() {
   // 마지막 갱신 시간 state
   const [lastUpdated, setLastUpdated] = useState(dayjs());
-  
-  // 테스트 결과 모달 state
-  const [testResultModalVisible, setTestResultModalVisible] = useState(false);
 
   const {
     // 데이터
@@ -103,7 +99,6 @@ function CreativePerformance() {
         onRefresh={handleRefresh}
         loading={loading}
         lastUpdated={lastUpdated}
-        onTestResult={() => setTestResultModalVisible(true)}
       />
 
       {/* 인사이트 카드 (Top 5 랭킹) */}
@@ -173,12 +168,6 @@ function CreativePerformance() {
           start: filters.dateRange[0],
           end: filters.dateRange[1]
         }}
-      />
-
-      {/* 테스트 결과 모달 */}
-      <TestResultModal
-        visible={testResultModalVisible}
-        onClose={() => setTestResultModalVisible(false)}
       />
     </div>
   );

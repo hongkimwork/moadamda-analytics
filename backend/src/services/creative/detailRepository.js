@@ -613,6 +613,94 @@ async function getRawTrafficSummary({ creative_name, utm_source, utm_medium, utm
   return result.rows[0];
 }
 
+/**
+ * 특정 광고로 유입된 visitor별 세션 정보 조회 (PV, 체류시간)
+ * 해당 광고를 마지막으로 본 세션의 정보를 반환
+ */
+async function getVisitorSessionInfoForCreative({ visitorIds, creative_name, utm_source, utm_medium, utm_campaign }) {
+  if (visitorIds.length === 0) return {};
+  
+  const query = `
+    SELECT DISTINCT ON (visitor_id)
+      visitor_id,
+      pageview_count,
+      duration_seconds
+    FROM utm_sessions
+    WHERE visitor_id = ANY($1)
+      AND REPLACE(utm_params->>'utm_content', '+', ' ') = $2
+      AND COALESCE(NULLIF(utm_params->>'utm_source', ''), '-') = $3
+      AND COALESCE(NULLIF(utm_params->>'utm_medium', ''), '-') = $4
+      AND COALESCE(NULLIF(utm_params->>'utm_campaign', ''), '-') = $5
+    ORDER BY visitor_id, entry_timestamp DESC
+  `;
+  
+  const result = await db.query(query, [visitorIds, creative_name, utm_source, utm_medium, utm_campaign]);
+  
+  // visitor_id를 키로 하는 객체로 변환
+  const sessionInfoMap = {};
+  result.rows.forEach(row => {
+    sessionInfoMap[row.visitor_id] = {
+      pageview_count: parseInt(row.pageview_count) || 0,
+      duration_seconds: parseInt(row.duration_seconds) || 0
+    };
+  });
+  
+  return sessionInfoMap;
+}
+
+/**
+ * visitor별 특정 광고 접촉 횟수 조회
+ */
+async function getCreativeTouchCounts({ visitorIds, creative_name, utm_source, utm_medium, utm_campaign }) {
+  if (visitorIds.length === 0) return {};
+  
+  const query = `
+    SELECT 
+      visitor_id,
+      COUNT(*) as touch_count
+    FROM utm_sessions
+    WHERE visitor_id = ANY($1)
+      AND REPLACE(utm_params->>'utm_content', '+', ' ') = $2
+      AND COALESCE(NULLIF(utm_params->>'utm_source', ''), '-') = $3
+      AND COALESCE(NULLIF(utm_params->>'utm_medium', ''), '-') = $4
+      AND COALESCE(NULLIF(utm_params->>'utm_campaign', ''), '-') = $5
+    GROUP BY visitor_id
+  `;
+  
+  const result = await db.query(query, [visitorIds, creative_name, utm_source, utm_medium, utm_campaign]);
+  
+  const touchCountMap = {};
+  result.rows.forEach(row => {
+    touchCountMap[row.visitor_id] = parseInt(row.touch_count) || 0;
+  });
+  
+  return touchCountMap;
+}
+
+/**
+ * visitor별 총 방문 횟수 조회
+ */
+async function getVisitorTotalVisits({ visitorIds }) {
+  if (visitorIds.length === 0) return {};
+  
+  const query = `
+    SELECT 
+      visitor_id,
+      visit_count
+    FROM visitors
+    WHERE visitor_id = ANY($1)
+  `;
+  
+  const result = await db.query(query, [visitorIds]);
+  
+  const visitCountMap = {};
+  result.rows.forEach(row => {
+    visitCountMap[row.visitor_id] = parseInt(row.visit_count) || 0;
+  });
+  
+  return visitCountMap;
+}
+
 module.exports = {
   getAllVisitorsInPeriod,
   getCreativeVisitors,
@@ -636,5 +724,8 @@ module.exports = {
   getLastTouchRevenue,
   getDailyTrends,
   getRawSessions,
-  getRawTrafficSummary
+  getRawTrafficSummary,
+  getVisitorSessionInfoForCreative,
+  getCreativeTouchCounts,
+  getVisitorTotalVisits
 };
