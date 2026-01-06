@@ -32,8 +32,8 @@ const EXCLUDED_SOURCES = ['viral'];
  * @param {boolean} loading - 로딩 상태
  */
 function UtmSourceQuickFilter({ onFilterChange, loading = false }) {
-  // 선택된 그룹 키 목록
-  const [selectedGroups, setSelectedGroups] = useState(['all']);
+  // 선택된 그룹 키 목록 (기본값: 메타)
+  const [selectedGroups, setSelectedGroups] = useState(['meta']);
   
   // 사용자가 추가한 개별 소스 버튼
   const [customSources, setCustomSources] = useState([]);

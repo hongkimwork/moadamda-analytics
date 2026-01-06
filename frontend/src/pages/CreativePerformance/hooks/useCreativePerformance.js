@@ -42,8 +42,8 @@ export const useCreativePerformance = () => {
   // 동적 UTM 필터 state
   const [activeUtmFilters, setActiveUtmFilters] = useState([]);
   
-  // UTM Source 퀵 필터 state
-  const [quickFilterSources, setQuickFilterSources] = useState([]);
+  // UTM Source 퀵 필터 state (기본값: 메타 그룹 소스)
+  const [quickFilterSources, setQuickFilterSources] = useState(['meta', 'instagram', 'ig']);
 
   // 모달 state
   const [ordersModalVisible, setOrdersModalVisible] = useState(false);
