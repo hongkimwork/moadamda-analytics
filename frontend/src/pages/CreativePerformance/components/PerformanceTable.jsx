@@ -4,7 +4,7 @@
 
 import React, { useMemo } from 'react';
 import { Card, Table, Tooltip, Dropdown, Button, message } from 'antd';
-import { ShoppingCart, Network, Database } from 'lucide-react';
+import { ShoppingCart, Network } from 'lucide-react';
 import { formatDuration, formatCurrency, formatNumber, calculateTrafficScores } from '../utils/formatters';
 import { getRowKey } from '../utils/helpers';
 
@@ -22,8 +22,7 @@ function PerformanceTable({
   onTableChange,
   onPageChange,
   onViewOrders,
-  onViewJourney,
-  onViewRawData
+  onViewJourney
 }) {
   // 모수 평가 점수 계산 (필터된 데이터 기준)
   const trafficScores = useMemo(() => calculateTrafficScores(data), [data]);
@@ -557,13 +556,6 @@ function PerformanceTable({
             label: '고객 여정',
             icon: <Network size={16} />,
             onClick: () => onViewJourney(record)
-          },
-          { type: 'divider' },
-          {
-            key: 'rawdata',
-            label: 'Raw Data 검증',
-            icon: <Database size={16} />,
-            onClick: () => onViewRawData(record)
           }
         ];
 

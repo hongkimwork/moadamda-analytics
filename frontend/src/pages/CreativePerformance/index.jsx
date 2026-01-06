@@ -12,7 +12,7 @@ import PerformanceFilters from './components/PerformanceFilters';
 import PerformanceTable from './components/PerformanceTable';
 import CreativeOrdersModal from '../../components/CreativeOrdersModal';
 import CreativeJourneyModal from '../../components/CreativeJourneyModal';
-import RawDataModal from '../../components/RawDataModal';
+import TestResultModal from '../../components/TestResultModal';
 
 /**
  * 광고 소재 퍼포먼스 페이지
@@ -20,6 +20,9 @@ import RawDataModal from '../../components/RawDataModal';
 function CreativePerformance() {
   // 마지막 갱신 시간 state
   const [lastUpdated, setLastUpdated] = useState(dayjs());
+  
+  // 테스트 결과 모달 state
+  const [testResultModalVisible, setTestResultModalVisible] = useState(false);
 
   const {
     // 데이터
@@ -39,16 +42,12 @@ function CreativePerformance() {
     selectedCreative,
     journeyModalVisible,
     journeyCreative,
-    rawDataModalVisible,
-    rawDataCreative,
     
     // 상태 변경 함수
     setOrdersModalVisible,
     setSelectedCreative,
     setJourneyModalVisible,
     setJourneyCreative,
-    setRawDataModalVisible,
-    setRawDataCreative,
     setActiveUtmFilters,
     setQuickFilterSources,
     setError,
@@ -97,17 +96,6 @@ function CreativePerformance() {
     setJourneyModalVisible(true);
   };
 
-  // Raw Data 검증 버튼 클릭 핸들러
-  const handleViewRawData = (record) => {
-    setRawDataCreative({
-      creative_name: record.creative_name,
-      utm_source: record.utm_source,
-      utm_medium: record.utm_medium,
-      utm_campaign: record.utm_campaign
-    });
-    setRawDataModalVisible(true);
-  };
-
   return (
     <div style={{ padding: '24px', background: '#f5f7fa', minHeight: '100vh' }}>
       {/* 헤더 */}
@@ -115,6 +103,7 @@ function CreativePerformance() {
         onRefresh={handleRefresh}
         loading={loading}
         lastUpdated={lastUpdated}
+        onTestResult={() => setTestResultModalVisible(true)}
       />
 
       {/* 인사이트 카드 (Top 5 랭킹) */}
@@ -156,7 +145,6 @@ function CreativePerformance() {
         onPageChange={handlePageChange}
         onViewOrders={handleViewOrders}
         onViewJourney={handleViewJourney}
-        onViewRawData={handleViewRawData}
       />
 
       {/* 주문 보기 모달 */}
@@ -187,18 +175,10 @@ function CreativePerformance() {
         }}
       />
 
-      {/* Raw Data 검증 모달 */}
-      <RawDataModal
-        visible={rawDataModalVisible}
-        onClose={() => {
-          setRawDataModalVisible(false);
-          setRawDataCreative(null);
-        }}
-        creative={rawDataCreative}
-        dateRange={{
-          start: filters.dateRange[0],
-          end: filters.dateRange[1]
-        }}
+      {/* 테스트 결과 모달 */}
+      <TestResultModal
+        visible={testResultModalVisible}
+        onClose={() => setTestResultModalVisible(false)}
       />
     </div>
   );

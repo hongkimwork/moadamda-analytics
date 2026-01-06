@@ -50,8 +50,6 @@ export const useCreativePerformance = () => {
   const [selectedCreative, setSelectedCreative] = useState(null);
   const [journeyModalVisible, setJourneyModalVisible] = useState(false);
   const [journeyCreative, setJourneyCreative] = useState(null);
-  const [rawDataModalVisible, setRawDataModalVisible] = useState(false);
-  const [rawDataCreative, setRawDataCreative] = useState(null);
 
   // 요약 통계 계산
   const summaryStats = useMemo(() => {
@@ -224,16 +222,12 @@ export const useCreativePerformance = () => {
     selectedCreative,
     journeyModalVisible,
     journeyCreative,
-    rawDataModalVisible,
-    rawDataCreative,
     
     // 상태 변경 함수
     setOrdersModalVisible,
     setSelectedCreative,
     setJourneyModalVisible,
     setJourneyCreative,
-    setRawDataModalVisible,
-    setRawDataCreative,
     setActiveUtmFilters,
     setQuickFilterSources,
     setError,
