@@ -6,13 +6,31 @@
 const db = require('../../utils/database');
 
 /**
+ * 선택 기간 내 모든 광고를 본 visitor 목록 조회
+ * (테이블 creativeAttribution.js와 동일한 방식)
+ */
+async function getAllVisitorsInPeriod({ startDate, endDate }) {
+  const query = `
+    SELECT DISTINCT visitor_id
+    FROM utm_sessions
+    WHERE utm_params->>'utm_content' IS NOT NULL
+      AND entry_timestamp >= $1
+      AND entry_timestamp <= $2
+  `;
+  
+  const result = await db.query(query, [startDate, endDate]);
+  return result.rows.map(r => r.visitor_id);
+}
+
+/**
  * 특정 광고 소재를 본 visitor 목록 조회
+ * (테이블과 동일하게 REPLACE 적용하여 + → 공백 변환)
  */
 async function getCreativeVisitors({ creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate }) {
   const query = `
     SELECT DISTINCT visitor_id
     FROM utm_sessions
-    WHERE utm_params->>'utm_content' = $1
+    WHERE REPLACE(utm_params->>'utm_content', '+', ' ') = $1
       AND COALESCE(NULLIF(utm_params->>'utm_source', ''), '-') = $2
       AND COALESCE(NULLIF(utm_params->>'utm_medium', ''), '-') = $3
       AND COALESCE(NULLIF(utm_params->>'utm_campaign', ''), '-') = $4
@@ -55,12 +73,13 @@ async function getVisitorOrders({ visitorIds, startDate, endDate }) {
 
 /**
  * Visitor들의 UTM 여정 조회
+ * (테이블과 동일하게 REPLACE 적용하여 + → 공백 변환)
  */
 async function getVisitorJourneys({ visitorIds }) {
   const query = `
     SELECT 
       visitor_id,
-      utm_params->>'utm_content' as utm_content,
+      REPLACE(utm_params->>'utm_content', '+', ' ') as utm_content,
       COALESCE(NULLIF(utm_params->>'utm_source', ''), '-') as utm_source,
       COALESCE(NULLIF(utm_params->>'utm_medium', ''), '-') as utm_medium,
       COALESCE(NULLIF(utm_params->>'utm_campaign', ''), '-') as utm_campaign,
@@ -86,7 +105,7 @@ async function getDailyTrend({ creative_name, utm_source, utm_medium, utm_campai
         DATE(us.entry_timestamp) as date,
         COUNT(DISTINCT us.visitor_id) as uv
       FROM utm_sessions us
-      WHERE us.utm_params->>'utm_content' = $1
+      WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = $1
         AND COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2
         AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
         AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
@@ -133,7 +152,7 @@ async function getDeviceStats({ creative_name, utm_source, utm_medium, utm_campa
         COUNT(DISTINCT us.visitor_id) as uv
       FROM utm_sessions us
       JOIN visitors v ON us.visitor_id = v.visitor_id
-      WHERE us.utm_params->>'utm_content' = $1
+      WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = $1
         AND COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2
         AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
         AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
@@ -391,7 +410,7 @@ async function getCreativeMetrics({ creative_name, utm_source, utm_medium, utm_c
       ROUND(AVG(us.pageview_count)::NUMERIC, 1) as avg_pageviews,
       ROUND(AVG(us.duration_seconds)::NUMERIC, 0) as avg_duration
     FROM utm_sessions us
-    WHERE us.utm_params->>'utm_content' = $1
+    WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = $1
       AND COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2
       AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
       AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
@@ -455,7 +474,7 @@ async function getLastTouchRevenue({ visitorIds, startDate, endDate, creative_na
     WITH visitor_journeys AS (
       SELECT 
         us.visitor_id,
-        us.utm_params->>'utm_content' as utm_content,
+        REPLACE(us.utm_params->>'utm_content', '+', ' ') as utm_content,
         COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') as utm_source,
         COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') as utm_medium,
         COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') as utm_campaign,
@@ -499,7 +518,7 @@ async function getDailyTrends({ creative_name, utm_source, utm_medium, utm_campa
         DATE(us.entry_timestamp) as date,
         COUNT(DISTINCT us.visitor_id) as uv
       FROM utm_sessions us
-      WHERE us.utm_params->>'utm_content' = $1
+      WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = $1
         AND COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2
         AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
         AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
@@ -553,7 +572,7 @@ async function getRawSessions({ creative_name, utm_source, utm_medium, utm_campa
       v.browser
     FROM utm_sessions us
     LEFT JOIN visitors v ON us.visitor_id = v.visitor_id
-    WHERE us.utm_params->>'utm_content' = $1
+    WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = $1
       AND COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2
       AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
       AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
@@ -577,12 +596,12 @@ async function getRawTrafficSummary({ creative_name, utm_source, utm_medium, utm
       COUNT(DISTINCT visitor_id) as unique_visitors,
       ROUND(COALESCE(SUM(pageview_count)::FLOAT / NULLIF(COUNT(DISTINCT visitor_id), 0), 0)::NUMERIC, 1) as avg_pageviews,
       ROUND(COALESCE(
-        SUM(CASE WHEN duration_seconds < 7200 THEN duration_seconds ELSE 0 END)::FLOAT 
-        / NULLIF(COUNT(DISTINCT CASE WHEN duration_seconds < 7200 THEN visitor_id END), 0), 
+        SUM(CASE WHEN duration_seconds < 300 THEN duration_seconds ELSE 0 END)::FLOAT 
+        / NULLIF(COUNT(DISTINCT CASE WHEN duration_seconds < 300 THEN visitor_id END), 0), 
         0
       )::NUMERIC, 1) as avg_duration_seconds
     FROM utm_sessions
-    WHERE utm_params->>'utm_content' = $1
+    WHERE REPLACE(utm_params->>'utm_content', '+', ' ') = $1
       AND COALESCE(NULLIF(utm_params->>'utm_source', ''), '-') = $2
       AND COALESCE(NULLIF(utm_params->>'utm_medium', ''), '-') = $3
       AND COALESCE(NULLIF(utm_params->>'utm_campaign', ''), '-') = $4
@@ -595,6 +614,7 @@ async function getRawTrafficSummary({ creative_name, utm_source, utm_medium, utm
 }
 
 module.exports = {
+  getAllVisitorsInPeriod,
   getCreativeVisitors,
   getVisitorOrders,
   getVisitorJourneys,

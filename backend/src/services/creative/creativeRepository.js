@@ -6,8 +6,8 @@
 const db = require('../../utils/database');
 
 // 이상치 필터링 기준값 (초 단위)
-// 2시간 이상의 체류시간은 비정상적인 데이터로 판단하여 평균 계산에서 제외
-const MAX_DURATION_SECONDS = 7200; // 2시간 = 7200초
+// 5분 이상의 체류시간은 비정상적인 데이터로 판단하여 평균 계산에서 제외
+const MAX_DURATION_SECONDS = 300; // 5분 = 300초
 
 /**
  * 광고 소재별 집계 데이터 조회
@@ -50,7 +50,7 @@ async function getCreativeAggregation({
       ) as avg_pageviews,
       
       -- 평균 체류시간 (방문자당 평균, 초 단위, 소수점 1자리)
-      -- 이상치 제외: 2시간(7200초) 이상의 체류시간은 비정상으로 판단하여 제외
+      -- 이상치 제외: 5분(300초) 이상의 체류시간은 비정상으로 판단하여 제외
       ROUND(
         COALESCE(
           SUM(CASE WHEN us.duration_seconds < ${MAX_DURATION_SECONDS} THEN us.duration_seconds ELSE 0 END)::FLOAT 
