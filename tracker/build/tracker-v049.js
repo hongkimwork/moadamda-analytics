@@ -440,7 +440,7 @@
     console.log('[MA] Coupon select tracked');
   }
   
-  // Send heartbeat for session duration tracking
+  // NEW: Send heartbeat for session duration tracking
   function sendHeartbeat() {
     const heartbeatEvent = {
       type: 'heartbeat',
@@ -456,7 +456,7 @@
     }
   }
   
-  // Start heartbeat timer
+  // NEW: Start heartbeat timer
   function startHeartbeat() {
     if (heartbeatTimer) {
       clearInterval(heartbeatTimer);
@@ -465,7 +465,7 @@
     console.log('[MA] Heartbeat started (interval: ' + CONFIG.heartbeatInterval/1000 + 's)');
   }
   
-  // Stop heartbeat timer
+  // NEW: Stop heartbeat timer
   function stopHeartbeat() {
     if (heartbeatTimer) {
       clearInterval(heartbeatTimer);
@@ -820,7 +820,7 @@
     console.log('[MA] Scroll depth tracking initialized');
   }
   
-  // Setup error logging
+  // NEW: Setup error logging
   function setupErrorLogging() {
     window.addEventListener('error', function(event) {
       // Only log errors from our tracker or related scripts
@@ -926,3 +926,4 @@
   }
   
 })();
+

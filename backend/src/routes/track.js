@@ -58,6 +58,9 @@ async function processEvent(event, clientIp) {
     case 'coupon_select':
       await eventHandlers.handleCouponSelect(event, clientIp);
       break;
+    case 'scroll_depth':
+      await eventHandlers.handleScrollDepth(event, clientIp);
+      break;
     default:
       console.warn('Unknown event type:', type);
   }

@@ -390,6 +390,39 @@ async function handleCouponSelect(event, clientIp) {
   }
 }
 
+/**
+ * Handle scroll depth event (v20.5)
+ * Tracks maximum scroll position (px) per page
+ */
+async function handleScrollDepth(event, clientIp) {
+  const { visitor_id, session_id, timestamp, url, max_scroll_px, document_height, viewport_height } = event;
+  const eventTime = new Date(timestamp);
+
+  try {
+    // Ensure visitor and session exist
+    await repository.ensureVisitorExists(visitor_id, eventTime, clientIp);
+    await repository.ensureSessionExists(session_id, visitor_id, eventTime, url, clientIp);
+
+    // Insert scroll_depth event into events table with metadata
+    await repository.insertEvent({
+      session_id,
+      visitor_id,
+      event_type: 'scroll_depth',
+      timestamp: eventTime,
+      metadata: JSON.stringify({
+        url,
+        max_scroll_px: max_scroll_px || 0,
+        document_height: document_height || 0,
+        viewport_height: viewport_height || 0
+      })
+    });
+
+    console.log(`[Track] Scroll depth: visitor=${visitor_id.substring(0, 8)}... | ${max_scroll_px}px / ${document_height}px`);
+  } catch (error) {
+    console.error('Error handling scroll depth:', error);
+  }
+}
+
 module.exports = {
   handlePageview,
   handleEcommerceEvent,
@@ -397,5 +430,6 @@ module.exports = {
   handleCheckoutAttempt,
   handleHeartbeat,
   handleTrackerError,
-  handleCouponSelect
+  handleCouponSelect,
+  handleScrollDepth
 };

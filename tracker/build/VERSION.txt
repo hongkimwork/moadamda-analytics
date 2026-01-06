@@ -1,24 +1,25 @@
-v20.4 (v047)
-Updated: 2025-12-03
+v20.5 (v048)
+Updated: 2026-01-06
 
-🚀 MAJOR UPDATE: 인앱 브라우저 강화 전송 + 실패 이벤트 재시도
+🚀 NEW: 스크롤 깊이 추적 기능 추가
 
-NEW IN v20.4 (v047):
-✅ 인앱 브라우저 감지 (FB/IG/카카오/네이버/라인)
-✅ 인앱 브라우저 강화 전송 (sendBeacon + fetch 동시 사용)
-✅ sendBeacon 실패 시 fetch fallback
-✅ 실패 이벤트 sessionStorage 저장 및 재시도 (30초 간격)
-✅ 쿠폰 선택 페이지 추적 (coupon_select)
+NEW IN v20.5 (v048):
+✅ 스크롤 깊이 추적 (scroll_depth)
+  - 페이지별 최대 스크롤 위치(px) 수집
+  - 문서 전체 높이 수집
+  - 뷰포트 높이 수집
+  - 페이지 이탈 시 자동 전송
+  - 성능 최적화: 100ms 쓰로틀링 적용
 
-WHY THIS UPDATE:
-- 배포 DB 검증 결과 21.5%~50% 데이터 누락 발견
-- 주요 원인: 인앱 브라우저에서 페이지 전환 시 데이터 유실
-- 해결: 이중 전송 전략 + 실패 시 재시도 메커니즘
+BACKEND CHANGES (eventHandlers.js):
+- scroll_depth 이벤트 핸들러 추가
+- events 테이블 metadata 컬럼에 스크롤 정보 저장
 
-BACKEND CHANGES (track.js):
-- coupon_select 이벤트 핸들러 추가
-
-Previous v20.3 features maintained:
+Previous v20.4 features maintained:
+- 인앱 브라우저 감지 (FB/IG/카카오/네이버/라인)
+- 인앱 브라우저 강화 전송 (sendBeacon + fetch 동시 사용)
+- 실패 이벤트 sessionStorage 저장 및 재시도
+- 쿠폰 선택 페이지 추적 (coupon_select)
 - visibilitychange 이벤트
 - checkout_attempt 이벤트
 - heartbeat 기능 (30초 간격)
