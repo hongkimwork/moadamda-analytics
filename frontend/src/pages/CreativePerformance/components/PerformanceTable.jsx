@@ -177,16 +177,12 @@ function PerformanceTable({
                 <table style={{ width: '100%', fontSize: '13px', borderCollapse: 'collapse' }}>
                   <tbody>
                     <tr>
-                      <td style={{ padding: '2px 12px 2px 0' }}>• UV (방문자)</td>
-                      <td style={{ padding: '2px 0', fontWeight: 700, textAlign: 'right', color: '#ffc069' }}>60%</td>
-                    </tr>
-                    <tr>
                       <td style={{ padding: '2px 12px 2px 0' }}>• 평균 PV</td>
-                      <td style={{ padding: '2px 0', fontWeight: 700, textAlign: 'right', color: '#bae7ff' }}>20%</td>
+                      <td style={{ padding: '2px 0', fontWeight: 700, textAlign: 'right', color: '#bae7ff' }}>50%</td>
                     </tr>
                     <tr>
                       <td style={{ padding: '2px 12px 2px 0' }}>• 체류시간</td>
-                      <td style={{ padding: '2px 0', fontWeight: 700, textAlign: 'right', color: '#d9f7be' }}>20%</td>
+                      <td style={{ padding: '2px 0', fontWeight: 700, textAlign: 'right', color: '#d9f7be' }}>50%</td>
                     </tr>
                   </tbody>
                 </table>

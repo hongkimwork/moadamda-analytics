@@ -1,11 +1,43 @@
-import { Modal, Table, Typography, Spin, Empty, Statistic, Row, Col, Tag, Tooltip, Tabs, Card, Progress, Popover, Timeline, Divider } from 'antd';
-import { ShoppingCartOutlined, DollarOutlined, UserOutlined, AimOutlined, QuestionCircleOutlined, CheckCircleOutlined, CalculatorOutlined, EyeOutlined, InfoCircleOutlined } from '@ant-design/icons';
-import { useState, useEffect } from 'react';
+import { Modal, Table, Typography, Spin, Empty, Statistic, Row, Col, Tag, Tooltip, Tabs, Card, Progress, Divider } from 'antd';
+import { ShoppingCartOutlined, QuestionCircleOutlined, CheckCircleOutlined, CalculatorOutlined, EyeOutlined, InfoCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import dayjs from 'dayjs';
+import { OrderDetailPageContent } from '../pages/OrderAnalysis/OrderDetailPage';
+import { useUserMappings } from '../hooks/useUserMappings';
 
 const { Text, Title } = Typography;
 const API_URL = import.meta.env.VITE_API_URL || '';
+
+/**
+ * 광고 노출일시와 노출→구매 간격 계산
+ * @param {Object} order - 주문 데이터 (journey 포함)
+ * @param {Object} dateRange - 조회 기간 { start, end }
+ * @returns {Object} { exposureDate, daysDiff, isOutOfRange }
+ */
+function getExposureInfo(order, dateRange) {
+  if (!order.journey || order.journey.length === 0) {
+    return { exposureDate: null, daysDiff: null, isOutOfRange: false };
+  }
+  
+  // journey에서 is_target === true인 항목 찾기 (현재 조회 중인 광고)
+  const targetTouch = order.journey.find(j => j.is_target);
+  if (!targetTouch || !targetTouch.timestamp) {
+    return { exposureDate: null, daysDiff: null, isOutOfRange: false };
+  }
+  
+  const exposureDate = dayjs(targetTouch.timestamp);
+  const orderDate = dayjs(order.order_date);
+  const daysDiff = orderDate.diff(exposureDate, 'day');
+  
+  // 조회 기간 밖 노출 여부 확인
+  const rangeStart = dateRange?.start ? dayjs(dateRange.start).startOf('day') : null;
+  const rangeEnd = dateRange?.end ? dayjs(dateRange.end).endOf('day') : null;
+  const isOutOfRange = rangeStart && rangeEnd && 
+    (exposureDate.isBefore(rangeStart) || exposureDate.isAfter(rangeEnd));
+  
+  return { exposureDate, daysDiff, isOutOfRange };
+}
 
 /**
  * CreativeOrdersModal - 광고 소재별 기여 주문 목록 모달 (기여도 상세 정보 + 계산 검증)
@@ -32,6 +64,11 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
     total_attributed: 0
   });
   const [activeTab, setActiveTab] = useState('orders');
+  
+  // 고객 여정 분석 모달 state
+  const [journeyModalVisible, setJourneyModalVisible] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState(null);
+  const { userMappings } = useUserMappings();
 
   useEffect(() => {
     if (visible && creative) {
@@ -70,105 +107,84 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
     return `${parseInt(amount).toLocaleString()}원`;
   };
 
-  // 광고 여정 팝오버 내용
-  const JourneyPopover = ({ journey, finalPayment }) => {
-    if (!journey || journey.length === 0) return <Text type="secondary">여정 정보 없음</Text>;
-    
-    const lastTouchCreative = journey.find(j => j.is_last_touch);
-    const assistCreatives = journey.filter(j => !j.is_last_touch);
-    const assistCount = assistCreatives.length;
-    
-    return (
-      <div style={{ maxWidth: 400, padding: '8px 0' }}>
-        <Title level={5} style={{ marginBottom: 12, fontSize: 14 }}>광고 여정 ({journey.length}개 광고)</Title>
-        <Timeline style={{ marginBottom: 16 }}>
-          {journey.map((item, idx) => (
-            <Timeline.Item 
-              key={idx}
-              color={item.is_target ? 'blue' : item.is_last_touch ? 'green' : 'gray'}
-              dot={item.is_last_touch ? <AimOutlined style={{ fontSize: 14 }} /> : null}
-            >
-              <div style={{ 
-                background: item.is_target ? '#e6f4ff' : 'transparent',
-                padding: item.is_target ? '6px 10px' : '2px 0',
-                borderRadius: 6,
-                border: item.is_target ? '1px solid #91caff' : 'none'
-              }}>
-                <div style={{ fontWeight: item.is_target ? 600 : 400, fontSize: 13 }}>
-                  {item.order}. {item.creative_name}
-                  {item.is_target && <Tag color="blue" style={{ marginLeft: 6, fontSize: 10 }}>현재 광고</Tag>}
-                  {item.is_last_touch && <Tag color="green" style={{ marginLeft: 6, fontSize: 10 }}>막타</Tag>}
-                </div>
-                <div style={{ fontSize: 11, color: '#8c8c8c', marginTop: 2 }}>
-                  {item.utm_source} · {dayjs(item.timestamp).format('MM/DD HH:mm')}
-                </div>
-              </div>
-            </Timeline.Item>
-          ))}
-          <Timeline.Item color="gold" dot={<ShoppingCartOutlined style={{ fontSize: 14 }} />}>
-            <div style={{ fontWeight: 600, color: '#d48806' }}>
-              구매 완료: {formatCurrency(finalPayment)}
-            </div>
-          </Timeline.Item>
-        </Timeline>
-        
-        <Divider style={{ margin: '12px 0' }} />
-        <Title level={5} style={{ marginBottom: 8, fontSize: 13 }}>기여도 분배</Title>
-        <div style={{ fontSize: 12 }}>
-          {journey.map((item, idx) => {
-            let contribution = 0;
-            let percent = 0;
-            if (item.is_last_touch) {
-              percent = assistCount === 0 ? 100 : 50;
-              contribution = finalPayment * (percent / 100);
-            } else {
-              percent = assistCount > 0 ? Math.round((50 / assistCount) * 10) / 10 : 0;
-              contribution = finalPayment * 0.5 / assistCount;
-            }
-            return (
-              <div key={idx} style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                padding: '4px 0',
-                background: item.is_target ? '#f0f5ff' : 'transparent',
-                borderRadius: 4,
-                paddingLeft: item.is_target ? 8 : 0,
-                paddingRight: item.is_target ? 8 : 0
-              }}>
-                <span style={{ fontWeight: item.is_target ? 600 : 400 }}>
-                  {item.creative_name.length > 20 ? item.creative_name.slice(0, 20) + '...' : item.creative_name}
-                  <Tag color={item.is_last_touch ? 'green' : 'default'} style={{ marginLeft: 4, fontSize: 10 }}>
-                    {item.is_last_touch ? '막타' : '어시'}
-                  </Tag>
-                </span>
-                <span style={{ fontWeight: item.is_target ? 600 : 400, color: item.is_target ? '#1677ff' : 'inherit' }}>
-                  {formatCurrency(Math.round(contribution))} ({percent}%)
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
-
   // 주문 목록 테이블 컬럼
   const columns = [
     {
       title: '주문번호',
       dataIndex: 'order_id',
       key: 'order_id',
-      width: 140,
+      width: 130,
       align: 'center',
       render: (text) => (
         <Text copyable={{ text }} style={{ fontFamily: 'monospace', fontSize: 11 }}>{text}</Text>
       )
     },
     {
+      title: (
+        <Tooltip title="이 광고를 언제 봤는지 (조회 기간 밖이면 파란색 표시)">
+          <span>광고 노출일 <QuestionCircleOutlined style={{ fontSize: 11, color: '#8c8c8c' }} /></span>
+        </Tooltip>
+      ),
+      key: 'exposure_date',
+      width: 110,
+      align: 'center',
+      render: (_, record) => {
+        const { exposureDate, isOutOfRange } = getExposureInfo(record, dateRange);
+        if (!exposureDate) return <Text type="secondary">-</Text>;
+        return (
+          <div>
+            <Text style={{ 
+              fontSize: 12, 
+              color: isOutOfRange ? '#1677ff' : 'inherit',
+              fontWeight: isOutOfRange ? 600 : 400
+            }}>
+              {exposureDate.format('MM-DD HH:mm')}
+            </Text>
+            {isOutOfRange && (
+              <Tooltip title="조회 기간 밖에서 광고를 봤지만, 구매일 기준 30일 이내이므로 기여로 인정됨">
+                <ExclamationCircleOutlined style={{ marginLeft: 4, color: '#1677ff', fontSize: 11 }} />
+              </Tooltip>
+            )}
+          </div>
+        );
+      }
+    },
+    {
+      title: (
+        <Tooltip title="광고를 본 후 구매까지 걸린 시간">
+          <span>노출→구매 <QuestionCircleOutlined style={{ fontSize: 11, color: '#8c8c8c' }} /></span>
+        </Tooltip>
+      ),
+      key: 'days_diff',
+      width: 85,
+      align: 'center',
+      render: (_, record) => {
+        const { daysDiff, isOutOfRange } = getExposureInfo(record, dateRange);
+        if (daysDiff === null) return <Text type="secondary">-</Text>;
+        
+        let label = '';
+        let color = 'default';
+        if (daysDiff === 0) {
+          label = '당일';
+          color = 'green';
+        } else if (daysDiff <= 3) {
+          label = `${daysDiff}일 전`;
+          color = 'cyan';
+        } else if (daysDiff <= 7) {
+          label = `${daysDiff}일 전`;
+          color = 'blue';
+        } else {
+          label = `${daysDiff}일 전`;
+          color = isOutOfRange ? 'purple' : 'default';
+        }
+        return <Tag color={color} style={{ margin: 0 }}>{label}</Tag>;
+      }
+    },
+    {
       title: '주문일시',
       dataIndex: 'order_date',
       key: 'order_date',
-      width: 130,
+      width: 100,
       align: 'center',
       render: (date) => <Text style={{ fontSize: 12 }}>{dayjs(date).format('MM-DD HH:mm')}</Text>
     },
@@ -176,7 +192,7 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
       title: '결제금액',
       dataIndex: 'final_payment',
       key: 'final_payment',
-      width: 100,
+      width: 95,
       align: 'center',
       render: (amount) => <Text strong style={{ fontSize: 13 }}>{formatCurrency(amount)}</Text>
     },
@@ -188,7 +204,7 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
       ),
       dataIndex: 'role',
       key: 'role',
-      width: 90,
+      width: 85,
       align: 'center',
       render: (role, record) => {
         const color = role === '막타(순수)' ? 'gold' : role === '막타' ? 'blue' : 'default';
@@ -198,12 +214,12 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
     {
       title: (
         <Tooltip title="고객이 구매 전 본 고유 광고 개수">
-          <span>여정 광고 <QuestionCircleOutlined style={{ fontSize: 11, color: '#8c8c8c' }} /></span>
+          <span>여정 <QuestionCircleOutlined style={{ fontSize: 11, color: '#8c8c8c' }} /></span>
         </Tooltip>
       ),
       dataIndex: 'journey_creative_count',
       key: 'journey_creative_count',
-      width: 80,
+      width: 65,
       align: 'center',
       render: (count) => <Tag color="purple">{count}개</Tag>
     },
@@ -215,7 +231,7 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
       ),
       dataIndex: 'contribution_rate',
       key: 'contribution_rate',
-      width: 80,
+      width: 70,
       align: 'center',
       render: (rate) => (
         <Text style={{ color: rate === 100 ? '#d48806' : rate >= 50 ? '#1677ff' : '#8c8c8c', fontWeight: rate >= 50 ? 600 : 400 }}>
@@ -226,32 +242,31 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
     {
       title: (
         <Tooltip title="결제금액 × 기여율">
-          <span>기여 금액 <QuestionCircleOutlined style={{ fontSize: 11, color: '#8c8c8c' }} /></span>
+          <span>기여금액 <QuestionCircleOutlined style={{ fontSize: 11, color: '#8c8c8c' }} /></span>
         </Tooltip>
       ),
       dataIndex: 'attributed_amount',
       key: 'attributed_amount',
-      width: 100,
+      width: 95,
       align: 'center',
       render: (amount) => <Text strong style={{ color: '#52c41a', fontSize: 13 }}>{formatCurrency(amount)}</Text>
     },
     {
-      title: '광고 여정',
+      title: '여정상세',
       key: 'journey',
-      width: 80,
+      width: 75,
       align: 'center',
       render: (_, record) => (
-        <Popover 
-          content={<JourneyPopover journey={record.journey} finalPayment={record.final_payment} />}
-          title={null}
-          trigger="click"
-          placement="left"
-          overlayStyle={{ maxWidth: 450 }}
+        <Tag 
+          color="cyan" 
+          style={{ cursor: 'pointer' }}
+          onClick={() => {
+            setSelectedOrderId(record.order_id);
+            setJourneyModalVisible(true);
+          }}
         >
-          <Tag color="cyan" style={{ cursor: 'pointer' }}>
-            <EyeOutlined /> 보기
-          </Tag>
-        </Popover>
+          <EyeOutlined /> 보기
+        </Tag>
       )
     }
   ];
@@ -351,7 +366,7 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
           rowKey="order_id"
           size="small"
           pagination={{ pageSize: 10, showTotal: (total) => `총 ${total}건`, showSizeChanger: false }}
-          scroll={{ x: 900 }}
+          scroll={{ x: false }}
         />
       ) : !loading && (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="해당 광고 소재로 발생한 주문이 없습니다" />
@@ -500,7 +515,7 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
       open={visible}
       onCancel={onClose}
       footer={null}
-      width={1000}
+      width={1350}
       style={{ top: '2.5vh' }}
       styles={{ body: { padding: '16px 24px', height: 'calc(95vh - 60px)', overflowY: 'auto' } }}
     >
@@ -528,10 +543,41 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
       </Spin>
 
       {dateRange && (
-        <div style={{ marginTop: 16, textAlign: 'center', color: '#8c8c8c', fontSize: 12 }}>
-          조회 기간: {dateRange.start} ~ {dateRange.end}
+        <div style={{ marginTop: 16, textAlign: 'center', fontSize: 12 }}>
+          <div style={{ color: '#8c8c8c', marginBottom: 4 }}>
+            조회 기간: {dateRange.start} ~ {dateRange.end}
+          </div>
+          <div style={{ color: '#1677ff', fontSize: 11 }}>
+            <ExclamationCircleOutlined style={{ marginRight: 4 }} />
+            파란색 날짜: 조회 기간 밖에서 광고를 봤지만, 구매일 기준 30일 이내이므로 기여로 인정
+          </div>
         </div>
       )}
+
+      {/* 고객 여정 분석 모달 */}
+      <Modal
+        open={journeyModalVisible}
+        onCancel={() => {
+          setJourneyModalVisible(false);
+          setSelectedOrderId(null);
+        }}
+        footer={null}
+        width="95vw"
+        style={{ top: '2.5vh' }}
+        styles={{ body: { padding: 0, height: 'calc(95vh - 55px)', overflow: 'hidden' } }}
+        destroyOnClose
+      >
+        {selectedOrderId && (
+          <OrderDetailPageContent
+            orderId={selectedOrderId}
+            userMappings={userMappings}
+            onClose={() => {
+              setJourneyModalVisible(false);
+              setSelectedOrderId(null);
+            }}
+          />
+        )}
+      </Modal>
     </Modal>
   );
 }

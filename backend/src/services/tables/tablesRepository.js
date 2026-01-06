@@ -307,7 +307,7 @@ async function getSessions(filters, limit, offset) {
       s.start_time,
       s.end_time,
       s.pageview_count,
-      LEAST(s.duration_seconds, 7200) as duration_seconds,
+      LEAST(s.duration_seconds, 300) as duration_seconds,
       s.entry_url,
       s.exit_url,
       s.is_bounced,
