@@ -37,52 +37,10 @@ async function calculateCreativeAttribution(creatives, startDate, endDate) {
     };
   });
 
-  // visitor 조회 시작일을 30일 전으로 확장 (기여 인정 기간만큼)
-  // 이렇게 해야 선택 기간 시작일에 결제한 사람이 30일 전에 본 광고도 집계됨
-  const extendedStartDate = new Date(startDate);
-  extendedStartDate.setDate(extendedStartDate.getDate() - ATTRIBUTION_WINDOW_DAYS);
+  // [수정] 구매 기준 접근: 선택 기간 내 구매한 사람을 먼저 찾고, 각 구매의 30일 이내 여정을 분석
+  // 이렇게 해야 "선택 기간 이전에만 광고를 보고, 선택 기간 내 구매한 케이스"도 놓치지 않음
 
-  // [최적화] 모든 광고의 visitor를 단일 쿼리로 조회 (N+1 문제 해결)
-  const allVisitorIds = new Set();
-  const creativeVisitorMap = {}; // { creative_key: Set<visitor_ids> }
-  
-  // 결과 키 초기화
-  creatives.forEach(creative => {
-    const key = getCreativeKey(creative);
-    creativeVisitorMap[key] = new Set();
-  });
-
-  // 단일 쿼리로 모든 광고-방문자 매핑 조회 (확장된 기간 사용)
-  const bulkVisitorQuery = `
-    SELECT 
-      REPLACE(utm_params->>'utm_content', '+', ' ') as utm_content,
-      COALESCE(NULLIF(utm_params->>'utm_source', ''), '-') as utm_source,
-      COALESCE(NULLIF(utm_params->>'utm_medium', ''), '-') as utm_medium,
-      COALESCE(NULLIF(utm_params->>'utm_campaign', ''), '-') as utm_campaign,
-      visitor_id
-    FROM utm_sessions
-    WHERE utm_params->>'utm_content' IS NOT NULL
-      AND entry_timestamp >= $1
-      AND entry_timestamp <= $2
-  `;
-  
-  const bulkVisitorResult = await db.query(bulkVisitorQuery, [extendedStartDate, endDate]);
-  
-  // 조회 결과를 광고별로 매핑
-  bulkVisitorResult.rows.forEach(row => {
-    const key = `${row.utm_content}||${row.utm_source}||${row.utm_medium}||${row.utm_campaign}`;
-    if (creativeVisitorMap[key]) {
-      creativeVisitorMap[key].add(row.visitor_id);
-      allVisitorIds.add(row.visitor_id);
-    }
-  });
-
-  // 모든 visitor의 구매 내역 한 번에 조회
-  if (allVisitorIds.size === 0) {
-    return result;
-  }
-
-  // 주문 분석 페이지와 동일한 조건으로 구매 조회 (선택한 기간의 주문만)
+  // 1단계: 선택 기간 내 모든 구매 조회
   const purchaseQuery = `
     SELECT 
       visitor_id,
@@ -90,23 +48,25 @@ async function calculateCreativeAttribution(creatives, startDate, endDate) {
       final_payment,
       timestamp
     FROM conversions
-    WHERE visitor_id = ANY($1)
-      AND order_id IS NOT NULL
+    WHERE order_id IS NOT NULL
       AND paid = 'T'
       AND final_payment > 0
-      AND timestamp >= $2
-      AND timestamp <= $3
+      AND timestamp >= $1
+      AND timestamp <= $2
     ORDER BY visitor_id, timestamp
   `;
 
-  const purchaseResult = await db.query(purchaseQuery, [Array.from(allVisitorIds), startDate, endDate]);
+  const purchaseResult = await db.query(purchaseQuery, [startDate, endDate]);
   const purchases = purchaseResult.rows;
 
   if (purchases.length === 0) {
     return result;
   }
 
-  // 모든 visitor의 UTM 여정 한 번에 조회 (성능 최적화)
+  // 2단계: 구매한 visitor들의 ID 수집
+  const purchaserIds = [...new Set(purchases.map(p => p.visitor_id))];
+
+  // 3단계: 구매한 visitor들의 전체 UTM 여정 조회 (30일 필터링은 각 구매별로 적용)
   const journeyQuery = `
     SELECT 
       visitor_id,
@@ -122,7 +82,7 @@ async function calculateCreativeAttribution(creatives, startDate, endDate) {
     ORDER BY visitor_id, sequence_order
   `;
 
-  const journeyResult = await db.query(journeyQuery, [Array.from(allVisitorIds)]);
+  const journeyResult = await db.query(journeyQuery, [purchaserIds]);
   
   // visitor별 여정 그룹화
   const visitorJourneys = {};
