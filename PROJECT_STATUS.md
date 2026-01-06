@@ -17,6 +17,7 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2026-01-06 | 계산검증 탭 제거 | CreativeOrdersModal.jsx |
 | 2026-01-06 | 모수평가점수 UV제외 변경 | formatters.js |
 | 2026-01-06 | 여정상세→고객여정모달 연동 | CreativeOrdersModal.jsx |
 | 2026-01-06 | 주문모달 노출일시 컬럼추가 | CreativeOrdersModal.jsx |
@@ -31,7 +32,6 @@
 | 2026-01-05 | 소재 비교 기능 제거 | PerformanceTable.jsx |
 | 2026-01-05 | 1명당 유입가치 컬럼 추가 | PerformanceTable.jsx |
 | 2025-12-29 | URL정규화 버그 수정 | urlCleaner.js |
-| 2025-12-29 | 테이블 스타일 개선 | PerformanceTable.jsx |
 
 ---
 

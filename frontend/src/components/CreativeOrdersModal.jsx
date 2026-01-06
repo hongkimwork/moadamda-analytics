@@ -1,5 +1,5 @@
-import { Modal, Table, Typography, Spin, Empty, Statistic, Row, Col, Tag, Tooltip, Tabs, Card, Progress, Divider } from 'antd';
-import { ShoppingCartOutlined, QuestionCircleOutlined, CheckCircleOutlined, CalculatorOutlined, EyeOutlined, InfoCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { Modal, Table, Typography, Spin, Empty, Statistic, Row, Col, Tag, Tooltip, Card } from 'antd';
+import { ShoppingCartOutlined, QuestionCircleOutlined, EyeOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import dayjs from 'dayjs';
@@ -40,7 +40,7 @@ function getExposureInfo(order, dateRange) {
 }
 
 /**
- * CreativeOrdersModal - 광고 소재별 기여 주문 목록 모달 (기여도 상세 정보 + 계산 검증)
+ * CreativeOrdersModal - 광고 소재별 기여 주문 목록 모달
  */
 function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
   const [loading, setLoading] = useState(false);
@@ -57,13 +57,6 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
     avg_contribution_rate: 0,
     unique_visitors: 0
   });
-  const [verification, setVerification] = useState({
-    last_touch_100_percent: { count: 0, revenue: 0 },
-    last_touch_50_percent: { count: 0, revenue: 0 },
-    assist_contribution: { count: 0, revenue: 0 },
-    total_attributed: 0
-  });
-  const [activeTab, setActiveTab] = useState('orders');
   
   // 고객 여정 분석 모달 state
   const [journeyModalVisible, setJourneyModalVisible] = useState(false);
@@ -73,7 +66,6 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
   useEffect(() => {
     if (visible && creative) {
       fetchOrders();
-      setActiveTab('orders');
     }
   }, [visible, creative]);
 
@@ -92,7 +84,6 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
       if (response.data.success) {
         setOrders(response.data.data || []);
         setSummary(response.data.summary || {});
-        setVerification(response.data.verification || {});
       }
     } catch (error) {
       console.error('주문 목록 조회 실패:', error);
@@ -374,136 +365,6 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
     </>
   );
 
-  // 계산 검증 탭 내용
-  const VerificationTab = () => (
-    <div style={{ padding: '0 12px' }}>
-      {/* 기여한 매출액 검증 */}
-      <Card 
-        title={<span><CalculatorOutlined style={{ marginRight: 8 }} />기여한 매출액 검증</span>}
-        size="small"
-        style={{ marginBottom: 16 }}
-      >
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: '#fffbe6', borderRadius: 6, marginBottom: 8 }}>
-            <span>
-              <Tag color="gold">막타 100%</Tag>
-              {verification.last_touch_100_percent?.description}
-            </span>
-            <span>
-              <Text strong>{verification.last_touch_100_percent?.count}건</Text>
-              <Text style={{ marginLeft: 12 }}>{formatCurrency(verification.last_touch_100_percent?.revenue)}</Text>
-            </span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: '#e6f4ff', borderRadius: 6, marginBottom: 8 }}>
-            <span>
-              <Tag color="blue">막타 50%</Tag>
-              {verification.last_touch_50_percent?.description}
-            </span>
-            <span>
-              <Text strong>{verification.last_touch_50_percent?.count}건</Text>
-              <Text style={{ marginLeft: 12 }}>{formatCurrency(verification.last_touch_50_percent?.revenue)}</Text>
-            </span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: '#f5f5f5', borderRadius: 6, marginBottom: 8 }}>
-            <span>
-              <Tag color="default">어시 기여</Tag>
-              {verification.assist_contribution?.description}
-            </span>
-            <span>
-              <Text strong>{verification.assist_contribution?.count}건</Text>
-              <Text style={{ marginLeft: 12 }}>{formatCurrency(verification.assist_contribution?.revenue)}</Text>
-            </span>
-          </div>
-          <Divider style={{ margin: '12px 0' }} />
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: '#f6ffed', borderRadius: 6 }}>
-            <span><CheckCircleOutlined style={{ color: '#52c41a', marginRight: 8 }} /><Text strong>기여한 매출액 합계</Text></span>
-            <Text strong style={{ color: '#52c41a', fontSize: 16 }}>{formatCurrency(verification.total_attributed)}</Text>
-          </div>
-        </div>
-        <div style={{ background: '#fafafa', padding: 12, borderRadius: 6, fontSize: 12 }}>
-          <Text type="secondary">
-            <InfoCircleOutlined style={{ marginRight: 6 }} />
-            {verification.formula}
-          </Text>
-        </div>
-      </Card>
-
-      {/* 영향준 주문 수 검증 */}
-      <Card 
-        title={<span><ShoppingCartOutlined style={{ marginRight: 8 }} />영향준 주문 수 검증</span>}
-        size="small"
-        style={{ marginBottom: 16 }}
-      >
-        <Row gutter={16}>
-          <Col span={8}>
-            <div style={{ textAlign: 'center', padding: 16, background: '#f0f5ff', borderRadius: 8 }}>
-              <div style={{ fontSize: 24, fontWeight: 600, color: '#1677ff' }}>{summary.last_touch_orders}</div>
-              <div style={{ fontSize: 12, color: '#8c8c8c' }}>막타 주문</div>
-            </div>
-          </Col>
-          <Col span={2} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontSize: 20 }}>+</Text>
-          </Col>
-          <Col span={8}>
-            <div style={{ textAlign: 'center', padding: 16, background: '#fff7e6', borderRadius: 8 }}>
-              <div style={{ fontSize: 24, fontWeight: 600, color: '#d48806' }}>{summary.assist_orders}</div>
-              <div style={{ fontSize: 12, color: '#8c8c8c' }}>어시 주문</div>
-            </div>
-          </Col>
-          <Col span={2} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontSize: 20 }}>=</Text>
-          </Col>
-          <Col span={4}>
-            <div style={{ textAlign: 'center', padding: 16, background: '#f6ffed', borderRadius: 8 }}>
-              <div style={{ fontSize: 24, fontWeight: 600, color: '#52c41a' }}>{summary.total_orders}</div>
-              <div style={{ fontSize: 12, color: '#8c8c8c' }}>합계</div>
-            </div>
-          </Col>
-        </Row>
-        <div style={{ marginTop: 16 }}>
-          <div style={{ marginBottom: 8 }}>
-            <Text style={{ fontSize: 12 }}>막타 비율</Text>
-            <Progress percent={summary.last_touch_ratio} strokeColor="#1677ff" size="small" />
-          </div>
-          <div>
-            <Text style={{ fontSize: 12 }}>어시 비율</Text>
-            <Progress percent={summary.assist_ratio} strokeColor="#d48806" size="small" />
-          </div>
-        </div>
-      </Card>
-
-      {/* 계산 방식 안내 */}
-      <Card 
-        title={<span><QuestionCircleOutlined style={{ marginRight: 8 }} />기여도 계산 방식</span>}
-        size="small"
-      >
-        <div style={{ fontSize: 13, lineHeight: 2 }}>
-          <div style={{ padding: '8px 12px', background: '#fffbe6', borderRadius: 6, marginBottom: 8 }}>
-            <Text strong>광고 1개만 보고 구매</Text>
-            <br />
-            → 해당 광고가 <Text strong style={{ color: '#d48806' }}>100% 기여</Text>
-          </div>
-          <div style={{ padding: '8px 12px', background: '#e6f4ff', borderRadius: 6, marginBottom: 8 }}>
-            <Text strong>여러 광고를 보고 구매</Text>
-            <br />
-            → 막타(마지막 광고): <Text strong style={{ color: '#1677ff' }}>50% 기여</Text>
-            <br />
-            → 어시(나머지 광고들): <Text strong>50%를 균등 분배</Text>
-          </div>
-          <div style={{ padding: '8px 12px', background: '#f5f5f5', borderRadius: 6 }}>
-            <Text strong>예시: 고객이 100만원 구매, 광고 A→B→C 순서로 봄</Text>
-            <br />
-            → 광고 A (어시): 25만원 (50% ÷ 2)
-            <br />
-            → 광고 B (어시): 25만원 (50% ÷ 2)
-            <br />
-            → 광고 C (막타): 50만원 (50%)
-          </div>
-        </div>
-      </Card>
-    </div>
-  );
-
   return (
     <Modal
       title={
@@ -532,14 +393,7 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
       )}
 
       <Spin spinning={loading}>
-        <Tabs
-          activeKey={activeTab}
-          onChange={setActiveTab}
-          items={[
-            { key: 'orders', label: <span><ShoppingCartOutlined /> 기여 주문</span>, children: <OrdersTab /> },
-            { key: 'verification', label: <span><CalculatorOutlined /> 계산 검증</span>, children: <VerificationTab /> }
-          ]}
-        />
+        <OrdersTab />
       </Spin>
 
       {dateRange && (
