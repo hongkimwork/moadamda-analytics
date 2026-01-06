@@ -1,9 +1,13 @@
 const db = require('./database');
 
+// 기여 인정 기간 (일 단위) - 구매일 기준 이 기간 내에 본 광고만 기여 인정
+const ATTRIBUTION_WINDOW_DAYS = 30;
+
 /**
  * 광고 소재별 기여도 계산 (Last Touch 50% + 어시 균등 분배 50%)
  * 
  * 계산 방식:
+ * - 구매일 기준 30일 이내에 본 광고만 기여 인정 (Attribution Window)
  * - 광고 1개만 봤으면: 해당 광고가 100% 기여
  * - 여러 광고를 봤으면: 막타 50% + 나머지 어시 광고들이 50%를 균등 분배
  * - 같은 광고를 여러 번 봤어도 1개로 카운트 (고유 조합 기준)
@@ -33,6 +37,11 @@ async function calculateCreativeAttribution(creatives, startDate, endDate) {
     };
   });
 
+  // visitor 조회 시작일을 30일 전으로 확장 (기여 인정 기간만큼)
+  // 이렇게 해야 선택 기간 시작일에 결제한 사람이 30일 전에 본 광고도 집계됨
+  const extendedStartDate = new Date(startDate);
+  extendedStartDate.setDate(extendedStartDate.getDate() - ATTRIBUTION_WINDOW_DAYS);
+
   // [최적화] 모든 광고의 visitor를 단일 쿼리로 조회 (N+1 문제 해결)
   const allVisitorIds = new Set();
   const creativeVisitorMap = {}; // { creative_key: Set<visitor_ids> }
@@ -43,7 +52,7 @@ async function calculateCreativeAttribution(creatives, startDate, endDate) {
     creativeVisitorMap[key] = new Set();
   });
 
-  // 단일 쿼리로 모든 광고-방문자 매핑 조회
+  // 단일 쿼리로 모든 광고-방문자 매핑 조회 (확장된 기간 사용)
   const bulkVisitorQuery = `
     SELECT 
       REPLACE(utm_params->>'utm_content', '+', ' ') as utm_content,
@@ -57,7 +66,7 @@ async function calculateCreativeAttribution(creatives, startDate, endDate) {
       AND entry_timestamp <= $2
   `;
   
-  const bulkVisitorResult = await db.query(bulkVisitorQuery, [startDate, endDate]);
+  const bulkVisitorResult = await db.query(bulkVisitorQuery, [extendedStartDate, endDate]);
   
   // 조회 결과를 광고별로 매핑
   bulkVisitorResult.rows.forEach(row => {
@@ -132,8 +141,22 @@ async function calculateCreativeAttribution(creatives, startDate, endDate) {
       return; // UTM 여정이 없으면 스킵
     }
 
-    // 막타 찾기 (sequence_order가 가장 큰 것)
-    const lastTouch = journey.reduce((max, current) => 
+    const purchaseDate = new Date(purchase.timestamp);
+    const attributionWindowStart = new Date(purchaseDate);
+    attributionWindowStart.setDate(attributionWindowStart.getDate() - ATTRIBUTION_WINDOW_DAYS);
+
+    // 구매일 기준 30일 이내에 본 광고만 필터링
+    const filteredJourney = journey.filter(touch => {
+      const touchDate = new Date(touch.entry_timestamp);
+      return touchDate >= attributionWindowStart && touchDate <= purchaseDate;
+    });
+
+    if (filteredJourney.length === 0) {
+      return; // 30일 이내 본 광고가 없으면 스킵
+    }
+
+    // 막타 찾기 (필터링된 여정 중 sequence_order가 가장 큰 것)
+    const lastTouch = filteredJourney.reduce((max, current) => 
       current.sequence_order > max.sequence_order ? current : max
     );
 
@@ -141,7 +164,7 @@ async function calculateCreativeAttribution(creatives, startDate, endDate) {
 
     // 여정에 있는 고유한 광고 조합 수집 (같은 광고를 여러 번 봤어도 1개로 카운트)
     const uniqueCreativesMap = new Map(); // key -> touch 정보
-    journey.forEach(touch => {
+    filteredJourney.forEach(touch => {
       const touchKey = `${touch.utm_content}||${touch.utm_source}||${touch.utm_medium}||${touch.utm_campaign}`;
       // 가장 마지막 sequence_order를 저장 (막타 판별용)
       if (!uniqueCreativesMap.has(touchKey) || touch.sequence_order > uniqueCreativesMap.get(touchKey).sequence_order) {

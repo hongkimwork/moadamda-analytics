@@ -5,6 +5,9 @@
 
 const repository = require('./detailRepository');
 
+// 기여 인정 기간 (일 단위) - 구매일 기준 이 기간 내에 본 광고만 기여 인정
+const ATTRIBUTION_WINDOW_DAYS = 30;
+
 /**
  * 날짜 파라미터 파싱 및 검증
  */
@@ -42,7 +45,26 @@ function groupJourneysByVisitor(journeyRows) {
 }
 
 /**
- * 특정 광고 소재에 기여한 주문 목록 조회
+ * 구매일 기준 30일 이내 여정만 필터링
+ */
+function filterJourneyByAttributionWindow(journey, purchaseDate) {
+  const orderDate = new Date(purchaseDate);
+  const windowStart = new Date(orderDate);
+  windowStart.setDate(windowStart.getDate() - ATTRIBUTION_WINDOW_DAYS);
+  
+  return journey.filter(touch => {
+    const touchDate = new Date(touch.entry_timestamp);
+    return touchDate >= windowStart && touchDate <= orderDate;
+  });
+}
+
+/**
+ * 특정 광고 소재에 기여한 주문 목록 조회 (기여도 상세 정보 포함)
+ * 
+ * 중요: 테이블(creativeAttribution.js)과 동일한 로직으로 계산
+ * - 선택 기간 내 구매한 모든 visitor의 여정을 분석
+ * - 구매일 기준 30일 이내에 본 광고만 기여 인정 (Attribution Window)
+ * - 해당 광고가 30일 이내 여정에 포함된 경우만 기여 주문으로 인정
  */
 async function getCreativeOrders(params) {
   const { creative_name, utm_source, utm_medium, utm_campaign, start, end } = params;
@@ -53,78 +75,182 @@ async function getCreativeOrders(params) {
   const { startDate, endDate } = parseDates(start, end);
   const targetCreativeKey = `${creative_name}||${utm_source}||${utm_medium}||${utm_campaign}`;
   
-  // visitor 조회
-  const visitorIds = await repository.getCreativeVisitors({
-    creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate
+  // visitor 조회 시작일을 30일 전으로 확장 (기여 인정 기간만큼)
+  // 이렇게 해야 선택 기간 시작일에 결제한 사람이 30일 전에 본 광고도 집계됨
+  const extendedStartDate = new Date(startDate);
+  extendedStartDate.setDate(extendedStartDate.getDate() - ATTRIBUTION_WINDOW_DAYS);
+  
+  const emptyResponse = {
+    success: true,
+    data: [],
+    summary: {
+      total_orders: 0,
+      last_touch_orders: 0,
+      last_touch_ratio: 0,
+      assist_orders: 0,
+      assist_ratio: 0,
+      single_touch_orders: 0,
+      attributed_revenue: 0,
+      last_touch_revenue: 0,
+      avg_contribution_rate: 0,
+      unique_visitors: 0
+    },
+    verification: {
+      last_touch_100_percent: { count: 0, revenue: 0 },
+      last_touch_50_percent: { count: 0, revenue: 0 },
+      assist_contribution: { count: 0, revenue: 0 },
+      total_attributed: 0
+    }
+  };
+  
+  // 테이블과 동일하게: 확장된 기간 내 모든 광고를 본 visitor 조회
+  const allVisitorIds = await repository.getAllVisitorsInPeriod({ startDate: extendedStartDate, endDate });
+  
+  if (allVisitorIds.length === 0) {
+    return emptyResponse;
+  }
+  
+  // 해당 visitor들의 주문 조회 (선택 기간 내)
+  const allOrders = await repository.getVisitorOrders({ 
+    visitorIds: allVisitorIds, 
+    startDate, 
+    endDate 
   });
   
-  if (visitorIds.length === 0) {
-    return {
-      success: true,
-      data: [],
-      summary: {
-        total_orders: 0,
-        total_revenue: 0,
-        avg_order_value: 0,
-        unique_visitors: 0
-      }
-    };
-  }
-  
-  // 주문 및 여정 조회
-  const [allOrders, journeyRows] = await Promise.all([
-    repository.getVisitorOrders({ visitorIds, startDate, endDate }),
-    repository.getVisitorJourneys({ visitorIds })
-  ]);
-  
   if (allOrders.length === 0) {
-    return {
-      success: true,
-      data: [],
-      summary: {
-        total_orders: 0,
-        total_revenue: 0,
-        avg_order_value: 0,
-        unique_visitors: visitorIds.length
-      }
-    };
+    return emptyResponse;
   }
+  
+  // 구매한 visitor들의 전체 여정 조회
+  const purchaserIds = [...new Set(allOrders.map(o => o.visitor_id))];
+  const journeyRows = await repository.getVisitorJourneys({ visitorIds: purchaserIds });
   
   // visitor별 여정 그룹화
   const visitorJourneys = groupJourneysByVisitor(journeyRows);
   
-  // 기여도 기반 주문 필터링
+  // 기여도 기반 주문 필터링 및 상세 계산
   const contributedOrders = [];
+  const contributedVisitorIds = new Set();
+  
+  // 검증용 집계 변수
+  let lastTouch100Count = 0, lastTouch100Revenue = 0;
+  let lastTouch50Count = 0, lastTouch50Revenue = 0;
+  let assistCount = 0, assistRevenue = 0;
+  let totalAttributedRevenue = 0;
+  let singleTouchCount = 0;
   
   allOrders.forEach(order => {
-    const journey = visitorJourneys[order.visitor_id] || [];
+    const fullJourney = visitorJourneys[order.visitor_id] || [];
+    if (fullJourney.length === 0) return;
+    
+    // 구매일 기준 30일 이내 여정만 필터링
+    const journey = filterJourneyByAttributionWindow(fullJourney, order.order_date);
     if (journey.length === 0) return;
     
-    // 해당 광고가 여정에 포함되어 있는지 확인
-    const hasTargetCreative = journey.some(touch => {
+    // 고유한 광고 조합 수집
+    const uniqueCreativesMap = new Map();
+    journey.forEach(touch => {
       const touchKey = `${touch.utm_content}||${touch.utm_source}||${touch.utm_medium}||${touch.utm_campaign}`;
-      return touchKey === targetCreativeKey;
+      if (!uniqueCreativesMap.has(touchKey) || touch.sequence_order > uniqueCreativesMap.get(touchKey).sequence_order) {
+        uniqueCreativesMap.set(touchKey, touch);
+      }
     });
     
-    if (hasTargetCreative) {
-      // 막타 여부 확인
-      const lastTouch = journey.reduce((max, current) => 
-        current.sequence_order > max.sequence_order ? current : max
-      );
-      const lastTouchKey = `${lastTouch.utm_content}||${lastTouch.utm_source}||${lastTouch.utm_medium}||${lastTouch.utm_campaign}`;
-      const isLastTouch = lastTouchKey === targetCreativeKey;
-      
-      contributedOrders.push({
-        ...order,
-        is_last_touch: isLastTouch
-      });
+    const uniqueCreativeKeys = Array.from(uniqueCreativesMap.keys());
+    
+    // 해당 광고가 30일 이내 여정에 포함되어 있는지 확인
+    if (!uniqueCreativeKeys.includes(targetCreativeKey)) return;
+    
+    contributedVisitorIds.add(order.visitor_id);
+    
+    // 막타 찾기 (필터링된 여정 중 sequence_order가 가장 큰 것)
+    const lastTouch = journey.reduce((max, current) => 
+      current.sequence_order > max.sequence_order ? current : max
+    );
+    const lastTouchKey = `${lastTouch.utm_content}||${lastTouch.utm_source}||${lastTouch.utm_medium}||${lastTouch.utm_campaign}`;
+    const isLastTouch = lastTouchKey === targetCreativeKey;
+    const isSingleTouch = uniqueCreativeKeys.length === 1;
+    
+    const finalPayment = parseFloat(order.final_payment) || 0;
+    const journeyCreativeCount = uniqueCreativeKeys.length;
+    const assistCreativeCount = uniqueCreativeKeys.filter(key => key !== lastTouchKey).length;
+    
+    // 기여율 및 기여 금액 계산
+    let contributionRate = 0;
+    let attributedAmount = 0;
+    let role = '';
+    
+    if (isLastTouch) {
+      if (assistCreativeCount === 0) {
+        // 순수 전환 (이 광고만 보고 구매)
+        contributionRate = 100;
+        attributedAmount = finalPayment;
+        role = '막타(순수)';
+        lastTouch100Count++;
+        lastTouch100Revenue += attributedAmount;
+        singleTouchCount++;
+      } else {
+        // 막타 50%
+        contributionRate = 50;
+        attributedAmount = finalPayment * 0.5;
+        role = '막타';
+        lastTouch50Count++;
+        lastTouch50Revenue += attributedAmount;
+      }
+    } else {
+      // 어시 (50%를 어시 광고 수로 균등 분배)
+      contributionRate = assistCreativeCount > 0 ? Math.round((50 / assistCreativeCount) * 10) / 10 : 0;
+      attributedAmount = assistCreativeCount > 0 ? (finalPayment * 0.5) / assistCreativeCount : 0;
+      role = '어시';
+      assistCount++;
+      assistRevenue += attributedAmount;
     }
+    
+    totalAttributedRevenue += attributedAmount;
+    
+    // 광고 여정 정보 구성
+    const journeyInfo = [];
+    const sortedJourney = [...uniqueCreativesMap.entries()]
+      .sort((a, b) => a[1].sequence_order - b[1].sequence_order);
+    
+    sortedJourney.forEach(([key, touch], index) => {
+      const isTarget = key === targetCreativeKey;
+      const isLast = key === lastTouchKey;
+      journeyInfo.push({
+        order: index + 1,
+        creative_name: touch.utm_content,
+        utm_source: touch.utm_source,
+        utm_medium: touch.utm_medium,
+        utm_campaign: touch.utm_campaign,
+        timestamp: touch.entry_timestamp,
+        is_target: isTarget,
+        is_last_touch: isLast,
+        role: isLast ? '막타' : '어시'
+      });
+    });
+    
+    contributedOrders.push({
+      ...order,
+      is_last_touch: isLastTouch,
+      is_single_touch: isSingleTouch,
+      role,
+      journey_creative_count: journeyCreativeCount,
+      contribution_rate: contributionRate,
+      attributed_amount: Math.round(attributedAmount),
+      journey: journeyInfo
+    });
   });
   
   // 요약 통계 계산
-  const totalRevenue = contributedOrders.reduce((sum, o) => sum + (parseFloat(o.final_payment) || 0), 0);
-  const avgOrderValue = contributedOrders.length > 0 ? totalRevenue / contributedOrders.length : 0;
-  const lastTouchCount = contributedOrders.filter(o => o.is_last_touch).length;
+  const lastTouchOrders = contributedOrders.filter(o => o.is_last_touch).length;
+  const assistOrders = contributedOrders.filter(o => !o.is_last_touch).length;
+  const totalOrders = contributedOrders.length;
+  const lastTouchRevenue = contributedOrders
+    .filter(o => o.is_last_touch)
+    .reduce((sum, o) => sum + (parseFloat(o.final_payment) || 0), 0);
+  const avgContributionRate = totalOrders > 0 
+    ? Math.round(contributedOrders.reduce((sum, o) => sum + o.contribution_rate, 0) / totalOrders * 10) / 10
+    : 0;
   
   // 응답 데이터 가공
   const formattedOrders = contributedOrders.map(order => ({
@@ -135,7 +261,13 @@ async function getCreativeOrders(params) {
     product_name: order.product_name || '-',
     product_count: parseInt(order.product_count) || 1,
     discount_amount: Math.round(parseFloat(order.discount_amount) || 0),
-    is_last_touch: order.is_last_touch
+    is_last_touch: order.is_last_touch,
+    is_single_touch: order.is_single_touch,
+    role: order.role,
+    journey_creative_count: order.journey_creative_count,
+    contribution_rate: order.contribution_rate,
+    attributed_amount: order.attributed_amount,
+    journey: order.journey
   }));
   
   return {
@@ -144,11 +276,35 @@ async function getCreativeOrders(params) {
     period: { start, end },
     data: formattedOrders,
     summary: {
-      total_orders: contributedOrders.length,
-      total_revenue: Math.round(totalRevenue),
-      avg_order_value: Math.round(avgOrderValue),
-      unique_visitors: visitorIds.length,
-      last_touch_count: lastTouchCount
+      total_orders: totalOrders,
+      last_touch_orders: lastTouchOrders,
+      last_touch_ratio: totalOrders > 0 ? Math.round(lastTouchOrders / totalOrders * 1000) / 10 : 0,
+      assist_orders: assistOrders,
+      assist_ratio: totalOrders > 0 ? Math.round(assistOrders / totalOrders * 1000) / 10 : 0,
+      single_touch_orders: singleTouchCount,
+      attributed_revenue: Math.round(totalAttributedRevenue),
+      last_touch_revenue: Math.round(lastTouchRevenue),
+      avg_contribution_rate: avgContributionRate,
+      unique_visitors: contributedVisitorIds.size
+    },
+    verification: {
+      last_touch_100_percent: { 
+        count: lastTouch100Count, 
+        revenue: Math.round(lastTouch100Revenue),
+        description: '이 광고만 보고 구매 (100% 기여)'
+      },
+      last_touch_50_percent: { 
+        count: lastTouch50Count, 
+        revenue: Math.round(lastTouch50Revenue),
+        description: '여러 광고 중 막타로 구매 (50% 기여)'
+      },
+      assist_contribution: { 
+        count: assistCount, 
+        revenue: Math.round(assistRevenue),
+        description: '어시로 기여 (50%를 어시 수로 분배)'
+      },
+      total_attributed: Math.round(totalAttributedRevenue),
+      formula: '기여한 매출액 = 막타100% + 막타50% + 어시기여'
     }
   };
 }
