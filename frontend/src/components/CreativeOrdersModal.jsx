@@ -168,24 +168,9 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
       title: '주문일시',
       dataIndex: 'order_date',
       key: 'order_date',
-      width: 100,
+      width: 130,
       align: 'center',
       render: (date) => <Text style={{ fontSize: 12 }}>{dayjs(date).format('MM-DD HH:mm')}</Text>
-    },
-    {
-      title: (
-        <Tooltip title="이 광고를 마지막으로 본 날짜 (구매 전 30일 이내)">
-          <span>광고 노출일 <QuestionCircleOutlined style={{ fontSize: 11, color: '#8c8c8c' }} /></span>
-        </Tooltip>
-      ),
-      key: 'target_ad_date',
-      width: 100,
-      align: 'center',
-      render: (_, record) => {
-        const targetTouch = record.journey?.find(j => j.is_target);
-        if (!targetTouch) return <Text type="secondary">-</Text>;
-        return <Text style={{ fontSize: 12, color: '#1677ff' }}>{dayjs(targetTouch.timestamp).format('MM-DD HH:mm')}</Text>;
-      }
     },
     {
       title: '결제금액',
