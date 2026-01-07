@@ -15,7 +15,8 @@ import {
   ExperimentOutlined,
   BarChartOutlined,
   SettingOutlined,
-  AppstoreOutlined
+  AppstoreOutlined,
+  CheckCircleOutlined
 } from '@ant-design/icons';
 import { BarChart3 } from 'lucide-react';
 import dayjs from 'dayjs';
@@ -38,6 +39,7 @@ const PageMapping = lazy(() => import('./pages/PageMapping'));
 const CreativePerformance = lazy(() => import('./pages/CreativePerformance/index'));
 const MyDashboard = lazy(() => import('./pages/MyDashboard/index'));
 const MetaInsights = lazy(() => import('./pages/MetaInsights/index'));
+const DataValidation = lazy(() => import('./pages/DataValidation/index'));
 
 const { Sider, Content } = Layout;
 
@@ -56,6 +58,7 @@ function AppLayout() {
     if (path === '/creative-performance') return ['creative-performance'];
     if (path === '/my-dashboard') return ['my-dashboard'];
     if (path === '/meta-insights') return ['meta-insights'];
+    if (path === '/data-validation') return ['data-validation'];
     if (path === '/page-mapping') return ['page-mapping'];
     if (path.startsWith('/order/')) return ['orders'];
     if (path === '/' || path.startsWith('/order')) return ['orders'];
@@ -93,6 +96,12 @@ function AppLayout() {
           icon: <AppstoreOutlined />,
           label: '나만의 대시보드',
           onClick: () => navigate('/my-dashboard')
+        },
+        {
+          key: 'data-validation',
+          icon: <CheckCircleOutlined />,
+          label: '데이터 검증',
+          onClick: () => navigate('/data-validation')
         }
       ]
     },
@@ -232,6 +241,9 @@ function AppLayout() {
               
               {/* 메타 성과 조회 */}
               <Route path="/meta-insights" element={<MetaInsights />} />
+              
+              {/* 데이터 검증 */}
+              <Route path="/data-validation" element={<DataValidation />} />
               
               {/* 페이지 매핑 */}
               <Route path="/page-mapping" element={<PageMapping />} />

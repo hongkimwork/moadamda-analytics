@@ -26,6 +26,7 @@ const ordersRouter = require('./orders');
 const funnelRouter = require('./funnel');
 const channelFunnelRouter = require('./channel-funnel');
 const customerTypeRouter = require('./customer-type');
+const validationRouter = require('./validation');
 
 // Mount sub-routers at root level (same path as parent)
 router.use('/', basicRouter);      // /today, /conversion, /products
@@ -40,5 +41,8 @@ router.use('/funnel', funnelRouter); // /funnel/conversion
 
 // Mount channel-funnel at /channel-funnel prefix
 router.use('/channel-funnel', channelFunnelRouter); // /channel-funnel/conversion
+
+// Mount validation at /validation prefix
+router.use('/validation', validationRouter); // /validation/daily-visits
 
 module.exports = router;
