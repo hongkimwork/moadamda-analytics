@@ -1,6 +1,6 @@
 # 🎯 Moadamda Analytics - 프로젝트 현황
 
-**마지막 업데이트**: 2026-01-06
+**마지막 업데이트**: 2026-01-07
 
 ---
 
@@ -17,6 +17,7 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2026-01-07 | 검증페이지 모달분리 및 배포 | index.jsx |
 | 2026-01-07 | 데이터검증 테이블 정렬기능 | VisitorStatsModal.jsx |
 | 2026-01-07 | 페이지뷰 일별 테이블 추가 | PageviewStatsModal.jsx |
 | 2026-01-06 | 구매자 체류시간 막대차트 | InsightCards.jsx |
@@ -31,8 +32,6 @@
 | 2026-01-05 | 광고소재 분석 배포완료 | creative-performance.js |
 | 2026-01-05 | Raw Data 검증 기능 추가 | RawDataModal.jsx |
 | 2026-01-05 | 기여매출액 계산버그 수정 | creativeAttribution.js |
-| 2026-01-05 | 유입가치 툴팁 개선 | PerformanceTable.jsx |
-| 2026-01-05 | UTM 컬럼 너비 축소 | PerformanceTable.jsx |
 
 ---
 
