@@ -45,6 +45,9 @@ export const useCreativePerformance = () => {
   // UTM Source 퀵 필터 state (기본값: 메타 그룹 소스)
   const [quickFilterSources, setQuickFilterSources] = useState(['meta', 'instagram', 'ig']);
 
+  // 이상치 기준 state (초 단위, 기본값 5분=300초)
+  const [maxDuration, setMaxDuration] = useState(300);
+
   // 모달 state
   const [ordersModalVisible, setOrdersModalVisible] = useState(false);
   const [selectedCreative, setSelectedCreative] = useState(null);
@@ -103,7 +106,8 @@ export const useCreativePerformance = () => {
         limit: pageSize,
         search: searchTerm,
         sort_by: sortField,
-        sort_order: sortOrder
+        sort_order: sortOrder,
+        max_duration: maxDuration
       };
 
       // 동적 UTM 필터 + 퀵 필터 병합
@@ -143,7 +147,7 @@ export const useCreativePerformance = () => {
   // 의존성 변경 시 재조회
   useEffect(() => {
     fetchData();
-  }, [currentPage, pageSize, filters, searchTerm, sortField, sortOrder, activeUtmFilters, quickFilterSources]);
+  }, [currentPage, pageSize, filters, searchTerm, sortField, sortOrder, activeUtmFilters, quickFilterSources, maxDuration]);
 
   // 검색 핸들러
   const handleSearch = (term) => {
@@ -216,6 +220,7 @@ export const useCreativePerformance = () => {
     pageSize,
     activeUtmFilters,
     quickFilterSources,
+    maxDuration,
     
     // 모달 상태
     ordersModalVisible,
@@ -230,6 +235,7 @@ export const useCreativePerformance = () => {
     setJourneyCreative,
     setActiveUtmFilters,
     setQuickFilterSources,
+    setMaxDuration,
     setError,
     
     // 핸들러

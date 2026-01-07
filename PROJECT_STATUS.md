@@ -17,6 +17,8 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2026-01-07 | 데이터검증 테이블 정렬기능 | VisitorStatsModal.jsx |
+| 2026-01-07 | 페이지뷰 일별 테이블 추가 | PageviewStatsModal.jsx |
 | 2026-01-06 | 구매자 체류시간 막대차트 | InsightCards.jsx |
 | 2026-01-06 | 체류시간 pageviews 기반 계산 | detailRepository.js |
 | 2026-01-06 | 주문보기 모달 지표 확장 | CreativeOrdersModal.jsx |
@@ -31,7 +33,6 @@
 | 2026-01-05 | 기여매출액 계산버그 수정 | creativeAttribution.js |
 | 2026-01-05 | 유입가치 툴팁 개선 | PerformanceTable.jsx |
 | 2026-01-05 | UTM 컬럼 너비 축소 | PerformanceTable.jsx |
-| 2026-01-05 | 소재 비교 기능 제거 | PerformanceTable.jsx |
 
 ---
 

@@ -21,7 +21,8 @@ async function getCreativePerformance(params) {
     search = '',
     sort_by = 'total_revenue',
     sort_order = 'desc',
-    utm_filters = '[]'
+    utm_filters = '[]',
+    max_duration = 300
   } = params;
 
   // 1. 날짜 파라미터 검증
@@ -34,6 +35,9 @@ async function getCreativePerformance(params) {
   
   const endDate = new Date(end);
   endDate.setHours(23, 59, 59, 999);
+
+  // 이상치 기준 검증 (5분~2시간30분, 초 단위)
+  const maxDurationSeconds = Math.min(Math.max(parseInt(max_duration) || 300, 300), 9000);
 
   // 2. 페이지네이션 파라미터
   const pageNum = parseInt(page);
@@ -69,7 +73,8 @@ async function getCreativePerformance(params) {
       utmFilterConditions,
       sortColumn,
       sortDirectionSQL,
-      queryParams
+      queryParams,
+      maxDurationSeconds
     }),
     repository.getCreativeCount({
       startDate,

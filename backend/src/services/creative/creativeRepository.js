@@ -5,10 +5,6 @@
 
 const db = require('../../utils/database');
 
-// 이상치 필터링 기준값 (초 단위)
-// 5분 이상의 체류시간은 비정상적인 데이터로 판단하여 평균 계산에서 제외
-const MAX_DURATION_SECONDS = 300; // 5분 = 300초
-
 /**
  * 광고 소재별 집계 데이터 조회
  * @param {Object} params - 쿼리 파라미터
@@ -19,6 +15,7 @@ const MAX_DURATION_SECONDS = 300; // 5분 = 300초
  * @param {string} params.sortColumn - 정렬 컬럼
  * @param {string} params.sortDirectionSQL - 정렬 방향 (ASC/DESC)
  * @param {Array} params.queryParams - SQL 쿼리 파라미터 배열
+ * @param {number} params.maxDurationSeconds - 이상치 기준 (초 단위, 기본값 300)
  * @returns {Promise<Array>} - 집계 데이터 배열
  */
 async function getCreativeAggregation({
@@ -28,7 +25,8 @@ async function getCreativeAggregation({
   utmFilterConditions,
   sortColumn,
   sortDirectionSQL,
-  queryParams
+  queryParams,
+  maxDurationSeconds = 300
 }) {
   const dataQuery = `
     SELECT 
@@ -50,11 +48,11 @@ async function getCreativeAggregation({
       ) as avg_pageviews,
       
       -- 평균 체류시간 (방문자당 평균, 초 단위, 소수점 1자리)
-      -- 이상치 제외: 5분(300초) 이상의 체류시간은 비정상으로 판단하여 제외
+      -- 이상치 제외: maxDurationSeconds 이상의 체류시간은 비정상으로 판단하여 제외
       ROUND(
         COALESCE(
-          SUM(CASE WHEN us.duration_seconds < ${MAX_DURATION_SECONDS} THEN us.duration_seconds ELSE 0 END)::FLOAT 
-          / NULLIF(COUNT(DISTINCT CASE WHEN us.duration_seconds < ${MAX_DURATION_SECONDS} THEN us.visitor_id END), 0), 
+          SUM(CASE WHEN us.duration_seconds < ${maxDurationSeconds} THEN us.duration_seconds ELSE 0 END)::FLOAT 
+          / NULLIF(COUNT(DISTINCT CASE WHEN us.duration_seconds < ${maxDurationSeconds} THEN us.visitor_id END), 0), 
           0
         )::NUMERIC,
         1

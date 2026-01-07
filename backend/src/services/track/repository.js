@@ -21,24 +21,28 @@ async function upsertVisitor({
   utm_params,
   clientIp
 }) {
+  // is_bot 판단: Unknown 브라우저 + Unknown OS = 봇 의심
+  const isBot = (browser === 'Unknown' && os === 'Unknown');
+
   await db.query(`
     INSERT INTO visitors (
       visitor_id, first_visit, last_visit, device_type, 
       browser, os, utm_source, utm_medium, utm_campaign,
-      utm_params, ip_address, last_ip
+      utm_params, ip_address, last_ip, is_bot
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
     ON CONFLICT (visitor_id) DO UPDATE SET
       last_visit = $3,
       visit_count = visitors.visit_count + 1,
       utm_params = $10,
-      last_ip = $12
+      last_ip = $12,
+      is_bot = $13
   `, [
     visitor_id, visitTime, visitTime, device_type,
     browser, os,
     utm_source, utm_medium, utm_campaign,
     utm_params ? JSON.stringify(utm_params) : null,
-    clientIp, clientIp
+    clientIp, clientIp, isBot
   ]);
 }
 
@@ -77,12 +81,17 @@ async function insertPageview({
   title,
   timestamp
 }) {
+  // site_version 결정: URL 기준 (카페24 방식)
+  const siteVersion = (url && (url.includes('m.moadamda') || url.includes('/m/'))) 
+    ? 'mobile' 
+    : 'pc';
+
   await db.query(`
     INSERT INTO pageviews (
-      session_id, visitor_id, page_url, page_title, timestamp
+      session_id, visitor_id, page_url, page_title, timestamp, site_version
     )
-    VALUES ($1, $2, $3, $4, $5)
-  `, [session_id, visitor_id, url, title, timestamp]);
+    VALUES ($1, $2, $3, $4, $5, $6)
+  `, [session_id, visitor_id, url, title, timestamp, siteVersion]);
 }
 
 /**

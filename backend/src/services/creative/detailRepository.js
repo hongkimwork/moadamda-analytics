@@ -556,34 +556,87 @@ async function getDailyTrends({ creative_name, utm_source, utm_medium, utm_campa
 
 /**
  * Raw Data 검증용: 세션 목록 조회
- * 특정 광고 소재로 유입된 모든 세션 조회
+ * 특정 광고 소재로 유입된 모든 방문자 조회 (방문자 단위로 집계)
  */
-async function getRawSessions({ creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate }) {
+async function getRawSessions({ creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate, page = 1, limit = 50, filter = 'all' }) {
+  // 구매 여부 필터 조건
+  let havingClause = '';
+  if (filter === 'purchased') {
+    havingClause = 'HAVING MAX(CASE WHEN c.order_id IS NOT NULL THEN 1 ELSE 0 END) = 1';
+  } else if (filter === 'not_purchased') {
+    havingClause = 'HAVING MAX(CASE WHEN c.order_id IS NOT NULL THEN 1 ELSE 0 END) = 0';
+  }
+  
+  const offset = (page - 1) * limit;
+  
   const query = `
     SELECT 
-      us.id,
       us.visitor_id,
-      us.entry_timestamp,
-      us.exit_timestamp,
-      us.duration_seconds,
-      us.pageview_count,
-      us.sequence_order,
-      v.device_type,
-      v.browser
+      MIN(us.entry_timestamp) as first_visit,
+      MAX(us.entry_timestamp) as last_visit,
+      COUNT(us.id) as visit_count,
+      SUM(us.duration_seconds) as total_duration_seconds,
+      SUM(us.pageview_count) as total_pageviews,
+      MAX(v.device_type) as device_type,
+      MAX(v.browser) as browser,
+      MAX(c.order_id) as order_id,
+      MAX(c.final_payment) as final_payment,
+      MAX(c.timestamp) as order_date
     FROM utm_sessions us
     LEFT JOIN visitors v ON us.visitor_id = v.visitor_id
+    LEFT JOIN conversions c ON us.visitor_id = c.visitor_id 
+      AND c.timestamp >= us.entry_timestamp
+      AND c.timestamp <= us.entry_timestamp + INTERVAL '30 days'
+      AND c.order_status = 'confirmed'
     WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = $1
       AND COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2
       AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
       AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
       AND us.entry_timestamp >= $5
       AND us.entry_timestamp <= $6
-    ORDER BY us.entry_timestamp DESC
-    LIMIT 500
+    GROUP BY us.visitor_id
+    ${havingClause}
+    ORDER BY MAX(us.entry_timestamp) DESC
+    LIMIT $7 OFFSET $8
+  `;
+  
+  const result = await db.query(query, [creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate, limit, offset]);
+  return result.rows;
+}
+
+/**
+ * Raw Data 검증용: 방문자 총 개수 조회 (페이지네이션용)
+ */
+async function getRawSessionsCount({ creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate, filter = 'all' }) {
+  // 구매 여부 필터 조건
+  let havingClause = '';
+  if (filter === 'purchased') {
+    havingClause = 'HAVING MAX(CASE WHEN c.order_id IS NOT NULL THEN 1 ELSE 0 END) = 1';
+  } else if (filter === 'not_purchased') {
+    havingClause = 'HAVING MAX(CASE WHEN c.order_id IS NOT NULL THEN 1 ELSE 0 END) = 0';
+  }
+  
+  const query = `
+    SELECT COUNT(*) as total FROM (
+      SELECT us.visitor_id
+      FROM utm_sessions us
+      LEFT JOIN conversions c ON us.visitor_id = c.visitor_id 
+        AND c.timestamp >= us.entry_timestamp
+        AND c.timestamp <= us.entry_timestamp + INTERVAL '30 days'
+        AND c.order_status = 'confirmed'
+      WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = $1
+        AND COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2
+        AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
+        AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
+        AND us.entry_timestamp >= $5
+        AND us.entry_timestamp <= $6
+      GROUP BY us.visitor_id
+      ${havingClause}
+    ) sub
   `;
   
   const result = await db.query(query, [creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate]);
-  return result.rows;
+  return parseInt(result.rows[0]?.total) || 0;
 }
 
 /**
@@ -619,20 +672,25 @@ async function getRawTrafficSummary({ creative_name, utm_source, utm_medium, utm
  * FIX (2026-01-06): 체류시간 계산 방식 변경
  * - 기존: utm_sessions.duration_seconds 사용 → 세션 종료 이벤트 필요, 자주 0초
  * - 수정: pageviews 테이블에서 직접 계산 (여정 상세와 동일한 방식)
- *   → 다음 페이지뷰와의 시간 차이로 체류시간 계산 (최대 600초=10분 제한)
+ *   → 다음 페이지뷰와의 시간 차이로 체류시간 계산 (이상치 기준 적용)
+ * 
+ * UPDATE (2026-01-07): 총 체류시간 + 막타 체류시간 분리
+ * - total_duration: 이 광고로 유입된 모든 방문의 체류시간 합계
+ * - last_touch_duration: 구매 직전 마지막 방문의 체류시간
  */
-async function getVisitorSessionInfoForCreative({ visitorIds, creative_name, utm_source, utm_medium, utm_campaign }) {
+async function getVisitorSessionInfoForCreative({ visitorIds, creative_name, utm_source, utm_medium, utm_campaign, maxDurationSeconds = 600 }) {
   if (visitorIds.length === 0) return {};
   
-  // 1단계: 해당 광고로 유입된 UTM 세션의 session_id 목록 조회
+  // 1단계: 해당 광고로 유입된 UTM 세션의 session_id 목록 조회 (시간순 정렬)
   const sessionQuery = `
-    SELECT visitor_id, session_id
+    SELECT visitor_id, session_id, entry_timestamp
     FROM utm_sessions
     WHERE visitor_id = ANY($1)
       AND REPLACE(utm_params->>'utm_content', '+', ' ') = $2
       AND COALESCE(NULLIF(utm_params->>'utm_source', ''), '-') = $3
       AND COALESCE(NULLIF(utm_params->>'utm_medium', ''), '-') = $4
       AND COALESCE(NULLIF(utm_params->>'utm_campaign', ''), '-') = $5
+    ORDER BY visitor_id, entry_timestamp DESC
   `;
   
   const sessionResult = await db.query(sessionQuery, [visitorIds, creative_name, utm_source, utm_medium, utm_campaign]);
@@ -641,18 +699,21 @@ async function getVisitorSessionInfoForCreative({ visitorIds, creative_name, utm
     return {};
   }
   
-  // visitor_id별 session_id 목록 구성
+  // visitor_id별 session_id 목록 구성 (최신순 정렬됨)
   const visitorSessionMap = {};
+  const visitorLastSessionMap = {}; // 각 visitor의 마지막(최신) 세션
   const allSessionIds = [];
+  
   sessionResult.rows.forEach(row => {
     if (!visitorSessionMap[row.visitor_id]) {
       visitorSessionMap[row.visitor_id] = [];
+      visitorLastSessionMap[row.visitor_id] = row.session_id; // 첫 번째가 최신
     }
     visitorSessionMap[row.visitor_id].push(row.session_id);
     allSessionIds.push(row.session_id);
   });
   
-  // 2단계: 해당 세션들의 pageviews에서 체류시간 계산 (여정 상세와 동일한 로직)
+  // 2단계: 해당 세션들의 pageviews에서 체류시간 계산
   const pageviewQuery = `
     WITH page_times AS (
       SELECT 
@@ -662,40 +723,70 @@ async function getVisitorSessionInfoForCreative({ visitorIds, creative_name, utm
         LEAD(p.timestamp) OVER (PARTITION BY p.session_id ORDER BY p.timestamp) as next_timestamp
       FROM pageviews p
       WHERE p.session_id = ANY($1)
+    ),
+    session_durations AS (
+      SELECT
+        session_id,
+        visitor_id,
+        COUNT(*) as pageview_count,
+        SUM(
+          CASE
+            WHEN next_timestamp IS NOT NULL THEN
+              LEAST(EXTRACT(EPOCH FROM (next_timestamp - timestamp))::INTEGER, ${maxDurationSeconds})
+            ELSE 0
+          END
+        ) as duration
+      FROM page_times
+      GROUP BY session_id, visitor_id
     )
     SELECT
       visitor_id,
-      COUNT(*) as pageview_count,
-      SUM(
-        CASE
-          WHEN next_timestamp IS NOT NULL THEN
-            LEAST(EXTRACT(EPOCH FROM (next_timestamp - timestamp))::INTEGER, 600)
-          ELSE 0
-        END
-      ) as total_duration
-    FROM page_times
-    GROUP BY visitor_id
+      session_id,
+      pageview_count,
+      duration
+    FROM session_durations
   `;
   
   const pageviewResult = await db.query(pageviewQuery, [allSessionIds]);
   
-  // visitor_id를 키로 하는 객체로 변환
-  const sessionInfoMap = {};
+  // session_id별 체류시간 맵
+  const sessionDurationMap = {};
   pageviewResult.rows.forEach(row => {
-    sessionInfoMap[row.visitor_id] = {
+    sessionDurationMap[row.session_id] = {
       pageview_count: parseInt(row.pageview_count) || 0,
-      duration_seconds: parseInt(row.total_duration) || 0
+      duration: parseInt(row.duration) || 0
     };
   });
   
-  // pageviews가 없는 visitor는 utm_sessions의 pageview_count 사용
+  // visitor_id별 총 체류시간 + 막타 체류시간 계산
+  const sessionInfoMap = {};
   Object.keys(visitorSessionMap).forEach(visitorId => {
-    if (!sessionInfoMap[visitorId]) {
-      sessionInfoMap[visitorId] = {
-        pageview_count: visitorSessionMap[visitorId].length,
-        duration_seconds: 0
-      };
-    }
+    const sessionIds = visitorSessionMap[visitorId];
+    const lastSessionId = visitorLastSessionMap[visitorId];
+    
+    let totalPageviews = 0;
+    let totalDuration = 0;
+    let lastTouchDuration = 0;
+    let lastTouchPageviews = 0;
+    
+    sessionIds.forEach(sessionId => {
+      const info = sessionDurationMap[sessionId] || { pageview_count: 0, duration: 0 };
+      totalPageviews += info.pageview_count;
+      totalDuration += info.duration;
+      
+      if (sessionId === lastSessionId) {
+        lastTouchDuration = info.duration;
+        lastTouchPageviews = info.pageview_count;
+      }
+    });
+    
+    sessionInfoMap[visitorId] = {
+      pageview_count: totalPageviews || sessionIds.length,
+      duration_seconds: totalDuration,
+      last_touch_duration: lastTouchDuration,
+      last_touch_pageviews: lastTouchPageviews,
+      visit_count: sessionIds.length
+    };
   });
   
   return sessionInfoMap;
@@ -986,6 +1077,7 @@ module.exports = {
   getLastTouchRevenue,
   getDailyTrends,
   getRawSessions,
+  getRawSessionsCount,
   getRawTrafficSummary,
   getVisitorSessionInfoForCreative,
   getCreativeTouchCounts,

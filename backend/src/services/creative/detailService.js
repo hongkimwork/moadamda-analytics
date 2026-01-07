@@ -67,13 +67,16 @@ function filterJourneyByAttributionWindow(journey, purchaseDate) {
  * - 해당 광고가 30일 이내 여정에 포함된 경우만 기여 주문으로 인정
  */
 async function getCreativeOrders(params) {
-  const { creative_name, utm_source, utm_medium, utm_campaign, start, end } = params;
+  const { creative_name, utm_source, utm_medium, utm_campaign, start, end, max_duration = 600 } = params;
   
   // 파라미터 검증
   validateCreativeParams(params);
   
   const { startDate, endDate } = parseDates(start, end);
   const targetCreativeKey = `${creative_name}||${utm_source}||${utm_medium}||${utm_campaign}`;
+  
+  // 이상치 기준 검증 (5분~2시간30분, 초 단위)
+  const maxDurationSeconds = Math.min(Math.max(parseInt(max_duration) || 600, 300), 9000);
   
   // visitor 조회 시작일을 30일 전으로 확장 (기여 인정 기간만큼)
   // 이렇게 해야 선택 기간 시작일에 결제한 사람이 30일 전에 본 광고도 집계됨
@@ -249,7 +252,8 @@ async function getCreativeOrders(params) {
       creative_name,
       utm_source,
       utm_medium,
-      utm_campaign
+      utm_campaign,
+      maxDurationSeconds
     }),
     repository.getCreativeTouchCounts({
       visitorIds: contributedVisitorArray,
@@ -274,7 +278,13 @@ async function getCreativeOrders(params) {
   
   // 응답 데이터 가공
   const formattedOrders = contributedOrders.map(order => {
-    const sessionInfo = sessionInfoMap[order.visitor_id] || { pageview_count: 0, duration_seconds: 0 };
+    const sessionInfo = sessionInfoMap[order.visitor_id] || { 
+      pageview_count: 0, 
+      duration_seconds: 0, 
+      last_touch_duration: 0,
+      last_touch_pageviews: 0,
+      visit_count: 0
+    };
     const touchCount = touchCountMap[order.visitor_id] || 0;
     const totalVisits = visitCountMap[order.visitor_id] || 0;
     
@@ -296,7 +306,10 @@ async function getCreativeOrders(params) {
       // 추가 지표
       session_pageviews: sessionInfo.pageview_count,
       session_duration: sessionInfo.duration_seconds,
+      last_touch_duration: sessionInfo.last_touch_duration,
+      last_touch_pageviews: sessionInfo.last_touch_pageviews,
       ad_touch_count: touchCount,
+      ad_visit_count: sessionInfo.visit_count,
       total_visits: totalVisits
     };
   });
@@ -953,28 +966,35 @@ async function compareCreatives(params) {
  * Raw Data 검증: 트래픽 지표 + 세션 목록
  */
 async function getRawTrafficData(params) {
-  const { creative_name, utm_source, utm_medium, utm_campaign, start, end } = params;
+  const { creative_name, utm_source, utm_medium, utm_campaign, start, end, page = 1, limit = 50, filter = 'all' } = params;
   
   // 파라미터 검증
   validateCreativeParams(params);
   
   const { startDate, endDate } = parseDates(start, end);
   
-  // 트래픽 요약 및 세션 목록 조회
-  const [summary, sessions] = await Promise.all([
+  // 트래픽 요약, 세션 목록, 총 개수 조회
+  const [summary, sessions, totalCount] = await Promise.all([
     repository.getRawTrafficSummary({ creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate }),
-    repository.getRawSessions({ creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate })
+    repository.getRawSessions({ creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate, page, limit, filter }),
+    repository.getRawSessionsCount({ creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate, filter })
   ]);
   
-  // 세션 데이터 가공
+  // 세션 데이터 가공 (방문자 단위)
   const formattedSessions = sessions.map(s => ({
-    id: s.id,
     visitor_id: s.visitor_id,
-    entry_timestamp: s.entry_timestamp,
-    duration_seconds: parseInt(s.duration_seconds) || 0,
-    pageview_count: parseInt(s.pageview_count) || 0,
+    first_visit: s.first_visit,
+    last_visit: s.last_visit,
+    visit_count: parseInt(s.visit_count) || 1,
+    total_duration_seconds: parseInt(s.total_duration_seconds) || 0,
+    total_pageviews: parseInt(s.total_pageviews) || 0,
     device_type: s.device_type || 'unknown',
-    browser: s.browser || 'unknown'
+    browser: s.browser || 'unknown',
+    // 구매 정보
+    is_purchased: !!s.order_id,
+    order_id: s.order_id || null,
+    final_payment: s.final_payment ? Math.round(parseFloat(s.final_payment)) : null,
+    order_date: s.order_date || null
   }));
   
   return {
@@ -987,7 +1007,13 @@ async function getRawTrafficData(params) {
       avg_pageviews: parseFloat(summary.avg_pageviews) || 0,
       avg_duration_seconds: parseFloat(summary.avg_duration_seconds) || 0
     },
-    sessions: formattedSessions
+    sessions: formattedSessions,
+    pagination: {
+      page,
+      limit,
+      total: totalCount,
+      totalPages: Math.ceil(totalCount / limit)
+    }
   };
 }
 

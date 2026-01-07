@@ -37,6 +37,7 @@ function CreativePerformance() {
     activeUtmFilters,
     currentPage,
     pageSize,
+    maxDuration,
     
     // 모달 상태
     ordersModalVisible,
@@ -51,6 +52,7 @@ function CreativePerformance() {
     setJourneyCreative,
     setActiveUtmFilters,
     setQuickFilterSources,
+    setMaxDuration,
     setError,
     
     // 핸들러
@@ -156,6 +158,8 @@ function CreativePerformance() {
         onPageChange={handlePageChange}
         onViewOrders={handleViewOrders}
         onViewJourney={handleViewJourney}
+        maxDuration={maxDuration}
+        onMaxDurationChange={setMaxDuration}
       />
 
       {/* 주문 보기 모달 */}

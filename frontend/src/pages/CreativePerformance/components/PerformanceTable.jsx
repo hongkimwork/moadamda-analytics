@@ -3,10 +3,22 @@
 // ============================================================================
 
 import React, { useMemo } from 'react';
-import { Card, Table, Tooltip, Dropdown, Button, message } from 'antd';
+import { Card, Table, Tooltip, Dropdown, Button, message, Select } from 'antd';
 import { ShoppingCart, Network } from 'lucide-react';
 import { formatDuration, formatCurrency, formatNumber, calculateTrafficScores } from '../utils/formatters';
 import { getRowKey } from '../utils/helpers';
+
+// 이상치 기준 옵션 생성 (5분~2시간30분, 5분 단위)
+const durationOptions = [];
+for (let minutes = 5; minutes <= 150; minutes += 5) {
+  const seconds = minutes * 60;
+  const label = minutes < 60 
+    ? `${minutes}분` 
+    : minutes % 60 === 0 
+      ? `${Math.floor(minutes / 60)}시간`
+      : `${Math.floor(minutes / 60)}시간 ${minutes % 60}분`;
+  durationOptions.push({ value: seconds, label });
+}
 
 /**
  * 퍼포먼스 테이블 컴포넌트
@@ -22,7 +34,9 @@ function PerformanceTable({
   onTableChange,
   onPageChange,
   onViewOrders,
-  onViewJourney
+  onViewJourney,
+  maxDuration,
+  onMaxDurationChange
 }) {
   // 모수 평가 점수 계산 (필터된 데이터 기준)
   const trafficScores = useMemo(() => calculateTrafficScores(data), [data]);
@@ -154,10 +168,23 @@ function PerformanceTable({
       showSorterTooltip: false
     },
     {
-      title: <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>평균<br />체류시간</div>,
+      title: (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+          <span style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>평균<br />체류시간</span>
+          <Select
+            size="small"
+            value={maxDuration}
+            onChange={onMaxDurationChange}
+            options={durationOptions}
+            style={{ width: 85, fontSize: 11 }}
+            onClick={(e) => e.stopPropagation()}
+            popupMatchSelectWidth={false}
+          />
+        </div>
+      ),
       dataIndex: 'avg_duration_seconds',
       key: 'avg_duration_seconds',
-      width: 80,
+      width: 95,
       align: 'center',
       render: (seconds) => <span style={{ fontSize: '13px', color: '#4b5563', fontWeight: 500 }}>{formatDuration(seconds)}</span>,
       sorter: true,
