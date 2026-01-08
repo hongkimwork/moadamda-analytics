@@ -27,37 +27,43 @@ router.get('/daily-visits', async (req, res) => {
       return res.status(400).json({ error: 'startDate and endDate are required' });
     }
 
-    // 일별 통계 쿼리
+    // 일별 통계 쿼리 (원본 데이터 기준)
+    // 전체방문 = 세션 수, 순방문 = 고유 visitor_id, 재방문 = 기간 내 2회 이상 방문자
     const query = `
-      WITH daily_stats AS (
+      WITH daily_sessions AS (
         SELECT 
-          DATE(s.start_time) as date,
-          COUNT(DISTINCT s.session_id) as total_visits,
-          COUNT(DISTINCT s.visitor_id) as unique_visitors,
-          COUNT(DISTINCT CASE WHEN v.visit_count > 1 THEN s.visitor_id END) as returning_visitors
-        FROM sessions s
-        LEFT JOIN visitors v ON s.visitor_id = v.visitor_id
-        WHERE s.start_time >= $1 AND s.start_time < ($2::date + interval '1 day')
-        GROUP BY DATE(s.start_time)
-        ORDER BY date
+          DATE(start_time) as date,
+          visitor_id,
+          COUNT(*) as session_count
+        FROM sessions
+        WHERE start_time >= $1 AND start_time < ($2::date + interval '1 day')
+        GROUP BY DATE(start_time), visitor_id
       )
       SELECT 
         date,
-        total_visits,
-        unique_visitors,
-        returning_visitors
-      FROM daily_stats
+        SUM(session_count) as total_visits,
+        COUNT(DISTINCT visitor_id) as unique_visitors,
+        COUNT(DISTINCT CASE WHEN session_count > 1 THEN visitor_id END) as returning_visitors
+      FROM daily_sessions
+      GROUP BY date
+      ORDER BY date
     `;
 
-    // 기간 전체 합계 쿼리 (카페24 방식: 기간 내 중복 제거)
+    // 기간 전체 합계 쿼리 (원본 데이터 기준)
     const summaryQuery = `
+      WITH visitor_sessions AS (
+        SELECT 
+          visitor_id,
+          COUNT(*) as session_count
+        FROM sessions
+        WHERE start_time >= $1 AND start_time < ($2::date + interval '1 day')
+        GROUP BY visitor_id
+      )
       SELECT 
-        COUNT(DISTINCT s.session_id) as total_visits,
-        COUNT(DISTINCT s.visitor_id) as unique_visitors,
-        COUNT(DISTINCT CASE WHEN v.visit_count > 1 THEN s.visitor_id END) as returning_visitors
-      FROM sessions s
-      LEFT JOIN visitors v ON s.visitor_id = v.visitor_id
-      WHERE s.start_time >= $1 AND s.start_time < ($2::date + interval '1 day')
+        SUM(session_count) as total_visits,
+        COUNT(DISTINCT visitor_id) as unique_visitors,
+        COUNT(DISTINCT CASE WHEN session_count > 1 THEN visitor_id END) as returning_visitors
+      FROM visitor_sessions
     `;
 
     const [result, summaryResult] = await Promise.all([
