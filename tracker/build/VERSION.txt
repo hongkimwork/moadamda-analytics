@@ -1,21 +1,16 @@
-v20.5 (v048)
-Updated: 2026-01-06
+v21.0 (v049)
+Updated: 2026-01-08
 
-🚀 NEW: 스크롤 깊이 추적 기능 추가
+🚀 카페24 호환 세션 타임아웃 변경
 
-NEW IN v20.5 (v048):
-✅ 스크롤 깊이 추적 (scroll_depth)
-  - 페이지별 최대 스크롤 위치(px) 수집
-  - 문서 전체 높이 수집
-  - 뷰포트 높이 수집
-  - 페이지 이탈 시 자동 전송
-  - 성능 최적화: 100ms 쓰로틀링 적용
+NEW IN v21.0 (v049):
+✅ 세션 타임아웃 30분 → 2시간 (카페24 호환)
+  - sessionTimeout: 1800000 → 7200000
+  - 세션 쿠키 유효기간: 0.0208일 → 0.0833일 (2시간)
+  - 카페24 통계와 동일한 세션 기준 적용
 
-BACKEND CHANGES (eventHandlers.js):
-- scroll_depth 이벤트 핸들러 추가
-- events 테이블 metadata 컬럼에 스크롤 정보 저장
-
-Previous v20.4 features maintained:
+Previous v20.5 features maintained:
+- 스크롤 깊이 추적 (scroll_depth)
 - 인앱 브라우저 감지 (FB/IG/카카오/네이버/라인)
 - 인앱 브라우저 강화 전송 (sendBeacon + fetch 동시 사용)
 - 실패 이벤트 sessionStorage 저장 및 재시도

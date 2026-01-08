@@ -40,6 +40,7 @@ const CreativePerformance = lazy(() => import('./pages/CreativePerformance/index
 const MyDashboard = lazy(() => import('./pages/MyDashboard/index'));
 const MetaInsights = lazy(() => import('./pages/MetaInsights/index'));
 const DataValidation = lazy(() => import('./pages/DataValidation/index'));
+const AdPerformance = lazy(() => import('./pages/AdPerformance/index'));
 
 const { Sider, Content } = Layout;
 
@@ -59,6 +60,7 @@ function AppLayout() {
     if (path === '/my-dashboard') return ['my-dashboard'];
     if (path === '/meta-insights') return ['meta-insights'];
     if (path === '/data-validation') return ['data-validation'];
+    if (path === '/ad-performance') return ['ad-performance'];
     if (path === '/page-mapping') return ['page-mapping'];
     if (path.startsWith('/order/')) return ['orders'];
     if (path === '/' || path.startsWith('/order')) return ['orders'];
@@ -102,6 +104,12 @@ function AppLayout() {
           icon: <CheckCircleOutlined />,
           label: '데이터 검증',
           onClick: () => navigate('/data-validation')
+        },
+        {
+          key: 'ad-performance',
+          icon: <BarChartOutlined />,
+          label: '광고 성과 분석',
+          onClick: () => navigate('/ad-performance')
         }
       ]
     },
@@ -244,6 +252,9 @@ function AppLayout() {
               
               {/* 데이터 검증 */}
               <Route path="/data-validation" element={<DataValidation />} />
+              
+              {/* 광고 성과 분석 */}
+              <Route path="/ad-performance" element={<AdPerformance />} />
               
               {/* 페이지 매핑 */}
               <Route path="/page-mapping" element={<PageMapping />} />

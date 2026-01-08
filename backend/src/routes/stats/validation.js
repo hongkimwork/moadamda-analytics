@@ -1,10 +1,16 @@
 /**
- * Data Validation API
+ * Data Validation API (카페24 호환)
  * 
- * 데이터 검증을 위한 통계 API
- * - /daily-visits: 일별 전체방문, 순방문, 재방문 통계
- * - /pageview-stats: 페이지뷰 통계
+ * 데이터 검증을 위한 통계 API - 카페24 기준과 동일한 집계 방식 적용
+ * - /daily-visits: 일별 전체방문, 순방문, 재방문 통계 (봇 제외)
+ * - /pageview-stats: 페이지뷰 통계 (봇 제외, 세션 내 중복 URL 제거)
  * - /daily-sales: 일별 매출 통계
+ * 
+ * 카페24 호환 기준:
+ * - 봇 트래픽 제외 (visitors.is_bot = false)
+ * - 재방문자: 조회 기간 시작일 이전에 첫 방문한 사람
+ * - 페이지뷰: 세션 내 동일 URL 중복 제거 (새로고침 제외)
+ * - 세션 타임아웃: 2시간 (트래커 v21.0부터 적용)
  */
 
 const express = require('express');
@@ -13,11 +19,15 @@ const db = require('../../utils/database');
 
 /**
  * GET /daily-visits
- * 일별 방문 통계 조회
+ * 일별 방문 통계 조회 (카페24 호환)
  * 
  * Query params:
  * - startDate: 시작일 (YYYY-MM-DD)
  * - endDate: 종료일 (YYYY-MM-DD)
+ * 
+ * 카페24 호환 기준:
+ * - 봇 트래픽 제외
+ * - 재방문자: 해당 날짜 이전에 첫 방문한 사람 (일별) / 조회 시작일 이전에 첫 방문한 사람 (합계)
  */
 router.get('/daily-visits', async (req, res) => {
   try {
@@ -27,53 +37,15 @@ router.get('/daily-visits', async (req, res) => {
       return res.status(400).json({ error: 'startDate and endDate are required' });
     }
 
-    // 일별 통계 쿼리 (원본 데이터 기준)
-    // 전체방문 = 세션 수, 순방문 = 고유 visitor_id, 재방문 = 기간 내 2회 이상 방문자
-    const query = `
-      WITH daily_sessions AS (
-        SELECT 
-          DATE(start_time) as date,
-          visitor_id,
-          COUNT(*) as session_count
-        FROM sessions
-        WHERE start_time >= $1 AND start_time < ($2::date + interval '1 day')
-        GROUP BY DATE(start_time), visitor_id
-      )
-      SELECT 
-        date,
-        SUM(session_count) as total_visits,
-        COUNT(DISTINCT visitor_id) as unique_visitors,
-        COUNT(DISTINCT CASE WHEN session_count > 1 THEN visitor_id END) as returning_visitors
-      FROM daily_sessions
-      GROUP BY date
-      ORDER BY date
-    `;
-
-    // 기간 전체 합계 쿼리 (원본 데이터 기준)
-    const summaryQuery = `
-      WITH visitor_sessions AS (
-        SELECT 
-          visitor_id,
-          COUNT(*) as session_count
-        FROM sessions
-        WHERE start_time >= $1 AND start_time < ($2::date + interval '1 day')
-        GROUP BY visitor_id
-      )
-      SELECT 
-        SUM(session_count) as total_visits,
-        COUNT(DISTINCT visitor_id) as unique_visitors,
-        COUNT(DISTINCT CASE WHEN session_count > 1 THEN visitor_id END) as returning_visitors
-      FROM visitor_sessions
-    `;
-
-    const [result, summaryResult] = await Promise.all([
-      db.query(query, [startDate, endDate]),
-      db.query(summaryQuery, [startDate, endDate])
+    // 카페24 호환 함수 사용
+    const [dailyResult, summaryResult] = await Promise.all([
+      db.query('SELECT * FROM get_daily_visits_cafe24($1::DATE, $2::DATE)', [startDate, endDate]),
+      db.query('SELECT * FROM get_visit_summary_cafe24($1::DATE, $2::DATE)', [startDate, endDate])
     ]);
     
     // 전일 대비 비교값과 증감 계산
-    const data = result.rows.map((row, index) => {
-      const prevUniqueVisitors = index > 0 ? result.rows[index - 1].unique_visitors : null;
+    const data = dailyResult.rows.map((row, index) => {
+      const prevUniqueVisitors = index > 0 ? dailyResult.rows[index - 1].unique_visitors : null;
       const change = prevUniqueVisitors !== null 
         ? parseInt(row.unique_visitors) - parseInt(prevUniqueVisitors)
         : null;
@@ -88,7 +60,7 @@ router.get('/daily-visits', async (req, res) => {
       };
     });
 
-    // 합계 (기간 전체 기준 중복 제거 - 카페24 방식)
+    // 합계 (카페24 호환 함수 결과)
     const summaryRow = summaryResult.rows[0];
     const summary = {
       totalVisits: parseInt(summaryRow.total_visits),
@@ -108,11 +80,15 @@ router.get('/daily-visits', async (req, res) => {
 
 /**
  * GET /pageview-stats
- * 페이지뷰 통계 조회 (사이트 버전별 + 일별 - 카페24 기준)
+ * 페이지뷰 통계 조회 (카페24 호환)
  * 
  * Query params:
  * - startDate: 시작일 (YYYY-MM-DD)
  * - endDate: 종료일 (YYYY-MM-DD)
+ * 
+ * 카페24 호환 기준:
+ * - 봇 트래픽 제외
+ * - 세션 내 동일 URL 중복 제거 (새로고침 제외)
  */
 router.get('/pageview-stats', async (req, res) => {
   try {
@@ -122,28 +98,13 @@ router.get('/pageview-stats', async (req, res) => {
       return res.status(400).json({ error: 'startDate and endDate are required' });
     }
 
-    // 카페24 기준: URL 기반 사이트 버전, 봇 제외, 세션 내 중복 페이지 제외
-    const siteVersionQuery = `
-      WITH unique_pageviews AS (
-        SELECT DISTINCT 
-          p.site_version,
-          p.session_id,
-          p.page_url
-        FROM pageviews p
-        JOIN visitors v ON p.visitor_id = v.visitor_id
-        WHERE p.timestamp >= $1 AND p.timestamp < ($2::date + interval '1 day')
-          AND v.is_bot = false
-      )
-      SELECT 
-        site_version,
-        COUNT(*) as pageviews,
-        COUNT(DISTINCT session_id) as first_sessions
-      FROM unique_pageviews
-      GROUP BY site_version
-      ORDER BY pageviews DESC
-    `;
+    // 카페24 호환 함수 사용 (사이트 버전별)
+    const siteVersionResult = await db.query(
+      'SELECT * FROM get_pageview_stats_cafe24($1::DATE, $2::DATE)',
+      [startDate, endDate]
+    );
 
-    // 일별 통계 쿼리
+    // 일별 통계 쿼리 (카페24 호환 - 봇 제외, 세션 내 중복 URL 제거)
     const dailyQuery = `
       WITH unique_pageviews AS (
         SELECT DISTINCT 
@@ -164,10 +125,7 @@ router.get('/pageview-stats', async (req, res) => {
       ORDER BY date
     `;
 
-    const [siteVersionResult, dailyResult] = await Promise.all([
-      db.query(siteVersionQuery, [startDate, endDate]),
-      db.query(dailyQuery, [startDate, endDate])
-    ]);
+    const dailyResult = await db.query(dailyQuery, [startDate, endDate]);
     
     // 전체 합계 계산
     const totalPageviews = siteVersionResult.rows.reduce((sum, row) => sum + parseInt(row.pageviews), 0);
@@ -177,9 +135,7 @@ router.get('/pageview-stats', async (req, res) => {
       siteVersion: row.site_version,
       pageviews: parseInt(row.pageviews),
       firstSessions: parseInt(row.first_sessions),
-      pvPerSession: row.first_sessions > 0 
-        ? Math.round((parseInt(row.pageviews) / parseInt(row.first_sessions)) * 10) / 10 
-        : 0
+      pvPerSession: parseFloat(row.pv_per_session) || 0
     }));
 
     // 일별 데이터 처리 (전일 대비 증감 계산)

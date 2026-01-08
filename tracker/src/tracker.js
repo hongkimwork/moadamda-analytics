@@ -1,6 +1,6 @@
 /**
- * Moadamda Analytics Tracker v20.5 (v048)
- * Updated: 2026-01-06
+ * Moadamda Analytics Tracker v21.0 (v049)
+ * Updated: 2026-01-08
  * 
  * DEPLOYMENT INFO:
  * - Production Domain: marketingzon.com
@@ -8,7 +8,11 @@
  * - Dashboard: https://dashboard.marketingzon.com
  * - SSL: Let's Encrypt (Trusted Certificate)
  * 
- * LATEST UPDATE (v20.5):
+ * LATEST UPDATE (v21.0):
+ * - CHANGED: 세션 타임아웃 30분 → 2시간 (카페24 호환)
+ * - 세션 쿠키 유효기간도 2시간으로 변경
+ * 
+ * PREVIOUS (v20.5):
  * - ADDED: 스크롤 깊이 추적 (scroll_depth) - 페이지별 최대 스크롤 위치(px) 수집
  * 
  * PREVIOUS (v20.4):
@@ -60,8 +64,8 @@
     cookieName: '_ma_id',
     sessionCookieName: '_ma_ses',
     batchInterval: 180000,  // 3 minutes
-    sessionTimeout: 1800000,  // 30 minutes
-    heartbeatInterval: 30000  // 30 seconds (NEW)
+    sessionTimeout: 7200000,  // 2 hours (Cafe24 compatible)
+    heartbeatInterval: 30000  // 30 seconds
   };
   
   let eventQueue = [];
@@ -84,7 +88,7 @@
   
   const IS_IN_APP = isInAppBrowser();
   
-  console.log('[MA] Initializing Moadamda Analytics v20.5 (v048)...');
+  console.log('[MA] Initializing Moadamda Analytics v21.0 (v049)...');
   console.log('[MA] In-app browser detected:', IS_IN_APP);
   console.log('[MA] API URL:', CONFIG.apiUrl);
   console.log('[MA] Visitor ID:', visitorId);
@@ -122,12 +126,12 @@
     return id;
   }
   
-  // Get or create session ID
+  // Get or create session ID (2 hours = 0.0833 days for Cafe24 compatibility)
   function getOrCreateSessionId() {
     let id = getCookie(CONFIG.sessionCookieName);
     if (!id) {
       id = generateUUID();
-      setCookie(CONFIG.sessionCookieName, id, 0.0208); // 30 minutes
+      setCookie(CONFIG.sessionCookieName, id, 0.0833); // 2 hours
     }
     return id;
   }
