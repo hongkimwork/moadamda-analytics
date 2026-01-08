@@ -10,7 +10,7 @@ function DailySalesModal({ open, onClose }) {
   const [data, setData] = useState([]);
   const [summary, setSummary] = useState({
     orderCount: 0, productCount: 0, totalAmount: 0, shippingFee: 0,
-    discountAmount: 0, finalPayment: 0, refundAmount: 0, netSales: 0
+    discountAmount: 0, finalPayment: 0
   });
   const [dateRange, setDateRange] = useState([
     dayjs('2025-12-01'),
@@ -29,7 +29,7 @@ function DailySalesModal({ open, onClose }) {
       setData(result.data || []);
       setSummary(result.summary || {
         orderCount: 0, productCount: 0, totalAmount: 0, shippingFee: 0,
-        discountAmount: 0, finalPayment: 0, refundAmount: 0, netSales: 0
+        discountAmount: 0, finalPayment: 0
       });
     } catch (error) {
       console.error('Failed to fetch data:', error);
@@ -167,39 +167,6 @@ function DailySalesModal({ open, onClose }) {
           {val?.toLocaleString()}
         </span>
       )
-    },
-    {
-      title: '환불합계',
-      dataIndex: 'refundAmount',
-      key: 'refundAmount',
-      width: 100,
-      align: 'right',
-      sorter: (a, b) => {
-        if (a.isTotal || b.isTotal) return 0;
-        return a.refundAmount - b.refundAmount;
-      },
-      render: (val) => (
-        <span style={{ color: val > 0 ? '#f5222d' : 'inherit' }}>
-          {val?.toLocaleString()}
-        </span>
-      )
-    },
-    {
-      title: '순매출',
-      dataIndex: 'netSales',
-      key: 'netSales',
-      width: 120,
-      align: 'right',
-      fixed: 'right',
-      sorter: (a, b) => {
-        if (a.isTotal || b.isTotal) return 0;
-        return a.netSales - b.netSales;
-      },
-      render: (val) => (
-        <span style={{ fontWeight: 'bold', color: '#52c41a' }}>
-          {val?.toLocaleString()}
-        </span>
-      )
     }
   ];
 
@@ -218,7 +185,7 @@ function DailySalesModal({ open, onClose }) {
       open={open}
       onCancel={onClose}
       footer={null}
-      width={1100}
+      width={1000}
       style={{ top: '2.5vh' }}
       styles={{ body: { height: 'calc(95vh - 55px)', overflowY: 'auto' } }}
     >
@@ -250,7 +217,7 @@ function DailySalesModal({ open, onClose }) {
           pagination={false}
           size="small"
           rowClassName={(record) => record.isTotal ? 'total-row' : ''}
-          scroll={{ x: 1000, y: 'calc(95vh - 250px)' }}
+          scroll={{ x: 900, y: 'calc(95vh - 250px)' }}
         />
       </Spin>
 

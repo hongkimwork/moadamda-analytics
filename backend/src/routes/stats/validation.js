@@ -248,8 +248,7 @@ router.get('/daily-sales', async (req, res) => {
         COALESCE(SUM(total_amount), 0) as total_amount,
         COALESCE(SUM(shipping_fee), 0) as shipping_fee,
         COALESCE(SUM(discount_amount), 0) as discount_amount,
-        COALESCE(SUM(final_payment), 0) as final_payment,
-        COALESCE(SUM(CASE WHEN order_status IN ('cancelled', 'refunded') THEN refund_amount ELSE 0 END), 0) as refund_amount
+        COALESCE(SUM(final_payment), 0) as final_payment
       FROM conversions
       WHERE timestamp >= $1 AND timestamp < ($2::date + interval '1 day')
       GROUP BY DATE(timestamp)
@@ -265,9 +264,7 @@ router.get('/daily-sales', async (req, res) => {
       totalAmount: parseInt(row.total_amount),
       shippingFee: parseInt(row.shipping_fee),
       discountAmount: parseInt(row.discount_amount),
-      finalPayment: parseInt(row.final_payment),
-      refundAmount: parseInt(row.refund_amount),
-      netSales: parseInt(row.final_payment) - parseInt(row.refund_amount)
+      finalPayment: parseInt(row.final_payment)
     }));
 
     const summary = {
@@ -276,9 +273,7 @@ router.get('/daily-sales', async (req, res) => {
       totalAmount: data.reduce((sum, row) => sum + row.totalAmount, 0),
       shippingFee: data.reduce((sum, row) => sum + row.shippingFee, 0),
       discountAmount: data.reduce((sum, row) => sum + row.discountAmount, 0),
-      finalPayment: data.reduce((sum, row) => sum + row.finalPayment, 0),
-      refundAmount: data.reduce((sum, row) => sum + row.refundAmount, 0),
-      netSales: data.reduce((sum, row) => sum + row.netSales, 0)
+      finalPayment: data.reduce((sum, row) => sum + row.finalPayment, 0)
     };
 
     res.json({
