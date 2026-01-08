@@ -49,7 +49,21 @@ router.get('/daily-visits', async (req, res) => {
       FROM daily_stats
     `;
 
-    const result = await db.query(query, [startDate, endDate]);
+    // 기간 전체 합계 쿼리 (카페24 방식: 기간 내 중복 제거)
+    const summaryQuery = `
+      SELECT 
+        COUNT(DISTINCT s.session_id) as total_visits,
+        COUNT(DISTINCT s.visitor_id) as unique_visitors,
+        COUNT(DISTINCT CASE WHEN v.visit_count > 1 THEN s.visitor_id END) as returning_visitors
+      FROM sessions s
+      LEFT JOIN visitors v ON s.visitor_id = v.visitor_id
+      WHERE s.start_time >= $1 AND s.start_time < ($2::date + interval '1 day')
+    `;
+
+    const [result, summaryResult] = await Promise.all([
+      db.query(query, [startDate, endDate]),
+      db.query(summaryQuery, [startDate, endDate])
+    ]);
     
     // 전일 대비 비교값과 증감 계산
     const data = result.rows.map((row, index) => {
@@ -68,11 +82,12 @@ router.get('/daily-visits', async (req, res) => {
       };
     });
 
-    // 합계 계산
+    // 합계 (기간 전체 기준 중복 제거 - 카페24 방식)
+    const summaryRow = summaryResult.rows[0];
     const summary = {
-      totalVisits: data.reduce((sum, row) => sum + row.totalVisits, 0),
-      uniqueVisitors: data.reduce((sum, row) => sum + row.uniqueVisitors, 0),
-      returningVisitors: data.reduce((sum, row) => sum + row.returningVisitors, 0)
+      totalVisits: parseInt(summaryRow.total_visits),
+      uniqueVisitors: parseInt(summaryRow.unique_visitors),
+      returningVisitors: parseInt(summaryRow.returning_visitors)
     };
 
     res.json({
