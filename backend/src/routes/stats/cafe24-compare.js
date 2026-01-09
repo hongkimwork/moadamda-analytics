@@ -26,10 +26,14 @@ const db = require('../../utils/database');
  */
 router.post('/', async (req, res) => {
   try {
-    const { visits } = req.body;
+    const { visits, date } = req.body;
     
     if (!visits || !Array.isArray(visits) || visits.length === 0) {
       return res.status(400).json({ error: '비교할 데이터가 없습니다.' });
+    }
+
+    if (!date) {
+      return res.status(400).json({ error: '비교할 날짜를 선택해주세요.' });
     }
 
     const results = [];
@@ -50,6 +54,7 @@ router.post('/', async (req, res) => {
       // IP + 시간(±3초) 기준으로 세션 검색
       // 원본 테이블 사용 이유: 데이터 무결성 검증 목적
       // IP 앞에 백슬래시가 붙어있을 수 있어서 양쪽 모두 검색
+      // 날짜 필터 추가로 조회 범위 제한
       const query = `
         SELECT 
           s.ip_address,
@@ -57,7 +62,9 @@ router.post('/', async (req, res) => {
           s.utm_params,
           s.entry_url
         FROM sessions s
-        WHERE (s.ip_address = $1 OR s.ip_address = $3)
+        WHERE (s.ip_address = $1 OR s.ip_address = $4)
+          AND s.start_time >= $3::date
+          AND s.start_time < ($3::date + interval '1 day')
           AND s.start_time BETWEEN ($2::timestamp - interval '3 seconds') 
                                AND ($2::timestamp + interval '3 seconds')
         ORDER BY ABS(EXTRACT(EPOCH FROM (s.start_time - $2::timestamp)))
@@ -65,7 +72,7 @@ router.post('/', async (req, res) => {
       `;
 
       const ipWithBackslash = '\\' + ip;
-      const result = await db.query(query, [ip, visitTime, ipWithBackslash]);
+      const result = await db.query(query, [ip, visitTime, date, ipWithBackslash]);
 
       if (result.rows.length === 0) {
         // 미수집

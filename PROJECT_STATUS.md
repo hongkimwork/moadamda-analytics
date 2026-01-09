@@ -1,6 +1,6 @@
 # 🎯 Moadamda Analytics - 프로젝트 현황
 
-**마지막 업데이트**: 2026-01-07
+**마지막 업데이트**: 2026-01-09
 
 ---
 
@@ -17,6 +17,12 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2026-01-09 | 요약 카드 중앙 정렬 | index.jsx |
+| 2026-01-09 | 페이지네이션 수정 | index.jsx |
+| 2026-01-09 | 테이블 스크롤 제거 | index.jsx |
+| 2026-01-09 | 페이지 레이아웃 최적화 | index.jsx |
+| 2026-01-09 | 테이블 배경색 변경 | index.jsx |
+| 2026-01-09 | 카페24 비교 테이블 UI 개선 | Cafe24Compare/index.jsx |
 | 2026-01-07 | 검증페이지 모달분리 및 배포 | index.jsx |
 | 2026-01-07 | 데이터검증 테이블 정렬기능 | VisitorStatsModal.jsx |
 | 2026-01-07 | 페이지뷰 일별 테이블 추가 | PageviewStatsModal.jsx |
@@ -26,12 +32,6 @@
 | 2026-01-06 | 모수평가점수 UV제외 변경 | formatters.js |
 | 2026-01-06 | 여정상세→고객여정모달 연동 | CreativeOrdersModal.jsx |
 | 2026-01-06 | 주문모달 노출일시 컬럼추가 | CreativeOrdersModal.jsx |
-| 2026-01-06 | 스크롤 깊이 추적 추가 | tracker-v049.js |
-| 2026-01-06 | 검증 기능 개선 | TestResultModal.jsx |
-| 2026-01-05 | 페이지네이션 초기화 수정 | RawDataModal.jsx |
-| 2026-01-05 | 광고소재 분석 배포완료 | creative-performance.js |
-| 2026-01-05 | Raw Data 검증 기능 추가 | RawDataModal.jsx |
-| 2026-01-05 | 기여매출액 계산버그 수정 | creativeAttribution.js |
 
 ---
 
