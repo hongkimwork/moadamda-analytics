@@ -49,6 +49,7 @@ router.post('/', async (req, res) => {
 
       // IP + 시간(±3초) 기준으로 세션 검색
       // 원본 테이블 사용 이유: 데이터 무결성 검증 목적
+      // IP 앞에 백슬래시가 붙어있을 수 있어서 양쪽 모두 검색
       const query = `
         SELECT 
           s.ip_address,
@@ -56,14 +57,15 @@ router.post('/', async (req, res) => {
           s.utm_params,
           s.entry_url
         FROM sessions s
-        WHERE s.ip_address = $1
+        WHERE (s.ip_address = $1 OR s.ip_address = $3)
           AND s.start_time BETWEEN ($2::timestamp - interval '3 seconds') 
                                AND ($2::timestamp + interval '3 seconds')
         ORDER BY ABS(EXTRACT(EPOCH FROM (s.start_time - $2::timestamp)))
         LIMIT 1
       `;
 
-      const result = await db.query(query, [ip, visitTime]);
+      const ipWithBackslash = '\\' + ip;
+      const result = await db.query(query, [ip, visitTime, ipWithBackslash]);
 
       if (result.rows.length === 0) {
         // 미수집
@@ -75,13 +77,14 @@ router.post('/', async (req, res) => {
         });
       } else {
         const row = result.rows[0];
+        const cleanIp = (row.ip_address || '').replace(/^\\/, '');
         const ourSource = extractSource(row.utm_params, row.entry_url);
         const sourceMatch = compareSource(source, ourSource, row.utm_params);
 
         results.push({
           cafe24: visit,
           ourSystem: {
-            ip: row.ip_address,
+            ip: cleanIp,
             source: ourSource,
             visitTime: formatTimestamp(row.start_time),
             utmParams: row.utm_params
