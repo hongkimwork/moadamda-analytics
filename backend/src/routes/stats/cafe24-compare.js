@@ -9,7 +9,7 @@
 
 const express = require('express');
 const router = express.Router();
-const db = require('../../db');
+const db = require('../../utils/database');
 
 /**
  * POST /api/stats/cafe24-compare
