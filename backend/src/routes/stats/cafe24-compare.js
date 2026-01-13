@@ -55,43 +55,21 @@ router.post('/', async (req, res) => {
       // 원본 테이블 사용 이유: 데이터 무결성 검증 목적
       // IP 앞에 백슬래시가 붙어있을 수 있어서 양쪽 모두 검색
       // 날짜 필터 추가로 조회 범위 제한
-      // 
-      // 시간대 보정: 2026-01-01 이전 데이터는 UTC로 저장되어 있음
-      // 카페24는 KST 기준이므로, 해당 기간 데이터 조회 시 -9시간 보정 필요
-      const utcCutoffDate = '2026-01-01';
-      const needsTimezoneAdjust = date < utcCutoffDate;
-      
-      const query = needsTimezoneAdjust
-        ? `
-          SELECT 
-            s.ip_address,
-            s.start_time,
-            s.utm_params,
-            s.entry_url
-          FROM sessions s
-          WHERE (s.ip_address = $1 OR s.ip_address = $4)
-            AND s.start_time >= ($3::date - interval '9 hours')
-            AND s.start_time < ($3::date + interval '1 day' - interval '9 hours')
-            AND s.start_time BETWEEN ($2::timestamp - interval '9 hours' - interval '3 seconds') 
-                                 AND ($2::timestamp - interval '9 hours' + interval '3 seconds')
-          ORDER BY ABS(EXTRACT(EPOCH FROM (s.start_time - ($2::timestamp - interval '9 hours'))))
-          LIMIT 1
-        `
-        : `
-          SELECT 
-            s.ip_address,
-            s.start_time,
-            s.utm_params,
-            s.entry_url
-          FROM sessions s
-          WHERE (s.ip_address = $1 OR s.ip_address = $4)
-            AND s.start_time >= $3::date
-            AND s.start_time < ($3::date + interval '1 day')
-            AND s.start_time BETWEEN ($2::timestamp - interval '3 seconds') 
-                                 AND ($2::timestamp + interval '3 seconds')
-          ORDER BY ABS(EXTRACT(EPOCH FROM (s.start_time - $2::timestamp)))
-          LIMIT 1
-        `;
+      const query = `
+        SELECT 
+          s.ip_address,
+          s.start_time,
+          s.utm_params,
+          s.entry_url
+        FROM sessions s
+        WHERE (s.ip_address = $1 OR s.ip_address = $4)
+          AND s.start_time >= $3::date
+          AND s.start_time < ($3::date + interval '1 day')
+          AND s.start_time BETWEEN ($2::timestamp - interval '3 seconds') 
+                               AND ($2::timestamp + interval '3 seconds')
+        ORDER BY ABS(EXTRACT(EPOCH FROM (s.start_time - $2::timestamp)))
+        LIMIT 1
+      `;
 
       const ipWithBackslash = '\\' + ip;
       const result = await db.query(query, [ip, visitTime, date, ipWithBackslash]);
@@ -109,18 +87,13 @@ router.post('/', async (req, res) => {
         const cleanIp = (row.ip_address || '').replace(/^\\/, '');
         const ourSource = extractSource(row.utm_params, row.entry_url);
         const sourceMatch = compareSource(source, ourSource, row.utm_params);
-        
-        // 2026-01-01 이전 데이터는 UTC로 저장되어 있으므로 표시 시 +9시간 보정
-        const displayTime = needsTimezoneAdjust
-          ? formatTimestamp(new Date(new Date(row.start_time).getTime() + 9 * 60 * 60 * 1000))
-          : formatTimestamp(row.start_time);
 
         results.push({
           cafe24: visit,
           ourSystem: {
             ip: cleanIp,
             source: ourSource,
-            visitTime: displayTime,
+            visitTime: formatTimestamp(row.start_time),
             utmParams: row.utm_params
           },
           status: sourceMatch ? 'match' : 'source_mismatch',
