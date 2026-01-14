@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-이 파일은 Claude Code (claude.ai/code)가 이 저장소에서 작업할 때 참고하는 가이드입니다.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## 프로젝트 개요
 
@@ -13,7 +13,7 @@
 - **로컬 개발**:
   - 백엔드 API: http://localhost:3003
   - 프론트엔드 대시보드: http://localhost:3030
-- **현재 트래커 버전**: tracker-v044.js
+- **현재 트래커 버전**: tracker-v049.js (PROJECT_STATUS.md 참조)
 
 ## 시스템 아키텍처
 
@@ -21,10 +21,11 @@
 
 1. **트래커 (클라이언트 사이드 JavaScript)**
    - 소스: `tracker/src/tracker.js`
-   - 빌드: `tracker/build/tracker-v044.js` (배포 버전)
+   - 빌드: `tracker/build/tracker-v049.js` (배포 버전)
    - Cafe24 쇼핑몰에 배포되는 순수 JavaScript 추적 스크립트
    - 페이지뷰, 세션, 전자상거래 이벤트(view_product, add_to_cart, checkout, purchase) 추적
    - POST 요청을 통해 백엔드 API로 데이터 전송
+   - **중요**: 트래커 수정 시 새 파일 생성하지 말고 기존 파일 직접 수정 (`.cursor/rules/tracker-versioning.mdc` 참조)
 
 2. **백엔드 (Node.js API)**
    - 위치: `backend/src/`
@@ -229,20 +230,9 @@ curl https://moadamda-analytics.co.kr/health
 
 **매 세션 시작 시 PROJECT_STATUS.md를 먼저 읽어** 현재 단계와 진행 상황을 파악하세요.
 
-현재 단계 컨텍스트 (v047 기준):
-- Phase 1-3: 핵심 추적, 전자상거래 이벤트, 대시보드 UI ✅ 완료
-- Phase 4: UTM 추적 기반 마케팅 분석 ✅ Phase 4.1-4.3 완료
-  - conversions 테이블에 UTM 추적
-  - UTM 성과 API (`/api/stats/utm-performance`)
-  - 캠페인 성과 테이블이 있는 대시보드 UTM 섹션
-- Phase 4.4+: 고급 어트리뷰션 모델 (계획)
-- Phase 5+: 고급 분석 (코호트, 퍼널, A/B 테스팅) (계획)
-
-**최근 주요 기능 (전체 로그는 PROJECT_STATUS.md 참조)**:
-- 복합 URL 조건 페이지 매핑
-- 수동 URL 등록
-- 제품 배지가 있는 주문 여정 분석
-- 광고 소재 성과 분석
+- 시스템 버전, 트래커 버전, 최근 작업 로그는 `PROJECT_STATUS.md`에서 확인
+- 다음 개발 계획: `CHANNEL_FUNNEL_PRD.md` (채널별 전환 퍼널 위젯)
+- DB 구조: `docs/database-structure.md`
 
 ## 주요 기술 패턴
 
@@ -301,14 +291,7 @@ WHERE time_spent_seconds > 0
 **원인**: `backend/.env` 설정이 없거나 잘못됨
 
 **해결책**:
-1. `backend/.env`가 올바른 자격 증명으로 존재하는지 확인:
-   ```env
-   DB_HOST=49.50.139.223
-   DB_PORT=5432
-   DB_USER=moadamda
-   DB_PASSWORD=MoaDamDa2025!Secure#Analytics
-   DB_NAME=analytics
-   ```
+1. `backend/.env`가 올바른 자격 증명으로 존재하는지 확인 (초기 설정 섹션 참조)
 2. 프로덕션 서버로의 네트워크 연결 확인
 3. 백엔드 재시작: Ctrl+C 후 `npm run dev` 다시 실행
 
@@ -337,7 +320,7 @@ WHERE time_spent_seconds > 0
 
 주문 데이터는 두 가지 소스에서 수집됩니다:
 
-1. **Tracker (tracker-v044.js)**: 자사몰에서 실행되어 visitor_id와 함께 구매 이벤트 수집
+1. **Tracker**: 자사몰에서 실행되어 visitor_id와 함께 구매 이벤트 수집
 2. **Cafe24 API Sync**: Tracker가 놓친 주문을 보충 (1시간마다 토큰 자동 갱신)
 
 ```
@@ -392,14 +375,16 @@ CAFE24_API_VERSION=2025-09-01
 ## 프로젝트 문서
 
 - `README.md` - 빠른 시작 가이드 및 단계별 로드맵
-- `PROJECT_STATUS.md` - **매 세션마다 먼저 읽으세요** - 현재 개발 상태, 최근 작업 로그, 알려진 이슈
-- `PHASE4_PLAN.md` - 마케팅 분석 (UTM) 기능 명세
+- `PROJECT_STATUS.md` - **매 세션마다 먼저 읽으세요** - 현재 개발 상태, 최근 작업 로그
+- `CHANNEL_FUNNEL_PRD.md` - 채널별 전환 퍼널 위젯 개발 명세서 (다음 개발)
+- `docs/database-structure.md` - DB 스키마 상세
 - `.cursor/rules/` - 개발 규칙 및 가이드라인:
   - `dev.mdc` - 로컬 개발 환경 설정
   - `deploy.mdc` - 서버 배포 절차
   - `data-validation.mdc` - 데이터 품질 검증 규칙 (중요)
   - `tracker-versioning.mdc` - 트래커 버전 관리
-  - `project-status-update.mdc` - 상태 추적 워크플로우
+
+**주의**: `moadamda-access-log/` 폴더는 다른 개발자가 만든 레퍼런스 프로젝트이며, 현재 프로젝트와 연동되지 않음
 
 ## GitHub 저장소
 

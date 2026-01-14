@@ -75,13 +75,52 @@ router.post('/', async (req, res) => {
       const result = await db.query(query, [ip, visitTime, date, ipWithBackslash]);
 
       if (result.rows.length === 0) {
-        // 미수집
-        results.push({
-          cafe24: visit,
-          ourSystem: null,
-          status: 'not_found',
-          statusText: '미수집'
-        });
+        // ±3초 내에 없으면, 같은 날 같은 IP로 재검색 (시간 불일치 확인)
+        const timeMismatchQuery = `
+          SELECT 
+            s.ip_address,
+            s.start_time,
+            s.utm_params,
+            s.entry_url,
+            ABS(EXTRACT(EPOCH FROM (s.start_time - $2::timestamp))) as time_diff_seconds
+          FROM sessions s
+          WHERE (s.ip_address = $1 OR s.ip_address = $4)
+            AND s.start_time >= $3::date
+            AND s.start_time < ($3::date + interval '1 day')
+          ORDER BY ABS(EXTRACT(EPOCH FROM (s.start_time - $2::timestamp)))
+          LIMIT 1
+        `;
+
+        const timeMismatchResult = await db.query(timeMismatchQuery, [ip, visitTime, date, ipWithBackslash]);
+
+        if (timeMismatchResult.rows.length === 0) {
+          // 진짜 미수집 (같은 날 해당 IP 세션 없음)
+          results.push({
+            cafe24: visit,
+            ourSystem: null,
+            status: 'not_found',
+            statusText: '미수집'
+          });
+        } else {
+          // 시간 불일치 (같은 IP는 있지만 시간이 ±3초 초과)
+          const row = timeMismatchResult.rows[0];
+          const cleanIp = (row.ip_address || '').replace(/^\\/, '');
+          const ourSource = extractSource(row.utm_params, row.entry_url);
+          const timeDiffSeconds = Math.round(row.time_diff_seconds);
+
+          results.push({
+            cafe24: visit,
+            ourSystem: {
+              ip: cleanIp,
+              source: ourSource,
+              visitTime: formatTimestamp(row.start_time),
+              utmParams: row.utm_params
+            },
+            status: 'time_mismatch',
+            statusText: '시간불일치',
+            timeDiff: formatTimeDiff(timeDiffSeconds)
+          });
+        }
       } else {
         const row = result.rows[0];
         const cleanIp = (row.ip_address || '').replace(/^\\/, '');
@@ -107,6 +146,7 @@ router.post('/', async (req, res) => {
       total: results.length,
       match: results.filter(r => r.status === 'match').length,
       sourceMismatch: results.filter(r => r.status === 'source_mismatch').length,
+      timeMismatch: results.filter(r => r.status === 'time_mismatch').length,
       notFound: results.filter(r => r.status === 'not_found').length,
       invalid: results.filter(r => r.status === 'invalid').length
     };
@@ -192,6 +232,25 @@ function formatTimestamp(timestamp) {
   const minutes = String(date.getMinutes()).padStart(2, '0');
   const seconds = String(date.getSeconds()).padStart(2, '0');
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
+/**
+ * 시간 차이 포맷팅 (초 단위 → 사람이 읽기 쉬운 형태)
+ */
+function formatTimeDiff(seconds) {
+  const absSeconds = Math.abs(seconds);
+  
+  if (absSeconds < 60) {
+    return `${absSeconds}초`;
+  } else if (absSeconds < 3600) {
+    const minutes = Math.floor(absSeconds / 60);
+    const secs = absSeconds % 60;
+    return secs > 0 ? `${minutes}분 ${secs}초` : `${minutes}분`;
+  } else {
+    const hours = Math.floor(absSeconds / 3600);
+    const minutes = Math.floor((absSeconds % 3600) / 60);
+    return minutes > 0 ? `${hours}시간 ${minutes}분` : `${hours}시간`;
+  }
 }
 
 module.exports = router;

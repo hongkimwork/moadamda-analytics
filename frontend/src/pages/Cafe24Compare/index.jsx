@@ -4,7 +4,8 @@ import {
   SwapOutlined, 
   CheckCircleOutlined, 
   WarningOutlined, 
-  CloseCircleOutlined
+  CloseCircleOutlined,
+  ClockCircleOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 
@@ -22,7 +23,6 @@ function Cafe24Compare() {
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState('all');
   const [selectedDate, setSelectedDate] = useState(dayjs());
-  const [pageSize, setPageSize] = useState(20);
   const [compareMode, setCompareMode] = useState('ip_time_only'); // 'ip_time_only' | 'ip_time_source'
   const [rawResults, setRawResults] = useState(null); // API 원본 결과 저장
 
@@ -77,8 +77,8 @@ function Cafe24Compare() {
     if (!rawResults) return { results: null, summary: null };
 
     const processedResults = rawResults.map(r => {
-      // 미수집이나 invalid는 그대로 유지
-      if (r.status === 'not_found' || r.status === 'invalid') {
+      // 미수집, 시간불일치, invalid는 그대로 유지
+      if (r.status === 'not_found' || r.status === 'invalid' || r.status === 'time_mismatch') {
         return r;
       }
 
@@ -106,6 +106,7 @@ function Cafe24Compare() {
       total: processedResults.length,
       match: processedResults.filter(r => r.status === 'match').length,
       sourceMismatch: processedResults.filter(r => r.status === 'source_mismatch').length,
+      timeMismatch: processedResults.filter(r => r.status === 'time_mismatch').length,
       notFound: processedResults.filter(r => r.status === 'not_found').length,
       invalid: processedResults.filter(r => r.status === 'invalid').length
     };
@@ -201,14 +202,28 @@ function Cafe24Compare() {
   /**
    * 상태별 태그 렌더링
    */
-  const renderStatusTag = (status, statusText) => {
+  const renderStatusTag = (status, statusText, record) => {
     const config = {
       match: { color: 'success', icon: <CheckCircleOutlined /> },
       source_mismatch: { color: 'warning', icon: <WarningOutlined /> },
+      time_mismatch: { color: 'purple', icon: <ClockCircleOutlined /> },
       not_found: { color: 'error', icon: <CloseCircleOutlined /> },
       invalid: { color: 'default', icon: <CloseCircleOutlined /> }
     };
     const { color, icon } = config[status] || config.invalid;
+    
+    // 시간 불일치인 경우 시간 차이도 표시
+    if (status === 'time_mismatch' && record?.timeDiff) {
+      return (
+        <div style={{ textAlign: 'center' }}>
+          <Tag color={color} icon={icon}>{statusText}</Tag>
+          <div style={{ fontSize: '11px', color: '#8c8c8c', marginTop: '2px' }}>
+            ({record.timeDiff})
+          </div>
+        </div>
+      );
+    }
+    
     return <Tag color={color} icon={icon}>{statusText}</Tag>;
   };
 
@@ -274,9 +289,9 @@ function Cafe24Compare() {
     {
       title: '상태',
       dataIndex: 'status',
-      width: 100,
+      width: 120,
       align: 'center',
-      render: (status, record) => renderStatusTag(status, record.statusText)
+      render: (status, record) => renderStatusTag(status, record.statusText, record)
     }
   ];
 
@@ -344,75 +359,108 @@ function Cafe24Compare() {
 
       {/* 요약 카드 */}
       {summary && (
-        <Row gutter={[16, 16]} style={{ marginBottom: '32px' }}>
-          <Col xs={12} sm={6}>
-            <Card 
-              style={getCardStyle('all')} 
-              onClick={() => setFilter('all')}
-              hoverable
-              bodyStyle={{ padding: '20px', textAlign: 'center' }}
-            >
-              <Statistic
-                title="📥 전체 입력"
-                value={summary.total}
-                suffix="건"
-                valueStyle={{ color: '#1890ff', fontWeight: 'bold' }}
-              />
-            </Card>
-          </Col>
-          <Col xs={12} sm={6}>
-            <Card 
-              style={getCardStyle('match')} 
-              onClick={() => setFilter('match')}
-              hoverable
-              bodyStyle={{ padding: '20px', textAlign: 'center' }}
-            >
-              <Statistic
-                title="✅ 일치"
-                value={summary.match}
-                suffix={`건 (${summary.total > 0 ? Math.round(summary.match / summary.total * 100) : 0}%)`}
-                valueStyle={{ color: '#52c41a', fontWeight: 'bold' }}
-              />
-            </Card>
-          </Col>
-          <Col xs={12} sm={6}>
-            <Card 
-              style={getCardStyle('source_mismatch')} 
-              onClick={() => setFilter('source_mismatch')}
-              hoverable
-              bodyStyle={{ padding: '20px', textAlign: 'center' }}
-            >
-              <Statistic
-                title="⚠️ 유입 불일치"
-                value={summary.sourceMismatch}
-                suffix={`건 (${summary.total > 0 ? Math.round(summary.sourceMismatch / summary.total * 100) : 0}%)`}
-                valueStyle={{ color: '#faad14', fontWeight: 'bold' }}
-              />
-            </Card>
-            <Select
-              value={compareMode}
-              onChange={(value) => setCompareMode(value)}
-              options={compareModeOptions}
-              style={{ width: '100%', marginTop: '8px' }}
-              size="small"
-            />
-          </Col>
-          <Col xs={12} sm={6}>
-            <Card 
-              style={getCardStyle('not_found')} 
-              onClick={() => setFilter('not_found')}
-              hoverable
-              bodyStyle={{ padding: '20px', textAlign: 'center' }}
-            >
-              <Statistic
-                title="❌ 미수집"
-                value={summary.notFound}
-                suffix={`건 (${summary.total > 0 ? Math.round(summary.notFound / summary.total * 100) : 0}%)`}
-                valueStyle={{ color: '#ff4d4f', fontWeight: 'bold' }}
-              />
-            </Card>
-          </Col>
-        </Row>
+        <>
+          <Row gutter={[12, 12]} style={{ marginBottom: '12px' }}>
+            <Col style={{ width: '20%' }}>
+              <Card 
+                style={getCardStyle('all')} 
+                onClick={() => setFilter('all')}
+                hoverable
+                bodyStyle={{ padding: '16px', textAlign: 'center' }}
+              >
+                <Statistic
+                  title="📥 전체 입력"
+                  value={summary.total}
+                  suffix="건"
+                  valueStyle={{ color: '#1890ff', fontWeight: 'bold', fontSize: '18px' }}
+                />
+              </Card>
+            </Col>
+            <Col style={{ width: '20%' }}>
+              <Card 
+                style={getCardStyle('match')} 
+                onClick={() => setFilter('match')}
+                hoverable
+                bodyStyle={{ padding: '16px', textAlign: 'center' }}
+              >
+                <Statistic
+                  title="✅ 일치"
+                  value={summary.match}
+                  suffix={`건 (${summary.total > 0 ? Math.round(summary.match / summary.total * 100) : 0}%)`}
+                  valueStyle={{ color: '#52c41a', fontWeight: 'bold', fontSize: '18px' }}
+                />
+              </Card>
+            </Col>
+            <Col style={{ width: '20%' }}>
+              <Card 
+                style={getCardStyle('source_mismatch')} 
+                onClick={() => setFilter('source_mismatch')}
+                hoverable
+                bodyStyle={{ padding: '16px', textAlign: 'center' }}
+              >
+                <Statistic
+                  title="⚠️ 유입 불일치"
+                  value={summary.sourceMismatch}
+                  suffix={`건 (${summary.total > 0 ? Math.round(summary.sourceMismatch / summary.total * 100) : 0}%)`}
+                  valueStyle={{ color: '#faad14', fontWeight: 'bold', fontSize: '18px' }}
+                />
+              </Card>
+            </Col>
+            <Col style={{ width: '20%' }}>
+              <Card 
+                style={getCardStyle('time_mismatch')} 
+                onClick={() => setFilter('time_mismatch')}
+                hoverable
+                bodyStyle={{ padding: '16px', textAlign: 'center' }}
+              >
+                <Statistic
+                  title="🕐 시간 불일치"
+                  value={summary.timeMismatch}
+                  suffix={`건 (${summary.total > 0 ? Math.round(summary.timeMismatch / summary.total * 100) : 0}%)`}
+                  valueStyle={{ color: '#722ed1', fontWeight: 'bold', fontSize: '18px' }}
+                />
+              </Card>
+            </Col>
+            <Col style={{ width: '20%' }}>
+              <Card 
+                style={getCardStyle('not_found')} 
+                onClick={() => setFilter('not_found')}
+                hoverable
+                bodyStyle={{ padding: '16px', textAlign: 'center' }}
+              >
+                <Statistic
+                  title="❌ 미수집"
+                  value={summary.notFound}
+                  suffix={`건 (${summary.total > 0 ? Math.round(summary.notFound / summary.total * 100) : 0}%)`}
+                  valueStyle={{ color: '#ff4d4f', fontWeight: 'bold', fontSize: '18px' }}
+                />
+              </Card>
+            </Col>
+          </Row>
+          <Row gutter={[12, 12]} style={{ marginBottom: '24px' }}>
+            <Col style={{ width: '20%' }} />
+            <Col style={{ width: '20%' }} />
+            <Col style={{ width: '20%' }}>
+              <Card 
+                style={{ borderRadius: '8px', background: '#fafafa', border: '1px solid #f0f0f0' }}
+                bodyStyle={{ padding: '8px 12px' }}
+              >
+                <Text type="secondary" style={{ fontSize: '11px', display: 'block', marginBottom: '4px' }}>
+                  유입출처 비교 모드 설정
+                </Text>
+                <Select
+                  value={compareMode}
+                  onChange={(value) => setCompareMode(value)}
+                  options={compareModeOptions}
+                  style={{ width: '100%' }}
+                  size="small"
+                />
+              </Card>
+            </Col>
+            <Col style={{ width: '20%' }} />
+            <Col style={{ width: '20%' }} />
+          </Row>
+        </>
       )}
 
       {/* 비교 결과 테이블 */}
@@ -423,19 +471,13 @@ function Cafe24Compare() {
         >
           <Title level={5} style={{ marginBottom: '4px' }}>📋 상세 비교 결과</Title>
           <Text type="secondary" style={{ display: 'block', marginBottom: '20px' }}>
-            * 매칭 기준: IP + 방문일시 (±3초 오차 허용)
+            * 일치/유입불일치: IP + 방문일시 ±3초 내 매칭 | 시간불일치: IP는 동일하나 시간 차이 ±3초 초과
           </Text>
           <Table
             columns={columns}
             dataSource={getFilteredResults()}
             rowKey={(record, index) => index}
-            pagination={{ 
-              pageSize: pageSize, 
-              onShowSizeChange: (current, size) => setPageSize(size),
-              showSizeChanger: true, 
-              showTotal: (total) => `총 ${total}건`,
-              position: ['bottomCenter']
-            }}
+            pagination={false}
             size="middle"
             bordered
           />

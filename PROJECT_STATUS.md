@@ -1,6 +1,6 @@
 # 🎯 Moadamda Analytics - 프로젝트 현황
 
-**마지막 업데이트**: 2026-01-09
+**마지막 업데이트**: 2026-01-13
 
 ---
 
@@ -17,6 +17,12 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2026-01-14 | 설정 박스 너비 조정 | index.jsx |
+| 2026-01-14 | 요약 지표 UI 최적화 | index.jsx |
+| 2026-01-14 | 요약 카드 한 줄 배치 | index.jsx |
+| 2026-01-14 | 데이터 테이블 스크롤 제거 | index.jsx |
+| 2026-01-13 | 광고성과 메뉴 제거 | App.jsx |
+| 2026-01-13 | 이전 버전 롤백 | cafe24-compare.js |
 | 2026-01-09 | 요약 카드 중앙 정렬 | index.jsx |
 | 2026-01-09 | 페이지네이션 수정 | index.jsx |
 | 2026-01-09 | 테이블 스크롤 제거 | index.jsx |
@@ -28,10 +34,6 @@
 | 2026-01-07 | 페이지뷰 일별 테이블 추가 | PageviewStatsModal.jsx |
 | 2026-01-06 | 구매자 체류시간 막대차트 | InsightCards.jsx |
 | 2026-01-06 | 체류시간 pageviews 기반 계산 | detailRepository.js |
-| 2026-01-06 | 주문보기 모달 지표 확장 | CreativeOrdersModal.jsx |
-| 2026-01-06 | 모수평가점수 UV제외 변경 | formatters.js |
-| 2026-01-06 | 여정상세→고객여정모달 연동 | CreativeOrdersModal.jsx |
-| 2026-01-06 | 주문모달 노출일시 컬럼추가 | CreativeOrdersModal.jsx |
 
 ---
 
