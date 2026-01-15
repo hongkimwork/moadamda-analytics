@@ -325,40 +325,5 @@ router.post('/creative-performance/raw-attribution', async (req, res) => {
   }
 });
 
-/**
- * GET /api/creative-performance/duration-distribution
- * 체류시간 분포 API
- * 
- * Query Parameters:
- *  - start: 시작일 (YYYY-MM-DD) - 필수
- *  - end: 종료일 (YYYY-MM-DD) - 필수
- *  - utm_filters: 동적 UTM 필터 (JSON string, optional)
- * 
- * Response:
- *  - distribution: 구간별 방문자 수 및 비율
- *  - stats: 총 방문자 수, 평균/중앙값 체류시간
- */
-router.get('/creative-performance/duration-distribution', async (req, res) => {
-  try {
-    const result = await detailService.getDurationDistribution(req.query);
-    res.json(result);
-  } catch (error) {
-    console.error('Duration distribution API error:', error);
-    
-    if (error.message.includes('required')) {
-      return res.status(400).json({ 
-        success: false,
-        error: error.message 
-      });
-    }
-    
-    res.status(500).json({ 
-      success: false,
-      error: 'Failed to fetch duration distribution',
-      message: error.message 
-    });
-  }
-});
-
 module.exports = router;
 

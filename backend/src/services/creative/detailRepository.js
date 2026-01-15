@@ -8,14 +8,17 @@ const db = require('../../utils/database');
 /**
  * 선택 기간 내 모든 광고를 본 visitor 목록 조회
  * (테이블 creativeAttribution.js와 동일한 방식)
+ * 카페24 호환: visitors 테이블과 조인하여 봇 트래픽 제외
  */
 async function getAllVisitorsInPeriod({ startDate, endDate }) {
   const query = `
-    SELECT DISTINCT visitor_id
-    FROM utm_sessions
-    WHERE utm_params->>'utm_content' IS NOT NULL
-      AND entry_timestamp >= $1
-      AND entry_timestamp <= $2
+    SELECT DISTINCT us.visitor_id
+    FROM utm_sessions us
+    JOIN visitors v ON us.visitor_id = v.visitor_id
+    WHERE us.utm_params->>'utm_content' IS NOT NULL
+      AND us.entry_timestamp >= $1
+      AND us.entry_timestamp <= $2
+      AND v.is_bot = false
   `;
   
   const result = await db.query(query, [startDate, endDate]);
@@ -25,17 +28,20 @@ async function getAllVisitorsInPeriod({ startDate, endDate }) {
 /**
  * 특정 광고 소재를 본 visitor 목록 조회
  * (테이블과 동일하게 REPLACE 적용하여 + → 공백 변환)
+ * 카페24 호환: visitors 테이블과 조인하여 봇 트래픽 제외
  */
 async function getCreativeVisitors({ creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate }) {
   const query = `
-    SELECT DISTINCT visitor_id
-    FROM utm_sessions
-    WHERE REPLACE(utm_params->>'utm_content', '+', ' ') = $1
-      AND COALESCE(NULLIF(utm_params->>'utm_source', ''), '-') = $2
-      AND COALESCE(NULLIF(utm_params->>'utm_medium', ''), '-') = $3
-      AND COALESCE(NULLIF(utm_params->>'utm_campaign', ''), '-') = $4
-      AND entry_timestamp >= $5
-      AND entry_timestamp <= $6
+    SELECT DISTINCT us.visitor_id
+    FROM utm_sessions us
+    JOIN visitors v ON us.visitor_id = v.visitor_id
+    WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = $1
+      AND COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2
+      AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
+      AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
+      AND us.entry_timestamp >= $5
+      AND us.entry_timestamp <= $6
+      AND v.is_bot = false
   `;
   
   const result = await db.query(query, [creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate]);
@@ -74,21 +80,24 @@ async function getVisitorOrders({ visitorIds, startDate, endDate }) {
 /**
  * Visitor들의 UTM 여정 조회
  * (테이블과 동일하게 REPLACE 적용하여 + → 공백 변환)
+ * 카페24 호환: visitors 테이블과 조인하여 봇 트래픽 제외
  */
 async function getVisitorJourneys({ visitorIds }) {
   const query = `
     SELECT 
-      visitor_id,
-      REPLACE(utm_params->>'utm_content', '+', ' ') as utm_content,
-      COALESCE(NULLIF(utm_params->>'utm_source', ''), '-') as utm_source,
-      COALESCE(NULLIF(utm_params->>'utm_medium', ''), '-') as utm_medium,
-      COALESCE(NULLIF(utm_params->>'utm_campaign', ''), '-') as utm_campaign,
-      sequence_order,
-      entry_timestamp
-    FROM utm_sessions
-    WHERE visitor_id = ANY($1)
-      AND utm_params->>'utm_content' IS NOT NULL
-    ORDER BY visitor_id, sequence_order
+      us.visitor_id,
+      REPLACE(us.utm_params->>'utm_content', '+', ' ') as utm_content,
+      COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') as utm_source,
+      COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') as utm_medium,
+      COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') as utm_campaign,
+      us.sequence_order,
+      us.entry_timestamp
+    FROM utm_sessions us
+    JOIN visitors v ON us.visitor_id = v.visitor_id
+    WHERE us.visitor_id = ANY($1)
+      AND us.utm_params->>'utm_content' IS NOT NULL
+      AND v.is_bot = false
+    ORDER BY us.visitor_id, us.sequence_order
   `;
   
   const result = await db.query(query, [visitorIds]);
@@ -97,6 +106,7 @@ async function getVisitorJourneys({ visitorIds }) {
 
 /**
  * 일별 UV 및 주문 추이 조회
+ * 카페24 호환: visitors 테이블과 조인하여 봇 트래픽 제외
  */
 async function getDailyTrend({ creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate, visitorIds }) {
   const query = `
@@ -105,12 +115,14 @@ async function getDailyTrend({ creative_name, utm_source, utm_medium, utm_campai
         DATE(us.entry_timestamp) as date,
         COUNT(DISTINCT us.visitor_id) as uv
       FROM utm_sessions us
+      JOIN visitors v ON us.visitor_id = v.visitor_id
       WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = $1
         AND COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2
         AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
         AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
         AND us.entry_timestamp >= $5
         AND us.entry_timestamp <= $6
+        AND v.is_bot = false
       GROUP BY DATE(us.entry_timestamp)
     ),
     daily_orders AS (
@@ -143,6 +155,7 @@ async function getDailyTrend({ creative_name, utm_source, utm_medium, utm_campai
 
 /**
  * 디바이스별 성과 조회
+ * 카페24 호환: visitors 테이블과 조인하여 봇 트래픽 제외
  */
 async function getDeviceStats({ creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate, visitorIds }) {
   const query = `
@@ -158,6 +171,7 @@ async function getDeviceStats({ creative_name, utm_source, utm_medium, utm_campa
         AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
         AND us.entry_timestamp >= $5
         AND us.entry_timestamp <= $6
+        AND v.is_bot = false
       GROUP BY v.device_type
     ),
     device_orders AS (
@@ -173,6 +187,7 @@ async function getDeviceStats({ creative_name, utm_source, utm_medium, utm_campa
         AND c.final_payment > 0
         AND c.timestamp >= $5
         AND c.timestamp <= $6
+        AND v.is_bot = false
       GROUP BY v.device_type
     )
     SELECT 
@@ -216,6 +231,7 @@ async function getProductSales({ visitorIds, startDate, endDate }) {
 
 /**
  * 신규 vs 재방문 비율 조회
+ * 카페24 호환: 봇 트래픽 제외
  */
 async function getVisitorType({ visitorIds }) {
   const query = `
@@ -224,6 +240,7 @@ async function getVisitorType({ visitorIds }) {
       COUNT(CASE WHEN v.visit_count > 1 THEN 1 END) as returning_visitors
     FROM visitors v
     WHERE v.visitor_id = ANY($1)
+      AND v.is_bot = false
   `;
   
   const result = await db.query(query, [visitorIds]);
@@ -275,6 +292,7 @@ async function getPurchasers({ visitorIds, startDate, endDate }) {
 
 /**
  * 요약 통계 조회 (세션 기준)
+ * 카페24 호환: v_sessions_cafe24 뷰 사용하여 봇 트래픽 제외
  */
 async function getSummaryStats({ visitorIds, startDate, endDate }) {
   const query = `
@@ -287,7 +305,7 @@ async function getSummaryStats({ visitorIds, startDate, endDate }) {
         (COUNT(CASE WHEN s.is_bounced = true THEN 1 END)::FLOAT / 
          NULLIF(COUNT(DISTINCT s.session_id), 0) * 100)::NUMERIC, 1
       ) as bounce_rate
-    FROM sessions s
+    FROM v_sessions_cafe24 s
     WHERE s.visitor_id = ANY($1)
       AND s.start_time >= $2
       AND s.start_time <= $3
@@ -299,6 +317,7 @@ async function getSummaryStats({ visitorIds, startDate, endDate }) {
 
 /**
  * 많이 본 페이지 TOP 10 조회
+ * 카페24 호환: v_pageviews_cafe24 뷰 사용하여 봇 트래픽 제외
  */
 async function getTopPages({ visitorIds, startDate, endDate }) {
   const query = `
@@ -308,7 +327,7 @@ async function getTopPages({ visitorIds, startDate, endDate }) {
       COUNT(DISTINCT p.visitor_id) as visitor_count,
       COUNT(*) as view_count,
       ROUND(AVG(COALESCE(p.time_spent, 0))::NUMERIC, 0) as avg_time_spent
-    FROM pageviews p
+    FROM v_pageviews_cafe24 p
     WHERE p.visitor_id = ANY($1)
       AND p.timestamp >= $2
       AND p.timestamp <= $3
@@ -323,6 +342,7 @@ async function getTopPages({ visitorIds, startDate, endDate }) {
 
 /**
  * 이탈 페이지 TOP 5 조회
+ * 카페24 호환: v_sessions_cafe24 뷰 사용하여 봇 트래픽 제외
  */
 async function getExitPages({ visitorIds, startDate, endDate }) {
   const query = `
@@ -330,7 +350,7 @@ async function getExitPages({ visitorIds, startDate, endDate }) {
       s.exit_url as page_url,
       COUNT(*) as exit_count,
       COUNT(DISTINCT s.visitor_id) as visitor_count
-    FROM sessions s
+    FROM v_sessions_cafe24 s
     WHERE s.visitor_id = ANY($1)
       AND s.start_time >= $2
       AND s.start_time <= $3
@@ -347,11 +367,12 @@ async function getExitPages({ visitorIds, startDate, endDate }) {
 
 /**
  * 특정 페이지의 방문자 수 조회
+ * 카페24 호환: v_pageviews_cafe24 뷰 사용하여 봇 트래픽 제외
  */
 async function getPageVisitors({ visitorIds, pageUrl, startDate, endDate }) {
   const query = `
     SELECT COUNT(DISTINCT visitor_id) as total_visitors
-    FROM pageviews
+    FROM v_pageviews_cafe24
     WHERE visitor_id = ANY($1)
       AND page_url = $2
       AND timestamp >= $3
@@ -364,13 +385,14 @@ async function getPageVisitors({ visitorIds, pageUrl, startDate, endDate }) {
 
 /**
  * 구매자/비구매자 통계 조회
+ * 카페24 호환: v_sessions_cafe24 뷰 사용하여 봇 트래픽 제외
  */
 async function getPurchaserStats({ visitorIds, startDate, endDate }) {
   const query = `
     SELECT 
       ROUND(AVG(s.pageview_count)::NUMERIC, 1) as avg_pageviews,
       ROUND(AVG(s.duration_seconds)::NUMERIC, 0) as avg_duration
-    FROM sessions s
+    FROM v_sessions_cafe24 s
     WHERE s.visitor_id = ANY($1)
       AND s.start_time >= $2
       AND s.start_time <= $3
@@ -382,6 +404,7 @@ async function getPurchaserStats({ visitorIds, startDate, endDate }) {
 
 /**
  * 상품 상세 페이지 방문 평균 조회
+ * 카페24 호환: v_pageviews_cafe24 뷰 사용하여 봇 트래픽 제외
  */
 async function getProductViews({ visitorIds }) {
   if (visitorIds.length === 0) {
@@ -391,7 +414,7 @@ async function getProductViews({ visitorIds }) {
   const query = `
     SELECT 
       ROUND((COUNT(*)::FLOAT / NULLIF($2, 0))::NUMERIC, 1) as avg_product_views
-    FROM pageviews p
+    FROM v_pageviews_cafe24 p
     WHERE p.visitor_id = ANY($1)
       AND (p.page_url LIKE '%product%' OR p.page_url LIKE '%detail%' OR p.page_url LIKE '%goods%')
   `;
@@ -402,6 +425,7 @@ async function getProductViews({ visitorIds }) {
 
 /**
  * 광고 소재 핵심 지표 조회 (compare용)
+ * 카페24 호환: visitors 테이블과 조인하여 봇 트래픽 제외
  */
 async function getCreativeMetrics({ creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate }) {
   const query = `
@@ -410,12 +434,14 @@ async function getCreativeMetrics({ creative_name, utm_source, utm_medium, utm_c
       ROUND(AVG(us.pageview_count)::NUMERIC, 1) as avg_pageviews,
       ROUND(AVG(us.duration_seconds)::NUMERIC, 0) as avg_duration
     FROM utm_sessions us
+    JOIN visitors v ON us.visitor_id = v.visitor_id
     WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = $1
       AND COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2
       AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
       AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
       AND us.entry_timestamp >= $5
       AND us.entry_timestamp <= $6
+      AND v.is_bot = false
   `;
   
   const result = await db.query(query, [creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate]);
@@ -424,6 +450,7 @@ async function getCreativeMetrics({ creative_name, utm_source, utm_medium, utm_c
 
 /**
  * 이탈률 조회 (compare용)
+ * 카페24 호환: v_sessions_cafe24 뷰 사용하여 봇 트래픽 제외
  */
 async function getBounceRate({ visitorIds, startDate, endDate }) {
   const query = `
@@ -432,7 +459,7 @@ async function getBounceRate({ visitorIds, startDate, endDate }) {
         (COUNT(CASE WHEN s.is_bounced = true THEN 1 END)::FLOAT / 
          NULLIF(COUNT(DISTINCT s.session_id), 0) * 100)::NUMERIC, 1
       ) as bounce_rate
-    FROM sessions s
+    FROM v_sessions_cafe24 s
     WHERE s.visitor_id = ANY($1)
       AND s.start_time >= $2
       AND s.start_time <= $3
@@ -468,6 +495,7 @@ async function getConversionStats({ visitorIds, startDate, endDate }) {
 
 /**
  * 막타 매출 계산 (compare용)
+ * 카페24 호환: visitors 테이블과 조인하여 봇 트래픽 제외
  */
 async function getLastTouchRevenue({ visitorIds, startDate, endDate, creative_name, utm_source, utm_medium, utm_campaign }) {
   const query = `
@@ -480,8 +508,10 @@ async function getLastTouchRevenue({ visitorIds, startDate, endDate, creative_na
         COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') as utm_campaign,
         us.sequence_order
       FROM utm_sessions us
+      JOIN visitors v ON us.visitor_id = v.visitor_id
       WHERE us.visitor_id = ANY($1)
         AND us.utm_params->>'utm_content' IS NOT NULL
+        AND v.is_bot = false
     ),
     last_touches AS (
       SELECT DISTINCT ON (visitor_id) 
@@ -510,6 +540,7 @@ async function getLastTouchRevenue({ visitorIds, startDate, endDate, creative_na
 
 /**
  * 일별 추이 조회 (compare용 - visitorIds 포함)
+ * 카페24 호환: visitors 테이블과 조인하여 봇 트래픽 제외
  */
 async function getDailyTrends({ creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate, visitorIds }) {
   const query = `
@@ -518,12 +549,14 @@ async function getDailyTrends({ creative_name, utm_source, utm_medium, utm_campa
         DATE(us.entry_timestamp) as date,
         COUNT(DISTINCT us.visitor_id) as uv
       FROM utm_sessions us
+      JOIN visitors v ON us.visitor_id = v.visitor_id
       WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = $1
         AND COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2
         AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
         AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
         AND us.entry_timestamp >= $5
         AND us.entry_timestamp <= $6
+        AND v.is_bot = false
       GROUP BY DATE(us.entry_timestamp)
     ),
     daily_conv AS (
@@ -557,6 +590,7 @@ async function getDailyTrends({ creative_name, utm_source, utm_medium, utm_campa
 /**
  * Raw Data 검증용: 세션 목록 조회
  * 특정 광고 소재로 유입된 모든 방문자 조회 (방문자 단위로 집계)
+ * 카페24 호환: visitors 테이블과 조인하여 봇 트래픽 제외
  */
 async function getRawSessions({ creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate, page = 1, limit = 50, filter = 'all' }) {
   // 구매 여부 필터 조건
@@ -583,7 +617,7 @@ async function getRawSessions({ creative_name, utm_source, utm_medium, utm_campa
       MAX(c.final_payment) as final_payment,
       MAX(c.timestamp) as order_date
     FROM utm_sessions us
-    LEFT JOIN visitors v ON us.visitor_id = v.visitor_id
+    JOIN visitors v ON us.visitor_id = v.visitor_id
     LEFT JOIN conversions c ON us.visitor_id = c.visitor_id 
       AND c.timestamp >= us.entry_timestamp
       AND c.timestamp <= us.entry_timestamp + INTERVAL '30 days'
@@ -594,6 +628,7 @@ async function getRawSessions({ creative_name, utm_source, utm_medium, utm_campa
       AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
       AND us.entry_timestamp >= $5
       AND us.entry_timestamp <= $6
+      AND v.is_bot = false
     GROUP BY us.visitor_id
     ${havingClause}
     ORDER BY MAX(us.entry_timestamp) DESC
@@ -606,6 +641,7 @@ async function getRawSessions({ creative_name, utm_source, utm_medium, utm_campa
 
 /**
  * Raw Data 검증용: 방문자 총 개수 조회 (페이지네이션용)
+ * 카페24 호환: visitors 테이블과 조인하여 봇 트래픽 제외
  */
 async function getRawSessionsCount({ creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate, filter = 'all' }) {
   // 구매 여부 필터 조건
@@ -620,6 +656,7 @@ async function getRawSessionsCount({ creative_name, utm_source, utm_medium, utm_
     SELECT COUNT(*) as total FROM (
       SELECT us.visitor_id
       FROM utm_sessions us
+      JOIN visitors v ON us.visitor_id = v.visitor_id
       LEFT JOIN conversions c ON us.visitor_id = c.visitor_id 
         AND c.timestamp >= us.entry_timestamp
         AND c.timestamp <= us.entry_timestamp + INTERVAL '30 days'
@@ -630,6 +667,7 @@ async function getRawSessionsCount({ creative_name, utm_source, utm_medium, utm_
         AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
         AND us.entry_timestamp >= $5
         AND us.entry_timestamp <= $6
+        AND v.is_bot = false
       GROUP BY us.visitor_id
       ${havingClause}
     ) sub
@@ -641,25 +679,28 @@ async function getRawSessionsCount({ creative_name, utm_source, utm_medium, utm_
 
 /**
  * Raw Data 검증용: 트래픽 지표 요약 조회
+ * 카페24 호환: visitors 테이블과 조인하여 봇 트래픽 제외
  */
 async function getRawTrafficSummary({ creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate }) {
   const query = `
     SELECT 
       COUNT(*) as total_views,
-      COUNT(DISTINCT visitor_id) as unique_visitors,
-      ROUND(COALESCE(SUM(pageview_count)::FLOAT / NULLIF(COUNT(DISTINCT visitor_id), 0), 0)::NUMERIC, 1) as avg_pageviews,
+      COUNT(DISTINCT us.visitor_id) as unique_visitors,
+      ROUND(COALESCE(SUM(us.pageview_count)::FLOAT / NULLIF(COUNT(DISTINCT us.visitor_id), 0), 0)::NUMERIC, 1) as avg_pageviews,
       ROUND(COALESCE(
-        SUM(CASE WHEN duration_seconds < 300 THEN duration_seconds ELSE 0 END)::FLOAT 
-        / NULLIF(COUNT(DISTINCT CASE WHEN duration_seconds < 300 THEN visitor_id END), 0), 
+        SUM(CASE WHEN us.duration_seconds < 300 THEN us.duration_seconds ELSE 0 END)::FLOAT 
+        / NULLIF(COUNT(DISTINCT CASE WHEN us.duration_seconds < 300 THEN us.visitor_id END), 0), 
         0
       )::NUMERIC, 1) as avg_duration_seconds
-    FROM utm_sessions
-    WHERE REPLACE(utm_params->>'utm_content', '+', ' ') = $1
-      AND COALESCE(NULLIF(utm_params->>'utm_source', ''), '-') = $2
-      AND COALESCE(NULLIF(utm_params->>'utm_medium', ''), '-') = $3
-      AND COALESCE(NULLIF(utm_params->>'utm_campaign', ''), '-') = $4
-      AND entry_timestamp >= $5
-      AND entry_timestamp <= $6
+    FROM utm_sessions us
+    JOIN visitors v ON us.visitor_id = v.visitor_id
+    WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = $1
+      AND COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2
+      AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
+      AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
+      AND us.entry_timestamp >= $5
+      AND us.entry_timestamp <= $6
+      AND v.is_bot = false
   `;
   
   const result = await db.query(query, [creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate]);
@@ -677,20 +718,24 @@ async function getRawTrafficSummary({ creative_name, utm_source, utm_medium, utm
  * UPDATE (2026-01-07): 총 체류시간 + 막타 체류시간 분리
  * - total_duration: 이 광고로 유입된 모든 방문의 체류시간 합계
  * - last_touch_duration: 구매 직전 마지막 방문의 체류시간
+ * 
+ * 카페24 호환: visitors 테이블과 조인하여 봇 트래픽 제외
  */
 async function getVisitorSessionInfoForCreative({ visitorIds, creative_name, utm_source, utm_medium, utm_campaign, maxDurationSeconds = 600 }) {
   if (visitorIds.length === 0) return {};
   
-  // 1단계: 해당 광고로 유입된 UTM 세션의 session_id 목록 조회 (시간순 정렬)
+  // 1단계: 해당 광고로 유입된 UTM 세션의 session_id 목록 조회 (시간순 정렬, 봇 제외)
   const sessionQuery = `
-    SELECT visitor_id, session_id, entry_timestamp
-    FROM utm_sessions
-    WHERE visitor_id = ANY($1)
-      AND REPLACE(utm_params->>'utm_content', '+', ' ') = $2
-      AND COALESCE(NULLIF(utm_params->>'utm_source', ''), '-') = $3
-      AND COALESCE(NULLIF(utm_params->>'utm_medium', ''), '-') = $4
-      AND COALESCE(NULLIF(utm_params->>'utm_campaign', ''), '-') = $5
-    ORDER BY visitor_id, entry_timestamp DESC
+    SELECT us.visitor_id, us.session_id, us.entry_timestamp
+    FROM utm_sessions us
+    JOIN visitors v ON us.visitor_id = v.visitor_id
+    WHERE us.visitor_id = ANY($1)
+      AND REPLACE(us.utm_params->>'utm_content', '+', ' ') = $2
+      AND COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $3
+      AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $4
+      AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $5
+      AND v.is_bot = false
+    ORDER BY us.visitor_id, us.entry_timestamp DESC
   `;
   
   const sessionResult = await db.query(sessionQuery, [visitorIds, creative_name, utm_source, utm_medium, utm_campaign]);
@@ -794,21 +839,24 @@ async function getVisitorSessionInfoForCreative({ visitorIds, creative_name, utm
 
 /**
  * visitor별 특정 광고 접촉 횟수 조회
+ * 카페24 호환: visitors 테이블과 조인하여 봇 트래픽 제외
  */
 async function getCreativeTouchCounts({ visitorIds, creative_name, utm_source, utm_medium, utm_campaign }) {
   if (visitorIds.length === 0) return {};
   
   const query = `
     SELECT 
-      visitor_id,
+      us.visitor_id,
       COUNT(*) as touch_count
-    FROM utm_sessions
-    WHERE visitor_id = ANY($1)
-      AND REPLACE(utm_params->>'utm_content', '+', ' ') = $2
-      AND COALESCE(NULLIF(utm_params->>'utm_source', ''), '-') = $3
-      AND COALESCE(NULLIF(utm_params->>'utm_medium', ''), '-') = $4
-      AND COALESCE(NULLIF(utm_params->>'utm_campaign', ''), '-') = $5
-    GROUP BY visitor_id
+    FROM utm_sessions us
+    JOIN visitors v ON us.visitor_id = v.visitor_id
+    WHERE us.visitor_id = ANY($1)
+      AND REPLACE(us.utm_params->>'utm_content', '+', ' ') = $2
+      AND COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $3
+      AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $4
+      AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $5
+      AND v.is_bot = false
+    GROUP BY us.visitor_id
   `;
   
   const result = await db.query(query, [visitorIds, creative_name, utm_source, utm_medium, utm_campaign]);
@@ -823,6 +871,7 @@ async function getCreativeTouchCounts({ visitorIds, creative_name, utm_source, u
 
 /**
  * visitor별 총 방문 횟수 조회
+ * 카페24 호환: 봇 트래픽 제외
  */
 async function getVisitorTotalVisits({ visitorIds }) {
   if (visitorIds.length === 0) return {};
@@ -833,6 +882,7 @@ async function getVisitorTotalVisits({ visitorIds }) {
       visit_count
     FROM visitors
     WHERE visitor_id = ANY($1)
+      AND is_bot = false
   `;
   
   const result = await db.query(query, [visitorIds]);
@@ -1081,6 +1131,5 @@ module.exports = {
   getRawTrafficSummary,
   getVisitorSessionInfoForCreative,
   getCreativeTouchCounts,
-  getVisitorTotalVisits,
-  getDurationDistribution
+  getVisitorTotalVisits
 };

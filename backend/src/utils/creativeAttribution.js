@@ -67,19 +67,22 @@ async function calculateCreativeAttribution(creatives, startDate, endDate) {
   const purchaserIds = [...new Set(purchases.map(p => p.visitor_id))];
 
   // 3단계: 구매한 visitor들의 전체 UTM 여정 조회 (30일 필터링은 각 구매별로 적용)
+  // 카페24 호환: visitors 테이블과 조인하여 봇 트래픽 제외
   const journeyQuery = `
     SELECT 
-      visitor_id,
-      REPLACE(utm_params->>'utm_content', '+', ' ') as utm_content,
-      COALESCE(NULLIF(utm_params->>'utm_source', ''), '-') as utm_source,
-      COALESCE(NULLIF(utm_params->>'utm_medium', ''), '-') as utm_medium,
-      COALESCE(NULLIF(utm_params->>'utm_campaign', ''), '-') as utm_campaign,
-      sequence_order,
-      entry_timestamp
-    FROM utm_sessions
-    WHERE visitor_id = ANY($1)
-      AND utm_params->>'utm_content' IS NOT NULL
-    ORDER BY visitor_id, sequence_order
+      us.visitor_id,
+      REPLACE(us.utm_params->>'utm_content', '+', ' ') as utm_content,
+      COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') as utm_source,
+      COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') as utm_medium,
+      COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') as utm_campaign,
+      us.sequence_order,
+      us.entry_timestamp
+    FROM utm_sessions us
+    JOIN visitors v ON us.visitor_id = v.visitor_id
+    WHERE us.visitor_id = ANY($1)
+      AND us.utm_params->>'utm_content' IS NOT NULL
+      AND v.is_bot = false
+    ORDER BY us.visitor_id, us.sequence_order
   `;
 
   const journeyResult = await db.query(journeyQuery, [purchaserIds]);

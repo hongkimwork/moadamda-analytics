@@ -388,7 +388,7 @@ function TestResultModal({ visible, onClose }) {
                         ✅ 이 고객이 구매 전 본 광고 목록입니다
                       </Text>
                       <div style={{ marginTop: '8px', fontSize: '13px', color: '#595959' }}>
-                        • UTM Content = 광고 소재 이름 (광고 소재 분석 테이블의 "광고 소재 이름" 컬럼과 매칭)
+                        • UTM Content = 광고 소재 이름 (광고 성과 파악 테이블의 "광고 소재 이름" 컬럼과 매칭)
                       </div>
                     </div>
                     <Table
@@ -481,7 +481,7 @@ function TestResultModal({ visible, onClose }) {
                 header={
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <DollarSign size={16} style={{ color: '#722ed1' }} />
-                    <span style={{ fontWeight: 600 }}>광고 소재 분석 테이블 반영 확인</span>
+                    <span style={{ fontWeight: 600 }}>광고 성과 파악 테이블 반영 확인</span>
                     {creativeStats && (
                       <Tag color="purple">{creativeStats.length}개 광고</Tag>
                     )}
@@ -708,12 +708,12 @@ function TestResultModal({ visible, onClose }) {
                     </>
                   ) : orderData?.utm_history?.length > 0 ? (
                     <Empty 
-                      description="UTM Content가 있는 광고가 없어 광고 소재 분석에 반영되지 않습니다"
+                      description="UTM Content가 있는 광고가 없어 광고 성과 파악에 반영되지 않습니다"
                       image={Empty.PRESENTED_IMAGE_SIMPLE}
                     />
                   ) : (
                     <Empty 
-                      description="UTM 유입 정보가 없어 광고 소재 분석에 반영되지 않습니다"
+                      description="UTM 유입 정보가 없어 광고 성과 파악에 반영되지 않습니다"
                       image={Empty.PRESENTED_IMAGE_SIMPLE}
                     />
                   )}

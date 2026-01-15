@@ -28,6 +28,7 @@ async function getCreativeAggregation({
   queryParams,
   maxDurationSeconds = 300
 }) {
+  // 카페24 호환: visitors 테이블과 조인하여 봇 트래픽 제외
   const dataQuery = `
     SELECT 
       us.utm_params->>'utm_content' as creative_name,
@@ -59,9 +60,11 @@ async function getCreativeAggregation({
       ) as avg_duration_seconds
 
     FROM utm_sessions us
+    JOIN visitors v ON us.visitor_id = v.visitor_id
     WHERE us.utm_params->>'utm_content' IS NOT NULL
       AND us.entry_timestamp >= $1
       AND us.entry_timestamp <= $2
+      AND v.is_bot = false
       ${searchCondition}
       ${utmFilterConditions}
     GROUP BY 
@@ -93,12 +96,15 @@ async function getCreativeCount({
   utmFilterConditions,
   queryParams
 }) {
+  // 카페24 호환: visitors 테이블과 조인하여 봇 트래픽 제외
   const countQuery = `
     SELECT COUNT(DISTINCT us.utm_params->>'utm_content') as total
     FROM utm_sessions us
+    JOIN visitors v ON us.visitor_id = v.visitor_id
     WHERE us.utm_params->>'utm_content' IS NOT NULL
       AND us.entry_timestamp >= $1
       AND us.entry_timestamp <= $2
+      AND v.is_bot = false
       ${searchCondition}
       ${utmFilterConditions}
   `;

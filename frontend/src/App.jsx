@@ -83,12 +83,6 @@ function AppLayout() {
           onClick: () => navigate('/')
         },
         {
-          key: 'creative-performance',
-          icon: <BarChartOutlined />,
-          label: '광고 소재 분석',
-          onClick: () => navigate('/creative-performance')
-        },
-        {
           key: 'meta-insights',
           icon: <GlobalOutlined />,
           label: '메타 성과 조회',
@@ -111,6 +105,12 @@ function AppLayout() {
           icon: <SwapOutlined />,
           label: '카페24 Data 비교',
           onClick: () => navigate('/cafe24-compare')
+        },
+        {
+          key: 'creative-performance',
+          icon: <BarChartOutlined />,
+          label: '광고 성과 파악',
+          onClick: () => navigate('/creative-performance')
         }
       ]
     },

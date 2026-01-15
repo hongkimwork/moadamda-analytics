@@ -48,7 +48,7 @@ function PerformanceHeader({
             }}
           >
             <BarChart3 size={28} strokeWidth={2.5} style={{ color: '#1890ff' }} />
-            광고 소재 분석
+            광고 성과 파악
           </Title>
           <Text type="secondary" style={{ 
             fontSize: '14px', 

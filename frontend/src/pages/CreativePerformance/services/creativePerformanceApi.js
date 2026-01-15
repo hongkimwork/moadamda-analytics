@@ -23,16 +23,3 @@ export const fetchCreativePerformance = async (params) => {
   const response = await axios.get(`${API_URL}/api/creative-performance`, { params });
   return response.data;
 };
-
-/**
- * 체류시간 분포 데이터 조회
- * @param {Object} params - 조회 파라미터
- * @param {string} params.start - 시작일 (YYYY-MM-DD)
- * @param {string} params.end - 종료일 (YYYY-MM-DD)
- * @param {string} [params.utm_filters] - UTM 필터 (JSON string)
- * @returns {Promise<Object>} API 응답
- */
-export const fetchDurationDistribution = async (params) => {
-  const response = await axios.get(`${API_URL}/api/creative-performance/duration-distribution`, { params });
-  return response.data;
-};

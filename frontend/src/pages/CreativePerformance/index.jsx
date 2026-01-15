@@ -112,15 +112,8 @@ function CreativePerformance() {
         onTestResult={() => setTestResultModalVisible(true)}
       />
 
-      {/* 인사이트 카드 (Top 5 랭킹 + 체류시간 분포) */}
-      <InsightCards 
-        data={data} 
-        dateRange={{
-          start: filters.dateRange[0],
-          end: filters.dateRange[1]
-        }}
-        utmFilters={activeUtmFilters}
-      />
+      {/* 인사이트 카드 (Top 5 랭킹) */}
+      <InsightCards data={data} />
 
       {/* 검색 및 필터 */}
       <PerformanceFilters
