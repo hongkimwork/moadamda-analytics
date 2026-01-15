@@ -4,6 +4,7 @@
  * 카페24에서 복사한 방문자 데이터(IP, 유입출처, 방문일시)를
  * 우리 시스템 데이터와 비교하는 API
  * 
+ * 비교 기준: pageview 시간 (카페24가 페이지뷰 시간을 기록하므로)
  * 원본 테이블 사용 이유: 데이터 무결성 검증 목적
  */
 
@@ -51,23 +52,24 @@ router.post('/', async (req, res) => {
         continue;
       }
 
-      // IP + 시간(±3초) 기준으로 세션 검색
+      // IP + 시간(±3초) 기준으로 pageview 검색 (카페24는 페이지뷰 시간을 기록하므로)
       // 원본 테이블 사용 이유: 데이터 무결성 검증 목적
       // IP 앞에 백슬래시가 붙어있을 수 있어서 양쪽 모두 검색
       // 날짜 필터 추가로 조회 범위 제한
       const query = `
         SELECT 
           s.ip_address,
-          s.start_time,
+          p.timestamp as visit_time,
           s.utm_params,
           s.entry_url
-        FROM sessions s
+        FROM pageviews p
+        JOIN sessions s ON p.session_id = s.session_id
         WHERE (s.ip_address = $1 OR s.ip_address = $4)
-          AND s.start_time >= $3::date
-          AND s.start_time < ($3::date + interval '1 day')
-          AND s.start_time BETWEEN ($2::timestamp - interval '3 seconds') 
-                               AND ($2::timestamp + interval '3 seconds')
-        ORDER BY ABS(EXTRACT(EPOCH FROM (s.start_time - $2::timestamp)))
+          AND p.timestamp >= $3::date
+          AND p.timestamp < ($3::date + interval '1 day')
+          AND p.timestamp BETWEEN ($2::timestamp - interval '3 seconds') 
+                              AND ($2::timestamp + interval '3 seconds')
+        ORDER BY ABS(EXTRACT(EPOCH FROM (p.timestamp - $2::timestamp)))
         LIMIT 1
       `;
 
@@ -79,15 +81,16 @@ router.post('/', async (req, res) => {
         const timeMismatchQuery = `
           SELECT 
             s.ip_address,
-            s.start_time,
+            p.timestamp as visit_time,
             s.utm_params,
             s.entry_url,
-            ABS(EXTRACT(EPOCH FROM (s.start_time - $2::timestamp))) as time_diff_seconds
-          FROM sessions s
+            ABS(EXTRACT(EPOCH FROM (p.timestamp - $2::timestamp))) as time_diff_seconds
+          FROM pageviews p
+          JOIN sessions s ON p.session_id = s.session_id
           WHERE (s.ip_address = $1 OR s.ip_address = $4)
-            AND s.start_time >= $3::date
-            AND s.start_time < ($3::date + interval '1 day')
-          ORDER BY ABS(EXTRACT(EPOCH FROM (s.start_time - $2::timestamp)))
+            AND p.timestamp >= $3::date
+            AND p.timestamp < ($3::date + interval '1 day')
+          ORDER BY ABS(EXTRACT(EPOCH FROM (p.timestamp - $2::timestamp)))
           LIMIT 1
         `;
 
@@ -113,7 +116,7 @@ router.post('/', async (req, res) => {
             ourSystem: {
               ip: cleanIp,
               source: ourSource,
-              visitTime: formatTimestamp(row.start_time),
+              visitTime: formatTimestamp(row.visit_time),
               utmParams: row.utm_params
             },
             status: 'time_mismatch',
@@ -132,7 +135,7 @@ router.post('/', async (req, res) => {
           ourSystem: {
             ip: cleanIp,
             source: ourSource,
-            visitTime: formatTimestamp(row.start_time),
+            visitTime: formatTimestamp(row.visit_time),
             utmParams: row.utm_params
           },
           status: sourceMatch ? 'match' : 'source_mismatch',
