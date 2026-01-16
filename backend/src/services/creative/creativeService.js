@@ -95,6 +95,7 @@ async function getCreativePerformance(params) {
     total_views: parseInt(row.total_views) || 0,
     avg_pageviews: parseFloat(row.avg_pageviews) || 0,
     avg_duration_seconds: parseFloat(row.avg_duration_seconds) || 0,
+    avg_scroll_px: parseInt(row.avg_scroll_px) || 0,
     // 구매 데이터는 아래에서 병합
     purchase_count: 0,
     total_revenue: 0
@@ -113,14 +114,16 @@ async function getCreativePerformance(params) {
       existing.unique_visitors += row.unique_visitors;
       // View 합산
       existing.total_views += row.total_views;
-      // 총 페이지뷰, 총 체류시간 합산 (나중에 평균 재계산용)
+      // 총 페이지뷰, 총 체류시간, 총 스크롤 합산 (나중에 평균 재계산용)
       existing._total_pageviews += row.unique_visitors * row.avg_pageviews;
       existing._total_duration += row.unique_visitors * row.avg_duration_seconds;
+      existing._total_scroll += row.unique_visitors * row.avg_scroll_px;
     } else {
       mergedDataMap.set(key, {
         ...row,
         _total_pageviews: row.unique_visitors * row.avg_pageviews,
-        _total_duration: row.unique_visitors * row.avg_duration_seconds
+        _total_duration: row.unique_visitors * row.avg_duration_seconds,
+        _total_scroll: row.unique_visitors * row.avg_scroll_px
       });
     }
   });
@@ -164,6 +167,7 @@ async function getCreativePerformance(params) {
           longRow.total_views += shortRow.total_views;
           longRow._total_pageviews += shortRow._total_pageviews;
           longRow._total_duration += shortRow._total_duration;
+          longRow._total_scroll += shortRow._total_scroll;
           
           // 짧은 것은 삭제 예정
           keysToDelete.add(shortKey);
@@ -189,6 +193,9 @@ async function getCreativePerformance(params) {
       : 0,
     avg_duration_seconds: row.unique_visitors > 0 
       ? Math.round((row._total_duration / row.unique_visitors) * 10) / 10 
+      : 0,
+    avg_scroll_px: row.unique_visitors > 0 
+      ? Math.round(row._total_scroll / row.unique_visitors) 
       : 0,
     purchase_count: row.purchase_count,
     total_revenue: row.total_revenue

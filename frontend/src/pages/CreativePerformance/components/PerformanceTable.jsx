@@ -62,7 +62,7 @@ function PerformanceTable({
       title: <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>UTM<br />Source</div>,
       dataIndex: 'utm_source',
       key: 'utm_source',
-      width: 80,
+      width: 70,
       align: 'center',
       ellipsis: true,
       render: (text) => (
@@ -77,7 +77,7 @@ function PerformanceTable({
       title: <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>UTM<br />Campaign</div>,
       dataIndex: 'utm_campaign',
       key: 'utm_campaign',
-      width: 90,
+      width: 75,
       align: 'center',
       ellipsis: true,
       render: (text) => (
@@ -92,7 +92,7 @@ function PerformanceTable({
       title: <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>UTM<br />Medium</div>,
       dataIndex: 'utm_medium',
       key: 'utm_medium',
-      width: 80,
+      width: 70,
       align: 'center',
       ellipsis: true,
       render: (text) => (
@@ -107,7 +107,7 @@ function PerformanceTable({
       title: '광고 소재 이름',
       dataIndex: 'creative_name',
       key: 'creative_name',
-      width: 250,
+      width: 200,
       align: 'center',
       fixed: 'left',
       render: (text) => (
@@ -141,7 +141,7 @@ function PerformanceTable({
       title: 'View',
       dataIndex: 'total_views',
       key: 'total_views',
-      width: 70,
+      width: 60,
       align: 'center',
       render: (num) => <span style={{ fontWeight: 500, fontSize: '13px', color: '#6b7280' }}>{formatNumber(num)}</span>,
       sorter: true,
@@ -151,7 +151,7 @@ function PerformanceTable({
       title: 'UV',
       dataIndex: 'unique_visitors',
       key: 'unique_visitors',
-      width: 70,
+      width: 55,
       align: 'center',
       render: (num) => <span style={{ fontWeight: 600, fontSize: '13px', color: '#374151' }}>{formatNumber(num)}</span>,
       sorter: true,
@@ -161,7 +161,7 @@ function PerformanceTable({
       title: '평균PV',
       dataIndex: 'avg_pageviews',
       key: 'avg_pageviews',
-      width: 75,
+      width: 60,
       align: 'center',
       render: (num) => <span style={{ fontSize: '13px', color: '#4b5563', fontWeight: 500 }}>{num ? num.toFixed(1) : '0.0'}</span>,
       sorter: true,
@@ -184,9 +184,53 @@ function PerformanceTable({
       ),
       dataIndex: 'avg_duration_seconds',
       key: 'avg_duration_seconds',
-      width: 95,
+      width: 85,
       align: 'center',
       render: (seconds) => <span style={{ fontSize: '13px', color: '#4b5563', fontWeight: 500 }}>{formatDuration(seconds)}</span>,
+      sorter: true,
+      showSorterTooltip: false
+    },
+    {
+      title: (
+        <Tooltip
+          title={
+            <div style={{ padding: '4px' }}>
+              <div style={{ marginBottom: '8px', fontWeight: 600, fontSize: '14px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '8px' }}>
+                📏 평균 스크롤이란?
+              </div>
+              <div style={{ fontSize: '13px', lineHeight: '1.6', marginBottom: '12px' }}>
+                이 광고로 유입된 방문자들이<br/>
+                세션 동안 <strong>평균적으로 스크롤한 거리</strong>입니다.
+              </div>
+              <div style={{ backgroundColor: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '4px', marginBottom: '12px' }}>
+                <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: '12px', marginBottom: '4px' }}>측정 방식</div>
+                <div style={{ fontSize: '13px' }}>각 페이지에서 최대로 스크롤한 위치(px)의 평균</div>
+              </div>
+              <div style={{ color: '#d9f7be', fontWeight: 600, fontSize: '13px' }}>
+                💡 숫자가 높을수록 콘텐츠에 관심을 가지고 탐색한 것
+              </div>
+            </div>
+          }
+          overlayStyle={{ maxWidth: '320px' }}
+        >
+          <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3', cursor: 'help' }}>
+            평균<br />스크롤
+          </div>
+        </Tooltip>
+      ),
+      dataIndex: 'avg_scroll_px',
+      key: 'avg_scroll_px',
+      width: 75,
+      align: 'center',
+      render: (px) => (
+        <span style={{ 
+          fontSize: '13px', 
+          color: px > 0 ? '#4b5563' : '#9ca3af', 
+          fontWeight: 500 
+        }}>
+          {px > 0 ? `${formatNumber(px)}px` : '-'}
+        </span>
+      ),
       sorter: true,
       showSorterTooltip: false
     },
@@ -204,15 +248,22 @@ function PerformanceTable({
                 <table style={{ width: '100%', fontSize: '13px', borderCollapse: 'collapse' }}>
                   <tbody>
                     <tr>
+                      <td style={{ padding: '2px 12px 2px 0' }}>• 평균 스크롤</td>
+                      <td style={{ padding: '2px 0', fontWeight: 700, textAlign: 'right', color: '#ffc069' }}>30%</td>
+                    </tr>
+                    <tr>
                       <td style={{ padding: '2px 12px 2px 0' }}>• 평균 PV</td>
-                      <td style={{ padding: '2px 0', fontWeight: 700, textAlign: 'right', color: '#bae7ff' }}>50%</td>
+                      <td style={{ padding: '2px 0', fontWeight: 700, textAlign: 'right', color: '#bae7ff' }}>35%</td>
                     </tr>
                     <tr>
                       <td style={{ padding: '2px 12px 2px 0' }}>• 체류시간</td>
-                      <td style={{ padding: '2px 0', fontWeight: 700, textAlign: 'right', color: '#d9f7be' }}>50%</td>
+                      <td style={{ padding: '2px 0', fontWeight: 700, textAlign: 'right', color: '#d9f7be' }}>35%</td>
                     </tr>
                   </tbody>
                 </table>
+                <div style={{ marginTop: '8px', fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>
+                  * 스크롤 0인 경우 해당 항목 0점 처리
+                </div>
               </div>
 
               <div>
@@ -248,7 +299,7 @@ function PerformanceTable({
         </Tooltip>
       ),
       key: 'traffic_score',
-      width: 85,
+      width: 75,
       align: 'center',
       render: (_, record) => {
         const key = `${record.utm_source || ''}_${record.utm_campaign || ''}_${record.utm_medium || ''}_${record.creative_name || ''}`;
@@ -311,7 +362,7 @@ function PerformanceTable({
       ),
       dataIndex: 'total_revenue',
       key: 'total_revenue',
-      width: 95,
+      width: 85,
       align: 'center',
       render: (amount) => {
         const percent = summaryStats.maxRevenue > 0 ? (amount / summaryStats.maxRevenue) * 100 : 0;
@@ -370,7 +421,7 @@ function PerformanceTable({
       ),
       dataIndex: 'contributed_orders_count',
       key: 'contributed_orders_count',
-      width: 85,
+      width: 70,
       align: 'center',
       render: (num) => (
         <span style={{
@@ -409,7 +460,7 @@ function PerformanceTable({
       ),
       dataIndex: 'last_touch_count',
       key: 'last_touch_count',
-      width: 75,
+      width: 60,
       align: 'center',
       render: (num) => (
         <span style={{
@@ -451,7 +502,7 @@ function PerformanceTable({
       ),
       dataIndex: 'attributed_revenue',
       key: 'attributed_revenue',
-      width: 95,
+      width: 85,
       align: 'center',
       render: (amount) => {
         const percent = summaryStats.maxRevenue > 0 ? (amount / summaryStats.maxRevenue) * 100 : 0;
@@ -531,7 +582,7 @@ function PerformanceTable({
         </Tooltip>
       ),
       key: 'value_per_visitor',
-      width: 95,
+      width: 80,
       align: 'center',
       render: (_, record) => {
         const uv = record.unique_visitors || 0;
@@ -562,7 +613,7 @@ function PerformanceTable({
     {
       title: '상세',
       key: 'action',
-      width: 80,
+      width: 65,
       align: 'center',
       fixed: 'right',
       render: (_, record) => {
@@ -615,7 +666,6 @@ function PerformanceTable({
         })}
         loading={loading}
         onChange={onTableChange}
-        scroll={{ x: 1530 }}
         pagination={{
           current: currentPage,
           pageSize: pageSize,

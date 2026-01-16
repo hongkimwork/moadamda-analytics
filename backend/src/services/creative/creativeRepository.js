@@ -57,10 +57,25 @@ async function getCreativeAggregation({
           0
         )::NUMERIC,
         1
-      ) as avg_duration_seconds
+      ) as avg_duration_seconds,
+      
+      -- 평균 스크롤 (세션당 평균, px 단위, 정수)
+      ROUND(
+        COALESCE(AVG(scroll.avg_scroll_px), 0)::NUMERIC,
+        0
+      ) as avg_scroll_px
 
     FROM utm_sessions us
     JOIN visitors v ON us.visitor_id = v.visitor_id
+    LEFT JOIN (
+      SELECT 
+        session_id,
+        AVG((metadata->>'max_scroll_px')::NUMERIC) as avg_scroll_px
+      FROM events 
+      WHERE event_type = 'scroll_depth'
+        AND (metadata->>'max_scroll_px') IS NOT NULL
+      GROUP BY session_id
+    ) scroll ON us.session_id = scroll.session_id
     WHERE us.utm_params->>'utm_content' IS NOT NULL
       AND us.entry_timestamp >= $1
       AND us.entry_timestamp <= $2

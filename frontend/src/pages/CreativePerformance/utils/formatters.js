@@ -47,7 +47,8 @@ export const formatNumber = (num) => {
 
 /**
  * 모수 평가 점수 계산 (상대 순위 기반)
- * 평균PV 50% + 평균체류시간 50%
+ * 평균 스크롤 30% + 평균PV 35% + 평균체류시간 35%
+ * 스크롤 0인 경우 해당 항목 0점 처리
  * @param {Array} data - 전체 광고 데이터 배열
  * @returns {Map} 각 광고의 고유키 → 점수 매핑
  */
@@ -55,6 +56,7 @@ export const calculateTrafficScores = (data) => {
   if (!data || data.length === 0) return new Map();
 
   // 각 지표별 정렬된 배열 생성 (내림차순 - 높을수록 좋음)
+  const sortedByScroll = [...data].sort((a, b) => (b.avg_scroll_px || 0) - (a.avg_scroll_px || 0));
   const sortedByPV = [...data].sort((a, b) => (b.avg_pageviews || 0) - (a.avg_pageviews || 0));
   const sortedByDuration = [...data].sort((a, b) => (b.avg_duration_seconds || 0) - (a.avg_duration_seconds || 0));
 
@@ -66,6 +68,12 @@ export const calculateTrafficScores = (data) => {
     const key = `${item.utm_source || ''}_${item.utm_campaign || ''}_${item.utm_medium || ''}_${item.creative_name || ''}`;
 
     // 순위 찾기 (0-based index)
+    const scrollRank = sortedByScroll.findIndex(d => 
+      d.utm_source === item.utm_source && 
+      d.utm_campaign === item.utm_campaign && 
+      d.utm_medium === item.utm_medium && 
+      d.creative_name === item.creative_name
+    );
     const pvRank = sortedByPV.findIndex(d => 
       d.utm_source === item.utm_source && 
       d.utm_campaign === item.utm_campaign && 
@@ -80,16 +88,22 @@ export const calculateTrafficScores = (data) => {
     );
 
     // 순위를 점수로 변환 (1등 = 100점, 꼴등 = 0점에 가까움)
+    // 스크롤 0인 경우 0점 처리
+    const scrollScore = (item.avg_scroll_px || 0) === 0 
+      ? 0 
+      : (totalCount > 1 ? ((totalCount - 1 - scrollRank) / (totalCount - 1)) * 100 : 100);
     const pvScore = totalCount > 1 ? ((totalCount - 1 - pvRank) / (totalCount - 1)) * 100 : 100;
     const durationScore = totalCount > 1 ? ((totalCount - 1 - durationRank) / (totalCount - 1)) * 100 : 100;
 
-    // 가중치 적용: 평균PV 50%, 체류시간 50%
-    const finalScore = Math.round(pvScore * 0.5 + durationScore * 0.5);
+    // 가중치 적용: 스크롤 30%, 평균PV 35%, 체류시간 35%
+    const finalScore = Math.round(scrollScore * 0.3 + pvScore * 0.35 + durationScore * 0.35);
 
     scoreMap.set(key, {
       score: finalScore,
+      scrollScore: Math.round(scrollScore),
       pvScore: Math.round(pvScore),
       durationScore: Math.round(durationScore),
+      scrollRank: scrollRank + 1,
       pvRank: pvRank + 1,
       durationRank: durationRank + 1,
       totalCount
