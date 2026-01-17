@@ -17,3 +17,7 @@ backend/build/
 *.pem
 *.zip
 .kiro/
+
+# 민감 정보 포함 파일 (DB 비밀번호 등)
+.cursor/rules/deploy.mdc
+.cursor/rules/data-validation.mdc
