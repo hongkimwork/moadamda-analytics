@@ -72,11 +72,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 DB_HOST=49.50.139.223
 DB_PORT=5432
 DB_USER=moadamda
-DB_PASSWORD=MoaDamDa2025!Secure#Analytics
+DB_PASSWORD=(팀 내부 공유 - .cursor/rules/deploy.mdc 참조)
 DB_NAME=analytics
 NODE_ENV=development
 PORT=3003
 ```
+
+> ⚠️ **보안 주의**: DB 비밀번호는 `.cursor/rules/deploy.mdc` 파일에서 확인하세요. (이 파일은 gitignore됨)
 
 #### 2. 개발 서버 시작
 
@@ -353,10 +355,12 @@ WHERE time_spent_seconds > 0
 ### 환경 변수 (backend/.env)
 
 ```env
-CAFE24_AUTH_KEY=ZVl6QTBSUUdlMFJiR2dPQ3l3WEh0STpnejh4ZklpMEE2UkdQZUhSa0c0UHFE
+CAFE24_AUTH_KEY=(팀 내부 공유 - Cafe24 개발자센터에서 발급)
 CAFE24_MALL_ID=moadamda
 CAFE24_API_VERSION=2025-09-01
 ```
+
+> ⚠️ **보안 주의**: Cafe24 AUTH_KEY는 팀 내부에서 별도 공유합니다.
 
 ## 알려진 이슈
 

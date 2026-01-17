@@ -4,7 +4,7 @@ const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT, 10) || 5432,
   user: process.env.DB_USER || 'moadamda',
-  password: process.env.DB_PASSWORD || 'analytics2024',
+  password: process.env.DB_PASSWORD,  // .env 파일 필수
   database: process.env.DB_NAME || 'analytics',
   max: 20,
   idleTimeoutMillis: 30000,
