@@ -1,6 +1,6 @@
 /**
- * Moadamda Analytics Tracker v21.0 (v049)
- * Updated: 2026-01-08
+ * Moadamda Analytics Tracker v22.0 (v050)
+ * Updated: 2026-01-19
  * 
  * DEPLOYMENT INFO:
  * - Production Domain: marketingzon.com
@@ -8,9 +8,12 @@
  * - Dashboard: https://dashboard.marketingzon.com
  * - SSL: Let's Encrypt (Trusted Certificate)
  * 
- * LATEST UPDATE (v21.0):
- * - CHANGED: 세션 타임아웃 30분 → 2시간 (카페24 호환)
- * - 세션 쿠키 유효기간도 2시간으로 변경
+ * LATEST UPDATE (v22.0):
+ * - CHANGED: 세션 타임아웃 2시간 → 60분 (카페24 애널리틱스 호환)
+ * - ADDED: 슬라이딩 윈도우 - 활동 시 세션 쿠키 60분 연장 (마지막 활동 기준)
+ * 
+ * PREVIOUS (v21.0):
+ * - 세션 타임아웃 30분 → 2시간 (카페24 접속통계 호환)
  * 
  * PREVIOUS (v20.5):
  * - ADDED: 스크롤 깊이 추적 (scroll_depth) - 페이지별 최대 스크롤 위치(px) 수집
@@ -64,7 +67,7 @@
     cookieName: '_ma_id',
     sessionCookieName: '_ma_ses',
     batchInterval: 180000,  // 3 minutes
-    sessionTimeout: 7200000,  // 2 hours (Cafe24 compatible)
+    sessionTimeout: 3600000,  // 60 minutes (Cafe24 Analytics compatible)
     heartbeatInterval: 30000  // 30 seconds
   };
   
@@ -88,7 +91,7 @@
   
   const IS_IN_APP = isInAppBrowser();
   
-  console.log('[MA] Initializing Moadamda Analytics v21.0 (v049)...');
+  console.log('[MA] Initializing Moadamda Analytics v22.0 (v050)...');
   console.log('[MA] In-app browser detected:', IS_IN_APP);
   console.log('[MA] API URL:', CONFIG.apiUrl);
   console.log('[MA] Visitor ID:', visitorId);
@@ -126,14 +129,21 @@
     return id;
   }
   
-  // Get or create session ID (2 hours = 0.0833 days for Cafe24 compatibility)
+  // Get or create session ID (60 minutes = 0.0417 days for Cafe24 Analytics compatibility)
   function getOrCreateSessionId() {
     let id = getCookie(CONFIG.sessionCookieName);
     if (!id) {
       id = generateUUID();
-      setCookie(CONFIG.sessionCookieName, id, 0.0833); // 2 hours
+      setCookie(CONFIG.sessionCookieName, id, 0.0417); // 60 minutes
     }
     return id;
+  }
+  
+  // Refresh session cookie (sliding window - extends session on activity)
+  // Called on every event to implement Cafe24 Analytics behavior:
+  // "마지막 활동으로부터 60분" (60 minutes from last activity)
+  function refreshSessionCookie() {
+    setCookie(CONFIG.sessionCookieName, sessionId, 0.0417); // 60 minutes from now
   }
   
   // Detect device type
@@ -264,6 +274,9 @@
   // Send event immediately (for critical events like pageview, cart, purchase)
   // Enhanced for in-app browsers: uses both sendBeacon AND fetch for reliability
   function sendImmediately(event) {
+    // Sliding window: refresh session cookie on every activity (Cafe24 Analytics compatible)
+    refreshSessionCookie();
+    
     console.log('[MA] Sending event immediately:', event.type);
     const payload = {
       site_id: CONFIG.siteId,
@@ -327,6 +340,9 @@
   
   // Send event via sendBeacon with fetch fallback (for page unload scenarios)
   function sendViaBeacon(event) {
+    // Sliding window: refresh session cookie on every activity (Cafe24 Analytics compatible)
+    refreshSessionCookie();
+    
     const payload = {
       site_id: CONFIG.siteId,
       events: [event]
