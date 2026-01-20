@@ -15,9 +15,7 @@ import {
   ExperimentOutlined,
   BarChartOutlined,
   SettingOutlined,
-  AppstoreOutlined,
-  CheckCircleOutlined,
-  SwapOutlined
+  AppstoreOutlined
 } from '@ant-design/icons';
 import { BarChart3 } from 'lucide-react';
 import dayjs from 'dayjs';
@@ -40,8 +38,7 @@ const PageMapping = lazy(() => import('./pages/PageMapping'));
 const CreativePerformance = lazy(() => import('./pages/CreativePerformance/index'));
 const MyDashboard = lazy(() => import('./pages/MyDashboard/index'));
 const MetaInsights = lazy(() => import('./pages/MetaInsights/index'));
-const DataValidation = lazy(() => import('./pages/DataValidation/index'));
-const Cafe24Compare = lazy(() => import('./pages/Cafe24Compare/index'));
+const VisitorAnalysis = lazy(() => import('./pages/VisitorAnalysis/index'));
 
 const { Sider, Content } = Layout;
 
@@ -58,10 +55,9 @@ function AppLayout() {
   const getSelectedKeys = () => {
     const path = location.pathname;
     if (path === '/creative-performance') return ['creative-performance'];
+    if (path === '/visitor-analysis') return ['visitor-analysis'];
     if (path === '/my-dashboard') return ['my-dashboard'];
     if (path === '/meta-insights') return ['meta-insights'];
-    if (path === '/data-validation') return ['data-validation'];
-    if (path === '/cafe24-compare') return ['cafe24-compare'];
     if (path === '/page-mapping') return ['page-mapping'];
     if (path.startsWith('/order/')) return ['orders'];
     if (path === '/' || path.startsWith('/order')) return ['orders'];
@@ -95,22 +91,16 @@ function AppLayout() {
           onClick: () => navigate('/my-dashboard')
         },
         {
-          key: 'data-validation',
-          icon: <CheckCircleOutlined />,
-          label: '데이터 검증',
-          onClick: () => navigate('/data-validation')
-        },
-        {
-          key: 'cafe24-compare',
-          icon: <SwapOutlined />,
-          label: '카페24 Data 비교',
-          onClick: () => navigate('/cafe24-compare')
-        },
-        {
           key: 'creative-performance',
           icon: <BarChartOutlined />,
           label: '광고 성과 파악',
           onClick: () => navigate('/creative-performance')
+        },
+        {
+          key: 'visitor-analysis',
+          icon: <UserOutlined />,
+          label: '방문자 분석',
+          onClick: () => navigate('/visitor-analysis')
         }
       ]
     },
@@ -245,17 +235,14 @@ function AppLayout() {
               {/* 광고 소재 분석 */}
               <Route path="/creative-performance" element={<CreativePerformance />} />
               
+              {/* 방문자 분석 */}
+              <Route path="/visitor-analysis" element={<VisitorAnalysis />} />
+              
               {/* 나만의 대시보드 */}
               <Route path="/my-dashboard" element={<MyDashboard />} />
               
               {/* 메타 성과 조회 */}
               <Route path="/meta-insights" element={<MetaInsights />} />
-              
-              {/* 데이터 검증 */}
-              <Route path="/data-validation" element={<DataValidation />} />
-              
-              {/* 카페24 Data 비교 */}
-              <Route path="/cafe24-compare" element={<Cafe24Compare />} />
               
               {/* 페이지 매핑 */}
               <Route path="/page-mapping" element={<PageMapping />} />

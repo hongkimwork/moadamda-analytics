@@ -4,6 +4,7 @@
  */
 
 const db = require('../../utils/database');
+const { detectBot } = require('./utils');
 
 /**
  * Upsert visitor (create or update)
@@ -19,10 +20,11 @@ async function upsertVisitor({
   utm_medium,
   utm_campaign,
   utm_params,
-  clientIp
+  clientIp,
+  userAgent = ''
 }) {
-  // is_bot 판단: Unknown 브라우저 + Unknown OS = 봇 의심
-  const isBot = (browser === 'Unknown' && os === 'Unknown');
+  // is_bot 판단: IP 대역 + User-Agent 패턴 + Unknown 브라우저/OS (카페24 호환)
+  const isBot = detectBot(clientIp, userAgent, browser, os);
 
   await db.query(`
     INSERT INTO visitors (

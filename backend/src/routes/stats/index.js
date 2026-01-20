@@ -27,7 +27,6 @@ const funnelRouter = require('./funnel');
 const channelFunnelRouter = require('./channel-funnel');
 const customerTypeRouter = require('./customer-type');
 const validationRouter = require('./validation');
-const cafe24CompareRouter = require('./cafe24-compare');
 
 // Mount sub-routers at root level (same path as parent)
 router.use('/', basicRouter);      // /today, /conversion, /products
@@ -45,8 +44,5 @@ router.use('/channel-funnel', channelFunnelRouter); // /channel-funnel/conversio
 
 // Mount validation at /validation prefix
 router.use('/validation', validationRouter); // /validation/daily-visits
-
-// Mount cafe24-compare at /cafe24-compare prefix
-router.use('/cafe24-compare', cafe24CompareRouter); // /cafe24-compare
 
 module.exports = router;

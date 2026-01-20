@@ -17,21 +17,21 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2026-01-19 | 봇감지 로직 강화 | utils.js, repository.js |
+| 2026-01-19 | 비교분석 다중기준 | VisitorAnalysis/index.jsx |
+| 2026-01-19 | 상세 모달 크기 확대 | VisitorAnalysis/index.jsx |
+| 2026-01-19 | 카페24 비교분석 기능 | VisitorAnalysis/index.jsx |
+| 2026-01-19 | 상세 모달 컬럼 제거 | VisitorAnalysis/index.jsx |
+| 2026-01-19 | 순방문자 상세 모달 | VisitorAnalysis/index.jsx |
+| 2026-01-19 | 타임존 이중변환 수정 | fix_kst_timezone.sql |
+| 2026-01-19 | KST 타임존 적용 | fix_kst_timezone.sql |
+| 2026-01-19 | 순방문자수 페이지 | VisitorAnalysis/index.jsx |
 | 2026-01-19 | 세션2시간+쿠키1년 | tracker-v051.js |
 | 2026-01-19 | 카페24 체류시간 필터 | update_cafe24_views.sql |
 | 2026-01-17 | SSH 보안 강화 완료 | deploy.mdc |
 | 2026-01-16 | 모수평가 스크롤 반영 | formatters.js |
 | 2026-01-16 | 평균 스크롤 컬럼 추가 | PerformanceTable.jsx |
 | 2026-01-15 | 메뉴 위치 변경 | App.jsx |
-| 2026-01-15 | 페이지명 변경 | App.jsx |
-| 2026-01-14 | 시간불일치 처리 추가 | cafe24-compare.js |
-| 2026-01-14 | 설정 박스 너비 조정 | index.jsx |
-| 2026-01-14 | 요약 지표 UI 최적화 | index.jsx |
-| 2026-01-14 | 요약 카드 한 줄 배치 | index.jsx |
-| 2026-01-14 | 데이터 테이블 스크롤 제거 | index.jsx |
-| 2026-01-13 | 광고성과 메뉴 제거 | App.jsx |
-| 2026-01-13 | 이전 버전 롤백 | cafe24-compare.js |
-| 2026-01-09 | 요약 카드 중앙 정렬 | index.jsx |
 
 ---
 

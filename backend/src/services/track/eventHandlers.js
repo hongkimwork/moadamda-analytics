@@ -33,7 +33,7 @@ async function handlePageview(event, clientIp) {
 
   const visitTime = new Date(timestamp);
 
-  // 1. Upsert visitor (with IP tracking + dynamic UTM support)
+  // 1. Upsert visitor (with IP tracking + dynamic UTM support + bot detection)
   const browserInfo = parseBrowserInfo(event);
   
   await repository.upsertVisitor({
@@ -46,7 +46,8 @@ async function handlePageview(event, clientIp) {
     utm_medium,
     utm_campaign,
     utm_params,
-    clientIp
+    clientIp,
+    userAgent: event.user_agent || ''
   });
 
   // 2. Upsert session (with IP tracking + auto-calculate duration_seconds + dynamic UTM)
