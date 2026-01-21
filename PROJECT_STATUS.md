@@ -17,6 +17,12 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2026-01-21 | 요약 카드 라벨 볼드 처리 | OurDataCompare/index.jsx |
+| 2026-01-21 | 요약 카드 레이아웃 개선 | OurDataCompare/index.jsx |
+| 2026-01-21 | 카페24 비교 중복제거 | validation.js |
+| 2026-01-21 | 테이블 텍스트 중앙 정렬 | OurDataCompare/index.jsx |
+| 2026-01-21 | 비교 페이지 너비 축소 | OurDataCompare/index.jsx |
+| 2026-01-21 | 데이터 비교 레이아웃 개선 | OurDataCompare/index.jsx |
 | 2026-01-20 | 방문자 분석 배포 | validation.js |
 | 2026-01-19 | 봇감지 로직 강화 | utils.js, repository.js |
 | 2026-01-19 | 비교분석 다중기준 | VisitorAnalysis/index.jsx |
@@ -27,11 +33,6 @@
 | 2026-01-19 | 타임존 이중변환 수정 | fix_kst_timezone.sql |
 | 2026-01-19 | KST 타임존 적용 | fix_kst_timezone.sql |
 | 2026-01-19 | 순방문자수 페이지 | VisitorAnalysis/index.jsx |
-| 2026-01-19 | 세션2시간+쿠키1년 | tracker-v051.js |
-| 2026-01-19 | 카페24 체류시간 필터 | update_cafe24_views.sql |
-| 2026-01-17 | SSH 보안 강화 완료 | deploy.mdc |
-| 2026-01-16 | 모수평가 스크롤 반영 | formatters.js |
-| 2026-01-16 | 평균 스크롤 컬럼 추가 | PerformanceTable.jsx |
 
 ---
 

@@ -39,6 +39,7 @@ const CreativePerformance = lazy(() => import('./pages/CreativePerformance/index
 const MyDashboard = lazy(() => import('./pages/MyDashboard/index'));
 const MetaInsights = lazy(() => import('./pages/MetaInsights/index'));
 const VisitorAnalysis = lazy(() => import('./pages/VisitorAnalysis/index'));
+const OurDataCompare = lazy(() => import('./pages/OurDataCompare/index'));
 
 const { Sider, Content } = Layout;
 
@@ -55,6 +56,7 @@ function AppLayout() {
   const getSelectedKeys = () => {
     const path = location.pathname;
     if (path === '/creative-performance') return ['creative-performance'];
+    if (path === '/our-data-compare') return ['our-data-compare'];
     if (path === '/visitor-analysis') return ['visitor-analysis'];
     if (path === '/my-dashboard') return ['my-dashboard'];
     if (path === '/meta-insights') return ['meta-insights'];
@@ -95,6 +97,12 @@ function AppLayout() {
           icon: <BarChartOutlined />,
           label: '광고 성과 파악',
           onClick: () => navigate('/creative-performance')
+        },
+        {
+          key: 'our-data-compare',
+          icon: <DatabaseOutlined />,
+          label: '카페24 Data 비교',
+          onClick: () => navigate('/our-data-compare')
         },
         {
           key: 'visitor-analysis',
@@ -234,6 +242,9 @@ function AppLayout() {
               
               {/* 광고 소재 분석 */}
               <Route path="/creative-performance" element={<CreativePerformance />} />
+              
+              {/* 카페24 Data 비교 */}
+              <Route path="/our-data-compare" element={<OurDataCompare />} />
               
               {/* 방문자 분석 */}
               <Route path="/visitor-analysis" element={<VisitorAnalysis />} />

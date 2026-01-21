@@ -594,4 +594,261 @@ router.get('/daily-sales', async (req, res) => {
   }
 });
 
+/**
+ * POST /compare-cafe24
+ * 카페24 데이터와 우리 DB 데이터 비교
+ * 
+ * Request body:
+ * - cafe24Data: 카페24에서 붙여넣은 데이터 배열 [{ip, referrer, visitTime}, ...]
+ * - startDate: 조회 시작일 (YYYY-MM-DD)
+ * - endDate: 조회 종료일 (YYYY-MM-DD)
+ * - tableType: 조회 테이블 (sessions | pageviews)
+ * - matchCriteria: 비교 기준 (ip_only | ip_time | ip_referrer | all)
+ * - timeToleranceSeconds: 시간 오차 허용 범위 (초, 기본값: 60)
+ * - removeDuplicates: IP 중복 제거 여부 (boolean, 기본값: false)
+ */
+router.post('/compare-cafe24', async (req, res) => {
+  try {
+    const { 
+      cafe24Data, 
+      startDate, 
+      endDate, 
+      tableType = 'pageviews',
+      matchCriteria = 'ip_only',
+      timeToleranceSeconds = 60,
+      removeDuplicates = false
+    } = req.body;
+
+    if (!cafe24Data || !Array.isArray(cafe24Data) || cafe24Data.length === 0) {
+      return res.status(400).json({ error: '카페24 데이터가 필요합니다.' });
+    }
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({ error: '조회 기간이 필요합니다.' });
+    }
+
+    // IP 정규화 함수 (앞의 \ 제거)
+    const normalizeIp = (ip) => {
+      if (!ip) return '';
+      return ip.replace(/^\\/, '').trim();
+    };
+
+    // 우리 DB 데이터 조회
+    let dbQuery;
+    if (tableType === 'sessions') {
+      // 세션 테이블 기준 조회
+      dbQuery = `
+        SELECT 
+          s.ip_address,
+          COALESCE(
+            CASE 
+              WHEN s.utm_params->>'utm_source' IS NOT NULL THEN s.utm_params->>'utm_source'
+              WHEN s.entry_url LIKE '%instagram%' THEN 'instagram.com'
+              WHEN s.entry_url LIKE '%facebook%' THEN 'facebook.com'
+              WHEN s.entry_url LIKE '%naver%' THEN 'naver.com'
+              WHEN s.entry_url LIKE '%google%' THEN 'google.com'
+              ELSE 'Direct'
+            END,
+            'Direct'
+          ) as referrer,
+          to_char(s.start_time, 'YYYY-MM-DD HH24:MI:SS') as visit_time
+        FROM sessions s
+        JOIN visitors v ON s.visitor_id = v.visitor_id
+        WHERE s.start_time >= $1::DATE
+          AND s.start_time < ($2::DATE + INTERVAL '1 day')
+          AND v.is_bot = false
+        ORDER BY s.start_time ASC
+      `;
+    } else {
+      // 페이지뷰 테이블 기준 조회
+      dbQuery = `
+        SELECT 
+          s.ip_address,
+          COALESCE(
+            CASE 
+              WHEN s.utm_params->>'utm_source' IS NOT NULL THEN s.utm_params->>'utm_source'
+              WHEN s.entry_url LIKE '%instagram%' THEN 'instagram.com'
+              WHEN s.entry_url LIKE '%facebook%' THEN 'facebook.com'
+              WHEN s.entry_url LIKE '%naver%' THEN 'naver.com'
+              WHEN s.entry_url LIKE '%google%' THEN 'google.com'
+              ELSE 'Direct'
+            END,
+            'Direct'
+          ) as referrer,
+          to_char(p.timestamp, 'YYYY-MM-DD HH24:MI:SS') as visit_time
+        FROM pageviews p
+        JOIN sessions s ON p.session_id = s.session_id
+        JOIN visitors v ON p.visitor_id = v.visitor_id
+        WHERE p.timestamp >= $1::DATE
+          AND p.timestamp < ($2::DATE + INTERVAL '1 day')
+          AND v.is_bot = false
+        ORDER BY p.timestamp ASC
+      `;
+    }
+
+    const dbResult = await db.query(dbQuery, [startDate, endDate]);
+    
+    // DB 데이터 정규화
+    let dbData = dbResult.rows.map(row => ({
+      ip: normalizeIp(row.ip_address),
+      referrer: row.referrer || 'Direct',
+      visitTime: row.visit_time
+    }));
+
+    // 카페24 데이터 정규화
+    let cafe24Normalized = cafe24Data.map(item => ({
+      ip: normalizeIp(item.ip),
+      referrer: item.referrer || 'Direct',
+      visitTime: item.visitTime
+    }));
+
+    // 중복 제거 로직
+    let duplicatesRemoved = 0;
+    if (removeDuplicates) {
+      // 카페24 데이터 중복 제거 (IP 기준, 첫 번째만 유지)
+      const cafe24SeenIps = new Set();
+      const cafe24Original = cafe24Normalized.length;
+      cafe24Normalized = cafe24Normalized.filter(item => {
+        if (cafe24SeenIps.has(item.ip)) {
+          return false;
+        }
+        cafe24SeenIps.add(item.ip);
+        return true;
+      });
+      duplicatesRemoved += cafe24Original - cafe24Normalized.length;
+
+      // DB 데이터 중복 제거 (IP 기준, 첫 번째만 유지)
+      const dbSeenIps = new Set();
+      const dbOriginal = dbData.length;
+      dbData = dbData.filter(item => {
+        if (dbSeenIps.has(item.ip)) {
+          return false;
+        }
+        dbSeenIps.add(item.ip);
+        return true;
+      });
+      duplicatesRemoved += dbOriginal - dbData.length;
+    }
+
+    // 시간 차이 계산 함수 (초 단위)
+    const getTimeDiffSeconds = (time1, time2) => {
+      try {
+        const t1 = new Date(time1);
+        const t2 = new Date(time2);
+        return Math.abs(t1.getTime() - t2.getTime()) / 1000;
+      } catch {
+        return Infinity;
+      }
+    };
+
+    // 유입경로 정규화 함수
+    const normalizeReferrer = (ref) => {
+      if (!ref) return 'direct';
+      const r = ref.toLowerCase();
+      if (r.includes('instagram')) return 'instagram';
+      if (r.includes('facebook')) return 'facebook';
+      if (r.includes('naver')) return 'naver';
+      if (r.includes('google')) return 'google';
+      if (r.includes('bookmark') || r === 'direct') return 'direct';
+      return r;
+    };
+
+    // 매칭 함수
+    const isMatch = (cafe24Item, dbItem) => {
+      // IP 비교 (필수)
+      if (cafe24Item.ip !== dbItem.ip) return false;
+
+      // 비교 기준에 따른 추가 조건
+      switch (matchCriteria) {
+        case 'ip_only':
+          return true;
+        
+        case 'ip_time':
+          return getTimeDiffSeconds(cafe24Item.visitTime, dbItem.visitTime) <= timeToleranceSeconds;
+        
+        case 'ip_referrer':
+          return normalizeReferrer(cafe24Item.referrer) === normalizeReferrer(dbItem.referrer);
+        
+        case 'all':
+          return (
+            getTimeDiffSeconds(cafe24Item.visitTime, dbItem.visitTime) <= timeToleranceSeconds &&
+            normalizeReferrer(cafe24Item.referrer) === normalizeReferrer(dbItem.referrer)
+          );
+        
+        default:
+          return true;
+      }
+    };
+
+    // 비교 로직
+    const matched = [];
+    const cafe24Only = [];
+    const dbOnly = [];
+
+    const dbMatched = new Set();
+    const cafe24Matched = new Set();
+
+    // 카페24 데이터 기준으로 매칭
+    for (let i = 0; i < cafe24Normalized.length; i++) {
+      const cafe24Item = cafe24Normalized[i];
+      let foundMatch = false;
+
+      for (let j = 0; j < dbData.length; j++) {
+        if (dbMatched.has(j)) continue;
+        
+        const dbItem = dbData[j];
+        if (isMatch(cafe24Item, dbItem)) {
+          matched.push({
+            cafe24: cafe24Item,
+            db: dbItem,
+            timeDiff: getTimeDiffSeconds(cafe24Item.visitTime, dbItem.visitTime)
+          });
+          dbMatched.add(j);
+          cafe24Matched.add(i);
+          foundMatch = true;
+          break;
+        }
+      }
+
+      if (!foundMatch) {
+        cafe24Only.push({
+          cafe24: cafe24Item,
+          db: null
+        });
+      }
+    }
+
+    // DB에만 있는 데이터
+    for (let j = 0; j < dbData.length; j++) {
+      if (!dbMatched.has(j)) {
+        dbOnly.push({
+          cafe24: null,
+          db: dbData[j]
+        });
+      }
+    }
+
+    res.json({
+      summary: {
+        cafe24Total: cafe24Normalized.length,
+        dbTotal: dbData.length,
+        matchedCount: matched.length,
+        cafe24OnlyCount: cafe24Only.length,
+        dbOnlyCount: dbOnly.length,
+        duplicatesRemoved,
+        matchRate: cafe24Normalized.length > 0 
+          ? Math.round((matched.length / cafe24Normalized.length) * 100 * 100) / 100 
+          : 0
+      },
+      matched,
+      cafe24Only,
+      dbOnly
+    });
+
+  } catch (error) {
+    console.error('Error comparing cafe24 data:', error);
+    res.status(500).json({ error: 'Failed to compare cafe24 data' });
+  }
+});
+
 module.exports = router;
