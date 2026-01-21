@@ -24,6 +24,7 @@ function OurDataCompare() {
   // 결과 상태
   const [result, setResult] = useState(null);
   const [activeTab, setActiveTab] = useState('all'); // all, matched, cafe24Only, dbOnly
+  const [currentPage, setCurrentPage] = useState(1);
 
   /**
    * 카페24 데이터 파싱
@@ -373,7 +374,10 @@ function OurDataCompare() {
             }}>
               {/* 카페24 전체 입력 */}
               <div
-                onClick={() => setActiveTab('all')}
+                onClick={() => {
+                  setActiveTab('all');
+                  setCurrentPage(1);
+                }}
                 style={{
                   flex: 1,
                   padding: '16px 20px',
@@ -387,12 +391,49 @@ function OurDataCompare() {
                 }}
               >
                 <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px', fontWeight: 600 }}>📋 카페24 전체</div>
-                <div style={{ fontSize: '24px', fontWeight: 600 }}>{result.summary.cafe24Total}</div>
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'baseline' }}>
+                  <span style={{ fontSize: '24px', fontWeight: 600 }}>{result.summary.cafe24Total}</span>
+                  {result.summary.cafe24DuplicatesRemoved > 0 && (
+                    <span style={{ fontSize: '11px', color: '#8c8c8c', marginLeft: '6px' }}>
+                      (중복 {result.summary.cafe24DuplicatesRemoved}건 제거)
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* 양쪽 일치 */}
+              <div
+                onClick={() => {
+                  setActiveTab('matched');
+                  setCurrentPage(1);
+                }}
+                style={{
+                  flex: 1,
+                  padding: '16px 20px',
+                  borderRadius: '8px',
+                  backgroundColor: activeTab === 'matched' ? '#f6ffed' : '#fafafa',
+                  border: activeTab === 'matched' ? '2px solid #52c41a' : '1px solid #d9d9d9',
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                  minWidth: '110px',
+                  transition: 'all 0.2s'
+                }}
+              >
+                <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px', fontWeight: 600 }}>🟢 양쪽 일치</div>
+                <div style={{ fontSize: '24px', fontWeight: 600, color: '#52c41a' }}>
+                  {result.summary.matchedCount}
+                  <span style={{ fontSize: '14px', fontWeight: 400, marginLeft: '4px' }}>
+                    ({result.summary.matchRate}%)
+                  </span>
+                </div>
               </div>
 
               {/* 카페24에만 있음 */}
               <div
-                onClick={() => setActiveTab('cafe24Only')}
+                onClick={() => {
+                  setActiveTab('cafe24Only');
+                  setCurrentPage(1);
+                }}
                 style={{
                   flex: 1,
                   padding: '16px 20px',
@@ -416,7 +457,10 @@ function OurDataCompare() {
 
               {/* 우리DB에만 있음 */}
               <div
-                onClick={() => setActiveTab('dbOnly')}
+                onClick={() => {
+                  setActiveTab('dbOnly');
+                  setCurrentPage(1);
+                }}
                 style={{
                   flex: 1,
                   padding: '16px 20px',
@@ -434,30 +478,6 @@ function OurDataCompare() {
                   {result.summary.dbOnlyCount}
                   <span style={{ fontSize: '14px', fontWeight: 400, marginLeft: '4px' }}>
                     ({((result.summary.dbOnlyCount / result.summary.dbTotal) * 100).toFixed(1)}%)
-                  </span>
-                </div>
-              </div>
-
-              {/* 양쪽 일치 */}
-              <div
-                onClick={() => setActiveTab('matched')}
-                style={{
-                  flex: 1,
-                  padding: '16px 20px',
-                  borderRadius: '8px',
-                  backgroundColor: activeTab === 'matched' ? '#f6ffed' : '#fafafa',
-                  border: activeTab === 'matched' ? '2px solid #52c41a' : '1px solid #d9d9d9',
-                  cursor: 'pointer',
-                  textAlign: 'center',
-                  minWidth: '110px',
-                  transition: 'all 0.2s'
-                }}
-              >
-                <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px', fontWeight: 600 }}>🟢 양쪽 일치</div>
-                <div style={{ fontSize: '24px', fontWeight: 600, color: '#52c41a' }}>
-                  {result.summary.matchedCount}
-                  <span style={{ fontSize: '14px', fontWeight: 400, marginLeft: '4px' }}>
-                    ({result.summary.matchRate}%)
                   </span>
                 </div>
               </div>
@@ -491,12 +511,12 @@ function OurDataCompare() {
                 <Select
                   value={matchCriteria}
                   onChange={setMatchCriteria}
-                  style={{ width: 140 }}
+                  style={{ width: 160 }}
                   options={[
                     { value: 'ip_only', label: 'IP만' },
-                    { value: 'ip_time', label: 'IP + 시간' },
+                    { value: 'ip_time', label: 'IP + 시간(±60초)' },
                     { value: 'ip_referrer', label: 'IP + 유입경로' },
-                    { value: 'all', label: '전체' }
+                    { value: 'all', label: '전체(±60초)' }
                   ]}
                 />
               </div>
@@ -525,10 +545,12 @@ function OurDataCompare() {
               dataSource={getDisplayData()}
               loading={loading}
               pagination={{
+                current: currentPage,
                 pageSize: 50,
                 showSizeChanger: true,
                 pageSizeOptions: ['20', '50', '100', '200'],
-                showTotal: (total) => `총 ${total}건`
+                showTotal: (total) => `총 ${total}건`,
+                onChange: (page) => setCurrentPage(page)
               }}
               size="small"
               bordered

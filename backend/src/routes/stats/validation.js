@@ -703,7 +703,8 @@ router.post('/compare-cafe24', async (req, res) => {
     }));
 
     // 중복 제거 로직
-    let duplicatesRemoved = 0;
+    let cafe24DuplicatesRemoved = 0;
+    let dbDuplicatesRemoved = 0;
     if (removeDuplicates) {
       // 카페24 데이터 중복 제거 (IP 기준, 첫 번째만 유지)
       const cafe24SeenIps = new Set();
@@ -715,7 +716,7 @@ router.post('/compare-cafe24', async (req, res) => {
         cafe24SeenIps.add(item.ip);
         return true;
       });
-      duplicatesRemoved += cafe24Original - cafe24Normalized.length;
+      cafe24DuplicatesRemoved = cafe24Original - cafe24Normalized.length;
 
       // DB 데이터 중복 제거 (IP 기준, 첫 번째만 유지)
       const dbSeenIps = new Set();
@@ -727,7 +728,7 @@ router.post('/compare-cafe24', async (req, res) => {
         dbSeenIps.add(item.ip);
         return true;
       });
-      duplicatesRemoved += dbOriginal - dbData.length;
+      dbDuplicatesRemoved = dbOriginal - dbData.length;
     }
 
     // 시간 차이 계산 함수 (초 단위)
@@ -835,7 +836,9 @@ router.post('/compare-cafe24', async (req, res) => {
         matchedCount: matched.length,
         cafe24OnlyCount: cafe24Only.length,
         dbOnlyCount: dbOnly.length,
-        duplicatesRemoved,
+        cafe24DuplicatesRemoved,
+        dbDuplicatesRemoved,
+        duplicatesRemoved: cafe24DuplicatesRemoved + dbDuplicatesRemoved,
         matchRate: cafe24Normalized.length > 0 
           ? Math.round((matched.length / cafe24Normalized.length) * 100 * 100) / 100 
           : 0

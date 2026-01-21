@@ -17,6 +17,9 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2026-01-21 | 카페24 중복제거 건수 표시 | OurDataCompare/index.jsx |
+| 2026-01-21 | 요약 카드 순서 변경 | OurDataCompare/index.jsx |
+| 2026-01-21 | 탭 변경 시 페이지 리셋 | OurDataCompare/index.jsx |
 | 2026-01-21 | 카페24 비교 페이지 배포 | OurDataCompare/index.jsx |
 | 2026-01-21 | 요약 카드 라벨 볼드 처리 | OurDataCompare/index.jsx |
 | 2026-01-21 | 요약 카드 레이아웃 개선 | OurDataCompare/index.jsx |
@@ -29,10 +32,6 @@
 | 2026-01-19 | 비교분석 다중기준 | VisitorAnalysis/index.jsx |
 | 2026-01-19 | 상세 모달 크기 확대 | VisitorAnalysis/index.jsx |
 | 2026-01-19 | 카페24 비교분석 기능 | VisitorAnalysis/index.jsx |
-| 2026-01-19 | 상세 모달 컬럼 제거 | VisitorAnalysis/index.jsx |
-| 2026-01-19 | 순방문자 상세 모달 | VisitorAnalysis/index.jsx |
-| 2026-01-19 | 타임존 이중변환 수정 | fix_kst_timezone.sql |
-| 2026-01-19 | KST 타임존 적용 | fix_kst_timezone.sql |
 
 ---
 
