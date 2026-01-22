@@ -45,8 +45,8 @@ export const useCreativePerformance = () => {
   // UTM Source 퀵 필터 state (기본값: 메타 그룹 소스)
   const [quickFilterSources, setQuickFilterSources] = useState(['meta', 'instagram', 'ig']);
 
-  // 이상치 기준 state (초 단위, 기본값 5분=300초)
-  const [maxDuration, setMaxDuration] = useState(300);
+  // 이상치 기준 state (초 단위, 기본값 1분=60초)
+  const [maxDuration, setMaxDuration] = useState(60);
 
   // 모달 state
   const [ordersModalVisible, setOrdersModalVisible] = useState(false);

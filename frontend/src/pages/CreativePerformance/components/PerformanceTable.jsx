@@ -8,15 +8,21 @@ import { ShoppingCart, Network } from 'lucide-react';
 import { formatDuration, formatCurrency, formatNumber, calculateTrafficScores } from '../utils/formatters';
 import { getRowKey } from '../utils/helpers';
 
-// 이상치 기준 옵션 생성 (5분~2시간30분, 5분 단위)
+// 이상치 기준 옵션 생성 (30초~10분, 30초 단위)
 const durationOptions = [];
-for (let minutes = 5; minutes <= 150; minutes += 5) {
-  const seconds = minutes * 60;
-  const label = minutes < 60 
-    ? `${minutes}분` 
-    : minutes % 60 === 0 
-      ? `${Math.floor(minutes / 60)}시간`
-      : `${Math.floor(minutes / 60)}시간 ${minutes % 60}분`;
+for (let seconds = 30; seconds <= 600; seconds += 30) {
+  const minutes = Math.floor(seconds / 60);
+  const remainSeconds = seconds % 60;
+  
+  let label;
+  if (seconds < 60) {
+    label = `${seconds}초`;
+  } else if (remainSeconds === 0) {
+    label = `${minutes}분`;
+  } else {
+    label = `${minutes}분 ${remainSeconds}초`;
+  }
+  
   durationOptions.push({ value: seconds, label });
 }
 

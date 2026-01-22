@@ -39,23 +39,22 @@ async function getCreativeAggregation({
       -- 순방문자수 (UV)
       COUNT(DISTINCT us.visitor_id) as unique_visitors,
       
-      -- 총 조회수 (View) - 중복 포함
-      COUNT(*) as total_views,
+      -- 총 조회수 (View) - 고유 세션 수 (같은 세션 내 중복 UTM 터치포인트 제외)
+      COUNT(DISTINCT us.session_id) as total_views,
       
-      -- 평균 페이지뷰 (방문자당 평균, 소수점 1자리)
+      -- 평균 페이지뷰 (세션당 평균, 소수점 1자리)
       ROUND(
-        COALESCE(SUM(us.pageview_count)::FLOAT / NULLIF(COUNT(DISTINCT us.visitor_id), 0), 0)::NUMERIC,
+        COALESCE(AVG(us.pageview_count)::NUMERIC, 0),
         1
       ) as avg_pageviews,
       
-      -- 평균 체류시간 (방문자당 평균, 초 단위, 소수점 1자리)
+      -- 평균 체류시간 (세션당 평균, 초 단위, 소수점 1자리)
       -- 이상치 제외: maxDurationSeconds 이상의 체류시간은 비정상으로 판단하여 제외
       ROUND(
         COALESCE(
-          SUM(CASE WHEN us.duration_seconds < ${maxDurationSeconds} THEN us.duration_seconds ELSE 0 END)::FLOAT 
-          / NULLIF(COUNT(DISTINCT CASE WHEN us.duration_seconds < ${maxDurationSeconds} THEN us.visitor_id END), 0), 
+          AVG(CASE WHEN us.duration_seconds < ${maxDurationSeconds} THEN us.duration_seconds ELSE NULL END)::NUMERIC,
           0
-        )::NUMERIC,
+        ),
         1
       ) as avg_duration_seconds,
       

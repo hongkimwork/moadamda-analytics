@@ -22,7 +22,7 @@ async function getCreativePerformance(params) {
     sort_by = 'total_revenue',
     sort_order = 'desc',
     utm_filters = '[]',
-    max_duration = 300
+    max_duration = 60
   } = params;
 
   // 1. 날짜 파라미터 검증
@@ -36,8 +36,8 @@ async function getCreativePerformance(params) {
   const endDate = new Date(end);
   endDate.setHours(23, 59, 59, 999);
 
-  // 이상치 기준 검증 (5분~2시간30분, 초 단위)
-  const maxDurationSeconds = Math.min(Math.max(parseInt(max_duration) || 300, 300), 9000);
+  // 이상치 기준 검증 (30초~10분, 초 단위)
+  const maxDurationSeconds = Math.min(Math.max(parseInt(max_duration) || 60, 30), 600);
 
   // 2. 페이지네이션 파라미터
   const pageNum = parseInt(page);
