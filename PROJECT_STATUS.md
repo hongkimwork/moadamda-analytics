@@ -17,8 +17,8 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2026-01-23 | 광고귀속 인앱대응 추가 | creativeAttribution.js |
 | 2026-01-23 | 인앱브라우저 UTM 복구 | ordersRepository.js |
-| 2026-01-23 | 중복요청 방지 로직 추가 | eventHandlers.js |
 | 2026-01-22 | 평균PV 중복계산 버그 수정 | creativeRepository.js |
 | 2026-01-22 | 광고 성과 정렬 수정 | creativeService.js |
 | 2026-01-22 | 메타광고명 병합 기능 | metaAdNameMapping.js |
