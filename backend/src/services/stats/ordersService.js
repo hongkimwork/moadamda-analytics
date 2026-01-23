@@ -258,7 +258,8 @@ async function getOrderDetail(orderId) {
     previousVisitsRows,
     utmHistoryRows,
     sameIpVisits,
-    pastPurchases
+    pastPurchases,
+    sessionUtmParams
   ] = await Promise.all([
     repository.getPurchaseJourney(order.visitor_id, order.timestamp),
     repository.getPreviousVisits(order.visitor_id, order.timestamp),
@@ -266,7 +267,9 @@ async function getOrderDetail(orderId) {
     order.ip_address && order.ip_address !== 'unknown'
       ? repository.getSameIpVisits(order.ip_address, order.session_id)
       : Promise.resolve([]),
-    repository.getPastPurchases(order.visitor_id, orderId)
+    repository.getPastPurchases(order.visitor_id, orderId),
+    // 세션에 저장된 UTM (utm_sessions 누락 시 복구용)
+    repository.getSessionUtmParams(order.session_id)
   ]);
 
   // 4. 데이터 가공
@@ -280,7 +283,8 @@ async function getOrderDetail(orderId) {
 
   const previousVisits = groupVisitsByDate(previousVisitsRows);
 
-  const utmHistory = utmHistoryRows.map(row => ({
+  // UTM 히스토리 구성
+  let utmHistory = utmHistoryRows.map(row => ({
     utm_source: row.utm_source || 'direct',
     utm_medium: row.utm_medium || null,
     utm_campaign: row.utm_campaign || null,
@@ -288,6 +292,25 @@ async function getOrderDetail(orderId) {
     entry_time: row.entry_timestamp,
     total_duration: row.duration_seconds || 0
   }));
+
+  // UTM 세션이 없는 경우: 세션에 저장된 UTM으로 복구
+  // (인앱 브라우저에서 utm_sessions 누락 문제 대응)
+  if (utmHistory.length === 0 && sessionUtmParams?.utm_params) {
+    const params = sessionUtmParams.utm_params;
+    if (params.utm_source || params.utm_campaign || params.utm_content) {
+      // entry_time은 세션 시작 시간 사용 (프론트엔드에서 페이지 timestamp와 30초 내 매칭)
+      utmHistory = [{
+        utm_source: params.utm_source || 'direct',
+        utm_medium: params.utm_medium || null,
+        utm_campaign: params.utm_campaign || null,
+        utm_content: params.utm_content || null,
+        entry_time: sessionUtmParams.start_time || order.timestamp,
+        total_duration: 0,
+        source_type: 'session_recovered' // 세션에서 복구됨
+      }];
+      console.log(`[OrderDetail] Session UTM recovered for order ${orderId}`);
+    }
+  }
 
   const sameIpVisitsMapped = sameIpVisits.map(row => ({
     session_id: row.session_id,

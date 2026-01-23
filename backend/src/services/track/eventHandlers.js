@@ -7,6 +7,39 @@ const repository = require('./repository');
 const utmService = require('./utmService');
 const { parseBrowserInfo, determineReferrerType } = require('./utils');
 
+// =====================================================
+// 인앱 브라우저 중복 요청 방지 (dual send 문제 해결)
+// =====================================================
+const recentPageviews = new Map(); // key: visitor_id:url, value: timestamp
+const PAGEVIEW_DEDUP_WINDOW_MS = 1000; // 1초 이내 중복 무시
+
+// 주기적으로 오래된 항목 정리 (메모리 누수 방지)
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, timestamp] of recentPageviews.entries()) {
+    if (now - timestamp > 10000) { // 10초 이상 된 항목 삭제
+      recentPageviews.delete(key);
+    }
+  }
+}, 30000); // 30초마다 정리
+
+/**
+ * 중복 pageview 체크 (인앱 브라우저 dual send 문제 해결)
+ * @returns {boolean} true면 중복이라 무시해야 함
+ */
+function isDuplicatePageview(visitor_id, url) {
+  const key = `${visitor_id}:${url}`;
+  const now = Date.now();
+  const lastTime = recentPageviews.get(key);
+  
+  if (lastTime && (now - lastTime) < PAGEVIEW_DEDUP_WINDOW_MS) {
+    return true; // 중복
+  }
+  
+  recentPageviews.set(key, now);
+  return false;
+}
+
 // Cafe24 API client (for real-time order verification)
 let cafe24 = null;
 if (process.env.CAFE24_AUTH_KEY) {
@@ -30,6 +63,12 @@ async function handlePageview(event, clientIp) {
     utm_campaign,
     utm_params
   } = event;
+
+  // 인앱 브라우저 중복 요청 방지 (dual send 문제)
+  if (isDuplicatePageview(visitor_id, url)) {
+    console.log(`[Track] Duplicate pageview ignored: ${visitor_id.substring(0, 8)}...`);
+    return;
+  }
 
   const visitTime = new Date(timestamp);
 

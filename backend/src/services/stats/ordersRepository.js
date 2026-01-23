@@ -501,6 +501,25 @@ async function getPastPurchases(visitorId, excludeOrderId) {
   return result.rows;
 }
 
+/**
+ * 주문의 세션에 저장된 UTM 정보 조회 (sessions 테이블)
+ * utm_sessions에 기록되지 않았더라도 sessions.utm_params에서 복구
+ */
+async function getSessionUtmParams(sessionId) {
+  const query = `
+    SELECT 
+      utm_params,
+      ip_address,
+      entry_url,
+      start_time
+    FROM sessions
+    WHERE session_id = $1
+  `;
+
+  const result = await db.query(query, [sessionId]);
+  return result.rows[0] || null;
+}
+
 module.exports = {
   getOrders,
   getOrdersCount,
@@ -510,6 +529,7 @@ module.exports = {
   getUtmHistory,
   getSameIpVisits,
   getPastPurchases,
+  getSessionUtmParams,
   buildOrderFilters,
   SORT_FIELD_MAP
 };
