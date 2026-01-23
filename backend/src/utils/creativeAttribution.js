@@ -41,19 +41,23 @@ async function calculateCreativeAttribution(creatives, startDate, endDate) {
   // 이렇게 해야 "선택 기간 이전에만 광고를 보고, 선택 기간 내 구매한 케이스"도 놓치지 않음
 
   // 1단계: 선택 기간 내 모든 구매 조회
+  // session_id도 함께 조회 (인앱 브라우저 쿠키 문제 대응)
   const purchaseQuery = `
     SELECT 
-      visitor_id,
-      order_id,
-      final_payment,
-      timestamp
-    FROM conversions
-    WHERE order_id IS NOT NULL
-      AND paid = 'T'
-      AND final_payment > 0
-      AND timestamp >= $1
-      AND timestamp <= $2
-    ORDER BY visitor_id, timestamp
+      c.visitor_id,
+      c.session_id,
+      c.order_id,
+      c.final_payment,
+      c.timestamp,
+      s.visitor_id as session_visitor_id
+    FROM conversions c
+    LEFT JOIN sessions s ON c.session_id = s.session_id
+    WHERE c.order_id IS NOT NULL
+      AND c.paid = 'T'
+      AND c.final_payment > 0
+      AND c.timestamp >= $1
+      AND c.timestamp <= $2
+    ORDER BY c.visitor_id, c.timestamp
   `;
 
   const purchaseResult = await db.query(purchaseQuery, [startDate, endDate]);
@@ -63,8 +67,10 @@ async function calculateCreativeAttribution(creatives, startDate, endDate) {
     return result;
   }
 
-  // 2단계: 구매한 visitor들의 ID 수집
-  const purchaserIds = [...new Set(purchases.map(p => p.visitor_id))];
+  // 2단계: 구매한 visitor들의 ID 수집 (인앱 브라우저 대응: session 기반 visitor_id도 포함)
+  const purchaserIds = [...new Set(purchases.flatMap(p => 
+    [p.visitor_id, p.session_visitor_id].filter(Boolean)
+  ))];
 
   // 3단계: 구매한 visitor들의 전체 UTM 여정 조회 (30일 필터링은 각 구매별로 적용)
   // 카페24 호환: visitors 테이블과 조인하여 봇 트래픽 제외
@@ -98,7 +104,11 @@ async function calculateCreativeAttribution(creatives, startDate, endDate) {
 
   // 각 구매건에 대해 기여도 계산
   purchases.forEach(purchase => {
-    const journey = visitorJourneys[purchase.visitor_id] || [];
+    // 인앱 브라우저 대응: visitor_id로 못 찾으면 session_visitor_id로 시도
+    let journey = visitorJourneys[purchase.visitor_id] || [];
+    if (journey.length === 0 && purchase.session_visitor_id) {
+      journey = visitorJourneys[purchase.session_visitor_id] || [];
+    }
     
     if (journey.length === 0) {
       return; // UTM 여정이 없으면 스킵
