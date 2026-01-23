@@ -7,44 +7,62 @@ const repository = require('./repository');
 const utmService = require('./utmService');
 const { parseBrowserInfo, determineReferrerType } = require('./utils');
 
-// =====================================================
-// 인앱 브라우저 중복 요청 방지 (dual send 문제 해결)
-// =====================================================
-const recentPageviews = new Map(); // key: visitor_id:url, value: timestamp
-const PAGEVIEW_DEDUP_WINDOW_MS = 1000; // 1초 이내 중복 무시
-
-// 주기적으로 오래된 항목 정리 (메모리 누수 방지)
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, timestamp] of recentPageviews.entries()) {
-    if (now - timestamp > 10000) { // 10초 이상 된 항목 삭제
-      recentPageviews.delete(key);
-    }
-  }
-}, 30000); // 30초마다 정리
-
-/**
- * 중복 pageview 체크 (인앱 브라우저 dual send 문제 해결)
- * @returns {boolean} true면 중복이라 무시해야 함
- */
-function isDuplicatePageview(visitor_id, url) {
-  const key = `${visitor_id}:${url}`;
-  const now = Date.now();
-  const lastTime = recentPageviews.get(key);
-  
-  if (lastTime && (now - lastTime) < PAGEVIEW_DEDUP_WINDOW_MS) {
-    return true; // 중복
-  }
-  
-  recentPageviews.set(key, now);
-  return false;
-}
-
 // Cafe24 API client (for real-time order verification)
 let cafe24 = null;
 if (process.env.CAFE24_AUTH_KEY) {
   cafe24 = require('../../utils/cafe24');
 }
+
+// ============================================================
+// 인앱 브라우저 중복 요청 방지 (Dual Send 문제 대응)
+// ============================================================
+// 인앱 브라우저(Instagram, Facebook 등)에서 sendBeacon + fetch를 
+// 동시에 보내면 같은 이벤트가 2번 처리되는 문제 방지
+// ============================================================
+
+const DEDUP_WINDOW_MS = 5000; // 5초 내 동일 요청은 중복으로 판단
+const DEDUP_CLEANUP_INTERVAL_MS = 60000; // 1분마다 오래된 항목 정리
+
+// 최근 처리된 이벤트 캐시: key -> timestamp
+const recentEvents = new Map();
+
+/**
+ * 중복 이벤트인지 확인
+ * @param {string} eventType - 이벤트 타입
+ * @param {string} sessionId - 세션 ID
+ * @param {string} url - 페이지 URL
+ * @param {string} timestamp - 이벤트 타임스탬프
+ * @returns {boolean} 중복이면 true
+ */
+function isDuplicateEvent(eventType, sessionId, url, timestamp) {
+  // pageview만 중복 체크 (가장 많이 중복되는 이벤트)
+  if (eventType !== 'pageview') return false;
+  
+  // URL에서 쿼리스트링 제거 (같은 페이지 판단용)
+  const urlPath = url ? url.split('?')[0] : '';
+  const key = `${sessionId}:${urlPath}:${timestamp}`;
+  
+  const now = Date.now();
+  const lastProcessed = recentEvents.get(key);
+  
+  if (lastProcessed && (now - lastProcessed) < DEDUP_WINDOW_MS) {
+    return true; // 중복
+  }
+  
+  // 새 이벤트로 등록
+  recentEvents.set(key, now);
+  return false;
+}
+
+// 주기적으로 오래된 항목 정리 (메모리 누수 방지)
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, timestamp] of recentEvents.entries()) {
+    if (now - timestamp > DEDUP_WINDOW_MS * 2) {
+      recentEvents.delete(key);
+    }
+  }
+}, DEDUP_CLEANUP_INTERVAL_MS);
 
 /**
  * Handle pageview event
@@ -64,10 +82,10 @@ async function handlePageview(event, clientIp) {
     utm_params
   } = event;
 
-  // 인앱 브라우저 중복 요청 방지 (dual send 문제)
-  if (isDuplicatePageview(visitor_id, url)) {
-    console.log(`[Track] Duplicate pageview ignored: ${visitor_id.substring(0, 8)}...`);
-    return;
+  // 중복 요청 체크 (인앱 브라우저 dual send 문제 대응)
+  if (isDuplicateEvent('pageview', session_id, url, timestamp)) {
+    console.log(`[Track] Duplicate pageview ignored: session=${session_id?.substring(0, 8)}...`);
+    return; // 중복 요청은 무시
   }
 
   const visitTime = new Date(timestamp);

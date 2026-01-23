@@ -355,23 +355,44 @@ async function getPreviousVisits(visitorId, purchaseTimestamp) {
 
 /**
  * UTM 히스토리 조회 (병합 적용)
+ * 
+ * 인앱 브라우저 쿠키 문제 대응:
+ * - 인앱 브라우저에서 쿠키가 저장되지 않으면 visitor_id가 중복 생성됨
+ * - conversions.visitor_id와 utm_sessions.visitor_id가 다를 수 있음
+ * - session_id를 통해 sessions.visitor_id를 찾아 utm_sessions 조회
+ * 
+ * @param {string} visitorId - conversions 테이블의 visitor_id
+ * @param {string} sessionId - conversions 테이블의 session_id (optional, for fallback)
  */
-async function getUtmHistory(visitorId) {
+async function getUtmHistory(visitorId, sessionId = null) {
   const query = `
-    WITH enriched_utm AS (
+    WITH 
+    -- session_id 기반으로 실제 visitor_id 찾기 (인앱 브라우저 쿠키 문제 대응)
+    session_visitor AS (
+      SELECT visitor_id 
+      FROM sessions 
+      WHERE session_id = $2
+    ),
+    -- 조회할 visitor_id 결정: session 기반 visitor_id 우선, 없으면 원래 visitor_id
+    target_visitors AS (
+      SELECT visitor_id FROM session_visitor
+      UNION
+      SELECT $1::text as visitor_id
+    ),
+    enriched_utm AS (
       SELECT
-        id,
-        visitor_id,
-        COALESCE(utm_source, utm_params->>'utm_source', 'direct') as utm_source,
-        COALESCE(utm_medium, utm_params->>'utm_medium') as utm_medium,
-        COALESCE(utm_campaign, utm_params->>'utm_campaign') as utm_campaign,
-        utm_params->>'utm_content' as utm_content,
-        entry_timestamp,
-        exit_timestamp,
-        duration_seconds,
-        sequence_order
-      FROM utm_sessions
-      WHERE visitor_id = $1
+        us.id,
+        us.visitor_id,
+        COALESCE(us.utm_source, us.utm_params->>'utm_source', 'direct') as utm_source,
+        COALESCE(us.utm_medium, us.utm_params->>'utm_medium') as utm_medium,
+        COALESCE(us.utm_campaign, us.utm_params->>'utm_campaign') as utm_campaign,
+        us.utm_params->>'utm_content' as utm_content,
+        us.entry_timestamp,
+        us.exit_timestamp,
+        us.duration_seconds,
+        us.sequence_order
+      FROM utm_sessions us
+      WHERE us.visitor_id IN (SELECT visitor_id FROM target_visitors)
     ),
     with_gaps AS (
       SELECT
@@ -426,7 +447,7 @@ async function getUtmHistory(visitorId) {
     ORDER BY entry_timestamp ASC
   `;
 
-  const result = await db.query(query, [visitorId]);
+  const result = await db.query(query, [visitorId, sessionId]);
   return result.rows;
 }
 
@@ -501,25 +522,6 @@ async function getPastPurchases(visitorId, excludeOrderId) {
   return result.rows;
 }
 
-/**
- * 주문의 세션에 저장된 UTM 정보 조회 (sessions 테이블)
- * utm_sessions에 기록되지 않았더라도 sessions.utm_params에서 복구
- */
-async function getSessionUtmParams(sessionId) {
-  const query = `
-    SELECT 
-      utm_params,
-      ip_address,
-      entry_url,
-      start_time
-    FROM sessions
-    WHERE session_id = $1
-  `;
-
-  const result = await db.query(query, [sessionId]);
-  return result.rows[0] || null;
-}
-
 module.exports = {
   getOrders,
   getOrdersCount,
@@ -529,7 +531,6 @@ module.exports = {
   getUtmHistory,
   getSameIpVisits,
   getPastPurchases,
-  getSessionUtmParams,
   buildOrderFilters,
   SORT_FIELD_MAP
 };
