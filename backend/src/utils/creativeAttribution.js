@@ -42,6 +42,7 @@ async function calculateCreativeAttribution(creatives, startDate, endDate) {
 
   // 1단계: 선택 기간 내 모든 구매 조회
   // session_id도 함께 조회 (인앱 브라우저 쿠키 문제 대응)
+  // FIX (2026-01-23): 취소/환불 주문 제외 - 실제 유효 매출만 기여도 계산
   const purchaseQuery = `
     SELECT 
       c.visitor_id,
@@ -57,6 +58,8 @@ async function calculateCreativeAttribution(creatives, startDate, endDate) {
       AND c.final_payment > 0
       AND c.timestamp >= $1
       AND c.timestamp <= $2
+      AND (c.canceled = 'F' OR c.canceled IS NULL)
+      AND (c.order_status = 'confirmed' OR c.order_status IS NULL)
     ORDER BY c.visitor_id, c.timestamp
   `;
 

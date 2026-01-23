@@ -3,15 +3,17 @@
 // ============================================================================
 
 import { useState, useEffect } from 'react';
-import { Alert } from 'antd';
+import { Alert, Modal, message, Spin } from 'antd';
 import dayjs from 'dayjs';
 import { useCreativePerformance } from './hooks/useCreativePerformance';
+import { fetchCreativeOriginalUrl } from './services/creativePerformanceApi';
 import PerformanceHeader from './components/PerformanceHeader';
 import InsightCards from './components/InsightCards';
 import PerformanceFilters from './components/PerformanceFilters';
 import PerformanceTable from './components/PerformanceTable';
 import CreativeOrdersModal from '../../components/CreativeOrdersModal';
-import CreativeJourneyModal from '../../components/CreativeJourneyModal';
+import CreativeSessionsModal from '../../components/CreativeSessionsModal';
+import CreativeEntriesModal from '../../components/CreativeEntriesModal';
 import TestResultModal from '../../components/TestResultModal';
 
 /**
@@ -23,6 +25,19 @@ function CreativePerformance() {
   
   // 테스트 결과 모달 state
   const [testResultModalVisible, setTestResultModalVisible] = useState(false);
+  
+  // 세션 상세 모달 state (UV 클릭)
+  const [sessionsModalVisible, setSessionsModalVisible] = useState(false);
+  const [sessionsCreative, setSessionsCreative] = useState(null);
+  
+  // 진입 목록 모달 state (View 클릭)
+  const [entriesModalVisible, setEntriesModalVisible] = useState(false);
+  const [entriesCreative, setEntriesCreative] = useState(null);
+
+  // 원본 URL 모달 state
+  const [originalUrlModalVisible, setOriginalUrlModalVisible] = useState(false);
+  const [originalUrlData, setOriginalUrlData] = useState(null);
+  const [originalUrlLoading, setOriginalUrlLoading] = useState(false);
 
   const {
     // 데이터
@@ -42,14 +57,10 @@ function CreativePerformance() {
     // 모달 상태
     ordersModalVisible,
     selectedCreative,
-    journeyModalVisible,
-    journeyCreative,
     
     // 상태 변경 함수
     setOrdersModalVisible,
     setSelectedCreative,
-    setJourneyModalVisible,
-    setJourneyCreative,
     setActiveUtmFilters,
     setQuickFilterSources,
     setMaxDuration,
@@ -91,15 +102,64 @@ function CreativePerformance() {
     setOrdersModalVisible(true);
   };
 
-  // 고객 여정 버튼 클릭 핸들러
-  const handleViewJourney = (record) => {
-    setJourneyCreative({
+  // 세션 상세 보기 핸들러 (UV 클릭)
+  const handleViewSessions = (record) => {
+    setSessionsCreative({
       creative_name: record.creative_name,
       utm_source: record.utm_source,
       utm_medium: record.utm_medium,
       utm_campaign: record.utm_campaign
     });
-    setJourneyModalVisible(true);
+    setSessionsModalVisible(true);
+  };
+
+  // 진입 목록 보기 핸들러 (View 클릭)
+  const handleViewEntries = (record) => {
+    setEntriesCreative({
+      creative_name: record.creative_name,
+      utm_source: record.utm_source,
+      utm_medium: record.utm_medium,
+      utm_campaign: record.utm_campaign
+    });
+    setEntriesModalVisible(true);
+  };
+
+  // 원본 URL 보기 핸들러
+  const handleViewOriginalUrl = async (record) => {
+    setOriginalUrlLoading(true);
+    setOriginalUrlModalVisible(true);
+    setOriginalUrlData({ creative_name: record.creative_name });
+    
+    try {
+      const result = await fetchCreativeOriginalUrl({
+        creative_name: record.creative_name,
+        utm_source: record.utm_source,
+        utm_medium: record.utm_medium,
+        utm_campaign: record.utm_campaign,
+        start: filters.dateRange[0],
+        end: filters.dateRange[1]
+      });
+      
+      if (result.success) {
+        setOriginalUrlData({
+          creative_name: record.creative_name,
+          ...result.data
+        });
+      } else {
+        message.error('원본 URL을 불러올 수 없습니다');
+      }
+    } catch (err) {
+      console.error('원본 URL 조회 실패:', err);
+      message.error('원본 URL 조회 중 오류가 발생했습니다');
+    } finally {
+      setOriginalUrlLoading(false);
+    }
+  };
+
+  // URL 복사 핸들러
+  const handleCopyUrl = (url) => {
+    navigator.clipboard.writeText(url);
+    message.success('URL이 복사되었습니다');
   };
 
   return (
@@ -150,7 +210,9 @@ function CreativePerformance() {
         onTableChange={handleTableChange}
         onPageChange={handlePageChange}
         onViewOrders={handleViewOrders}
-        onViewJourney={handleViewJourney}
+        onViewSessions={handleViewSessions}
+        onViewEntries={handleViewEntries}
+        onViewOriginalUrl={handleViewOriginalUrl}
         maxDuration={maxDuration}
         onMaxDurationChange={setMaxDuration}
       />
@@ -169,14 +231,28 @@ function CreativePerformance() {
         }}
       />
 
-      {/* 고객 여정 모달 */}
-      <CreativeJourneyModal
-        visible={journeyModalVisible}
+      {/* 세션 상세 모달 (UV 클릭) */}
+      <CreativeSessionsModal
+        visible={sessionsModalVisible}
         onClose={() => {
-          setJourneyModalVisible(false);
-          setJourneyCreative(null);
+          setSessionsModalVisible(false);
+          setSessionsCreative(null);
         }}
-        creative={journeyCreative}
+        creative={sessionsCreative}
+        dateRange={{
+          start: filters.dateRange[0],
+          end: filters.dateRange[1]
+        }}
+      />
+
+      {/* 진입 목록 모달 (View 클릭) */}
+      <CreativeEntriesModal
+        visible={entriesModalVisible}
+        onClose={() => {
+          setEntriesModalVisible(false);
+          setEntriesCreative(null);
+        }}
+        creative={entriesCreative}
         dateRange={{
           start: filters.dateRange[0],
           end: filters.dateRange[1]
@@ -188,6 +264,64 @@ function CreativePerformance() {
         visible={testResultModalVisible}
         onClose={() => setTestResultModalVisible(false)}
       />
+
+      {/* 원본 URL 모달 */}
+      <Modal
+        title="원본 URL"
+        open={originalUrlModalVisible}
+        onCancel={() => {
+          setOriginalUrlModalVisible(false);
+          setOriginalUrlData(null);
+        }}
+        footer={null}
+        width={700}
+      >
+        {originalUrlLoading ? (
+          <div style={{ textAlign: 'center', padding: '40px' }}>
+            <Spin size="large" />
+            <div style={{ marginTop: '16px', color: '#666' }}>URL 조회 중...</div>
+          </div>
+        ) : originalUrlData ? (
+          <div>
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>광고 소재 이름</div>
+              <div style={{ fontSize: '14px', fontWeight: 600 }}>{originalUrlData.creative_name}</div>
+            </div>
+            
+            {originalUrlData.full_url ? (
+              <>
+                <div style={{ marginBottom: '16px' }}>
+                  <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>광고 랜딩 URL</div>
+                  <div 
+                    style={{ 
+                      fontSize: '13px', 
+                      padding: '12px', 
+                      background: '#f5f5f5', 
+                      borderRadius: '6px',
+                      wordBreak: 'break-all',
+                      cursor: 'pointer',
+                      maxHeight: '200px',
+                      overflow: 'auto'
+                    }}
+                    onClick={() => handleCopyUrl(originalUrlData.full_url)}
+                    title="클릭하여 복사"
+                  >
+                    {originalUrlData.full_url}
+                  </div>
+                </div>
+                
+                <div style={{ fontSize: '12px', color: '#999' }}>
+                  * 해당 기간 내 {originalUrlData.total_count?.toLocaleString()}회 유입된 대표 URL입니다. 클릭하면 복사됩니다.
+                </div>
+              </>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
+                해당 기간 내 유입 기록이 없습니다.
+              </div>
+            )}
+          </div>
+        ) : null}
+      </Modal>
     </div>
   );
 }

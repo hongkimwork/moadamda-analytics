@@ -325,5 +325,122 @@ router.post('/creative-performance/raw-attribution', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/creative-performance/sessions
+ * 특정 광고 소재를 통해 유입된 세션 상세 목록 조회
+ * 
+ * Request Body:
+ *  - creative_name: 광고 소재 이름 (utm_content) - 필수
+ *  - utm_source: UTM Source - 필수
+ *  - utm_medium: UTM Medium - 필수
+ *  - utm_campaign: UTM Campaign - 필수
+ *  - start: 시작일 (YYYY-MM-DD) - 필수
+ *  - end: 종료일 (YYYY-MM-DD) - 필수
+ *  - page: 페이지 번호 (default: 1)
+ *  - limit: 페이지 크기 (default: 50)
+ * 
+ * Response:
+ *  - data: 세션 목록 (session_id, start_time, end_time, duration, pageviews, device, browser, os, ip, entry_url, exit_url, is_converted)
+ *  - pagination: 페이지 정보
+ */
+router.post('/creative-performance/sessions', async (req, res) => {
+  try {
+    const result = await detailService.getCreativeSessions(req.body);
+    res.json(result);
+  } catch (error) {
+    console.error('Creative sessions API error:', error);
+    
+    if (error.message.includes('required')) {
+      return res.status(400).json({ 
+        success: false,
+        error: error.message 
+      });
+    }
+    
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch creative sessions',
+      message: error.message 
+    });
+  }
+});
+
+/**
+ * POST /api/creative-performance/entries
+ * 특정 광고 소재의 진입 목록 조회 (View 상세)
+ * 
+ * Request Body:
+ *  - creative_name: 광고 소재 이름 (utm_content) - 필수
+ *  - utm_source: UTM Source - 필수
+ *  - utm_medium: UTM Medium - 필수
+ *  - utm_campaign: UTM Campaign - 필수
+ *  - start: 시작일 (YYYY-MM-DD) - 필수
+ *  - end: 종료일 (YYYY-MM-DD) - 필수
+ *  - page: 페이지 번호 (default: 1)
+ *  - limit: 페이지 크기 (default: 50)
+ * 
+ * Response:
+ *  - data: 진입 목록 (entry_timestamp, visitor_id, session_id, gap_seconds)
+ *  - pagination: 페이지 정보
+ */
+router.post('/creative-performance/entries', async (req, res) => {
+  try {
+    const result = await detailService.getCreativeEntries(req.body);
+    res.json(result);
+  } catch (error) {
+    console.error('Creative entries API error:', error);
+    
+    if (error.message.includes('required')) {
+      return res.status(400).json({ 
+        success: false,
+        error: error.message 
+      });
+    }
+    
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch creative entries',
+      message: error.message 
+    });
+  }
+});
+
+/**
+ * POST /api/creative-performance/original-url
+ * 특정 광고 소재의 원본 URL (대표 랜딩 URL) 조회
+ * 
+ * Request Body:
+ *  - creative_name: 광고 소재 이름 (utm_content) - 필수
+ *  - utm_source: UTM Source - 필수
+ *  - utm_medium: UTM Medium - 필수
+ *  - utm_campaign: UTM Campaign - 필수
+ *  - start: 시작일 (YYYY-MM-DD) - 필수
+ *  - end: 종료일 (YYYY-MM-DD) - 필수
+ * 
+ * Response:
+ *  - data: { original_url, full_url, total_count }
+ */
+router.post('/creative-performance/original-url', async (req, res) => {
+  try {
+    const result = await detailService.getCreativeOriginalUrl(req.body);
+    res.json(result);
+  } catch (error) {
+    console.error('Creative original URL API error:', error);
+    
+    if (error.message.includes('required')) {
+      return res.status(400).json({ 
+        success: false,
+        error: error.message 
+      });
+    }
+    
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch creative original URL',
+      message: error.message 
+    });
+  }
+});
+
 module.exports = router;
 

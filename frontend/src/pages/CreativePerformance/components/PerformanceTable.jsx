@@ -4,7 +4,7 @@
 
 import React, { useMemo } from 'react';
 import { Card, Table, Tooltip, Dropdown, Button, message, Select } from 'antd';
-import { ShoppingCart, Network } from 'lucide-react';
+import { ShoppingCart, Link } from 'lucide-react';
 import { formatDuration, formatCurrency, formatNumber, calculateTrafficScores } from '../utils/formatters';
 import { getRowKey } from '../utils/helpers';
 
@@ -40,7 +40,9 @@ function PerformanceTable({
   onTableChange,
   onPageChange,
   onViewOrders,
-  onViewJourney,
+  onViewSessions,
+  onViewEntries,
+  onViewOriginalUrl,
   maxDuration,
   onMaxDurationChange
 }) {
@@ -149,7 +151,21 @@ function PerformanceTable({
       key: 'total_views',
       width: 60,
       align: 'center',
-      render: (num) => <span style={{ fontWeight: 500, fontSize: '13px', color: '#6b7280' }}>{formatNumber(num)}</span>,
+      render: (num, record) => (
+        <span 
+          style={{ 
+            fontWeight: 500, 
+            fontSize: '13px', 
+            color: '#1890ff',
+            cursor: 'pointer',
+            textDecoration: 'underline'
+          }}
+          onClick={() => onViewEntries && onViewEntries(record)}
+          title="클릭하여 진입 목록 보기"
+        >
+          {formatNumber(num)}
+        </span>
+      ),
       sorter: true,
       showSorterTooltip: false
     },
@@ -159,7 +175,21 @@ function PerformanceTable({
       key: 'unique_visitors',
       width: 55,
       align: 'center',
-      render: (num) => <span style={{ fontWeight: 600, fontSize: '13px', color: '#374151' }}>{formatNumber(num)}</span>,
+      render: (num, record) => (
+        <span 
+          style={{ 
+            fontWeight: 600, 
+            fontSize: '13px', 
+            color: '#389e0d',
+            cursor: 'pointer',
+            textDecoration: 'underline'
+          }}
+          onClick={() => onViewSessions && onViewSessions(record)}
+          title="클릭하여 세션 상세 보기"
+        >
+          {formatNumber(num)}
+        </span>
+      ),
       sorter: true,
       showSorterTooltip: false
     },
@@ -632,10 +662,10 @@ function PerformanceTable({
             onClick: () => onViewOrders(record)
           },
           {
-            key: 'journey',
-            label: '고객 여정',
-            icon: <Network size={16} />,
-            onClick: () => onViewJourney(record)
+            key: 'originalUrl',
+            label: '원본 URL 보기',
+            icon: <Link size={16} />,
+            onClick: () => onViewOriginalUrl && onViewOriginalUrl(record)
           }
         ];
 

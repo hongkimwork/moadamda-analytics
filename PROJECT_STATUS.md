@@ -17,6 +17,12 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2026-01-23 | 세션PV→총PV 컬럼명 변경 | CreativeOrdersModal.jsx |
+| 2026-01-23 | 평균스크롤 합계방식 변경 | creativeRepository.js |
+| 2026-01-23 | 세션모달 스크롤컬럼 추가 | CreativeSessionsModal.jsx |
+| 2026-01-23 | View/UV 모달 분리 | CreativeEntriesModal.jsx |
+| 2026-01-23 | 취소주문 기여도 제외 | creativeAttribution.js |
+| 2026-01-23 | View를 진입횟수로 변경 | creativeRepository.js |
 | 2026-01-23 | 광고귀속 인앱대응 추가 | creativeAttribution.js |
 | 2026-01-23 | 인앱브라우저 UTM 복구 | ordersRepository.js |
 | 2026-01-22 | 평균PV 중복계산 버그 수정 | creativeRepository.js |
@@ -26,12 +32,6 @@
 | 2026-01-21 | 요약 카드 순서 변경 | OurDataCompare/index.jsx |
 | 2026-01-21 | 탭 변경 시 페이지 리셋 | OurDataCompare/index.jsx |
 | 2026-01-21 | 카페24 비교 페이지 배포 | OurDataCompare/index.jsx |
-| 2026-01-21 | 요약 카드 라벨 볼드 처리 | OurDataCompare/index.jsx |
-| 2026-01-21 | 요약 카드 레이아웃 개선 | OurDataCompare/index.jsx |
-| 2026-01-21 | 카페24 비교 중복제거 | validation.js |
-| 2026-01-21 | 테이블 텍스트 중앙 정렬 | OurDataCompare/index.jsx |
-| 2026-01-21 | 비교 페이지 너비 축소 | OurDataCompare/index.jsx |
-| 2026-01-21 | 데이터 비교 레이아웃 개선 | OurDataCompare/index.jsx |
 
 ---
 

@@ -4,9 +4,45 @@
  */
 
 const repository = require('./detailRepository');
+const { getMetaAdNames, getAllVariantNames } = require('./metaAdNameMapping');
+const db = require('../../utils/database');
 
 // 기여 인정 기간 (일 단위) - 구매일 기준 이 기간 내에 본 광고만 기여 인정
 const ATTRIBUTION_WINDOW_DAYS = 30;
+
+/**
+ * DB에서 해당 기간 내 존재하는 광고명 목록 조회 (변형 찾기용)
+ */
+async function getDbCreativeNames(startDate, endDate) {
+  const query = `
+    SELECT DISTINCT REPLACE(us.utm_params->>'utm_content', '+', ' ') as creative_name
+    FROM utm_sessions us
+    JOIN visitors v ON us.visitor_id = v.visitor_id
+    WHERE us.utm_params->>'utm_content' IS NOT NULL
+      AND us.entry_timestamp >= $1
+      AND us.entry_timestamp <= $2
+      AND v.is_bot = false
+  `;
+  const result = await db.query(query, [startDate, endDate]);
+  return result.rows.map(r => r.creative_name);
+}
+
+/**
+ * 광고명의 모든 변형을 찾아서 배열로 반환
+ * @param {string} creative_name - 요청받은 광고명
+ * @param {Date} startDate - 시작일
+ * @param {Date} endDate - 종료일
+ * @returns {Promise<string[]>} - 변형 광고명들의 배열
+ */
+async function getCreativeVariants(creative_name, startDate, endDate) {
+  // DB에서 해당 기간 내 존재하는 광고명 목록 조회
+  const dbCreativeNames = await getDbCreativeNames(startDate, endDate);
+  
+  // 요청받은 광고명이 메타 광고명인 경우 변형들 찾기
+  const variants = getAllVariantNames(creative_name, dbCreativeNames);
+  
+  return variants.length > 0 ? variants : [creative_name];
+}
 
 /**
  * 날짜 파라미터 파싱 및 검증
@@ -253,6 +289,8 @@ async function getCreativeOrders(params) {
       utm_source,
       utm_medium,
       utm_campaign,
+      startDate,
+      endDate,
       maxDurationSeconds
     }),
     repository.getCreativeTouchCounts({
@@ -260,7 +298,9 @@ async function getCreativeOrders(params) {
       creative_name,
       utm_source,
       utm_medium,
-      utm_campaign
+      utm_campaign,
+      startDate,
+      endDate
     }),
     repository.getVisitorTotalVisits({ visitorIds: contributedVisitorArray })
   ]);
@@ -364,9 +404,12 @@ async function getCreativeAnalysis(params) {
   
   const { startDate, endDate } = parseDates(start, end);
   
-  // visitor 조회
+  // 광고명 변형들 찾기 (잘린 광고명 포함)
+  const creativeVariants = await getCreativeVariants(creative_name, startDate, endDate);
+  
+  // visitor 조회 (변형들 모두 포함)
   const visitorIds = await repository.getCreativeVisitors({
-    creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate
+    creative_name: creativeVariants, utm_source, utm_medium, utm_campaign, startDate, endDate
   });
   
   if (visitorIds.length === 0) {
@@ -381,10 +424,10 @@ async function getCreativeAnalysis(params) {
     };
   }
   
-  // 병렬 쿼리 실행
+  // 병렬 쿼리 실행 (변형들 모두 포함)
   const [dailyTrendRows, deviceStatsRows, productSalesRows, visitorTypeRow] = await Promise.all([
-    repository.getDailyTrend({ creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate, visitorIds }),
-    repository.getDeviceStats({ creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate, visitorIds }),
+    repository.getDailyTrend({ creative_name: creativeVariants, utm_source, utm_medium, utm_campaign, startDate, endDate, visitorIds }),
+    repository.getDeviceStats({ creative_name: creativeVariants, utm_source, utm_medium, utm_campaign, startDate, endDate, visitorIds }),
     repository.getProductSales({ visitorIds, startDate, endDate }),
     repository.getVisitorType({ visitorIds })
   ]);
@@ -466,9 +509,12 @@ async function getCreativeJourney(params) {
   const { startDate, endDate } = parseDates(start, end);
   const targetCreativeKey = `${creative_name}||${utm_source}||${utm_medium}||${utm_campaign}`;
   
-  // visitor 조회
+  // 광고명 변형들 찾기
+  const creativeVariants = await getCreativeVariants(creative_name, startDate, endDate);
+  
+  // visitor 조회 (변형들 모두 포함)
   const visitorIds = await repository.getCreativeVisitors({
-    creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate
+    creative_name: creativeVariants, utm_source, utm_medium, utm_campaign, startDate, endDate
   });
   
   if (visitorIds.length === 0) {
@@ -647,9 +693,12 @@ async function getCreativeLandingPages(params) {
   
   const { startDate, endDate } = parseDates(start, end);
   
-  // visitor 조회
+  // 광고명 변형들 찾기
+  const creativeVariants = await getCreativeVariants(creative_name, startDate, endDate);
+  
+  // visitor 조회 (변형들 모두 포함)
   const visitorIds = await repository.getCreativeVisitors({
-    creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate
+    creative_name: creativeVariants, utm_source, utm_medium, utm_campaign, startDate, endDate
   });
   
   if (visitorIds.length === 0) {
@@ -973,11 +1022,14 @@ async function getRawTrafficData(params) {
   
   const { startDate, endDate } = parseDates(start, end);
   
-  // 트래픽 요약, 세션 목록, 총 개수 조회
+  // 광고명 변형들 찾기
+  const creativeVariants = await getCreativeVariants(creative_name, startDate, endDate);
+  
+  // 트래픽 요약, 세션 목록, 총 개수 조회 (변형들 모두 포함)
   const [summary, sessions, totalCount] = await Promise.all([
-    repository.getRawTrafficSummary({ creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate }),
-    repository.getRawSessions({ creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate, page, limit, filter }),
-    repository.getRawSessionsCount({ creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate, filter })
+    repository.getRawTrafficSummary({ creative_name: creativeVariants, utm_source, utm_medium, utm_campaign, startDate, endDate }),
+    repository.getRawSessions({ creative_name: creativeVariants, utm_source, utm_medium, utm_campaign, startDate, endDate, page, limit, filter }),
+    repository.getRawSessionsCount({ creative_name: creativeVariants, utm_source, utm_medium, utm_campaign, startDate, endDate, filter })
   ]);
   
   // 세션 데이터 가공 (방문자 단위)
@@ -1160,6 +1212,188 @@ async function getRawAttributionData(params) {
   };
 }
 
+/**
+ * 특정 광고 소재를 통해 유입된 세션 상세 목록 조회
+ * 카페24 호환: visitors.is_bot = false 필터 적용
+ */
+async function getCreativeSessions(params) {
+  const { creative_name, utm_source, utm_medium, utm_campaign, start, end, page = 1, limit = 50 } = params;
+  
+  // 파라미터 검증
+  validateCreativeParams(params);
+  
+  const { startDate, endDate } = parseDates(start, end);
+  
+  // 광고명 변형들 찾기
+  const creativeVariants = await getCreativeVariants(creative_name, startDate, endDate);
+  
+  // 세션 목록 및 총 개수 조회 (변형들 모두 포함)
+  const [sessions, totalCount] = await Promise.all([
+    repository.getCreativeSessions({
+      creative_name: creativeVariants, utm_source, utm_medium, utm_campaign,
+      startDate, endDate, page, limit
+    }),
+    repository.getCreativeSessionsCount({
+      creative_name: creativeVariants, utm_source, utm_medium, utm_campaign,
+      startDate, endDate
+    })
+  ]);
+  
+  // 체류시간 포맷 함수
+  const formatDuration = (seconds) => {
+    if (!seconds || seconds <= 0) return '0초';
+    if (seconds < 60) return `${Math.round(seconds)}초`;
+    if (seconds < 3600) {
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.round(seconds % 60);
+      return secs > 0 ? `${mins}분 ${secs}초` : `${mins}분`;
+    }
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    return mins > 0 ? `${hours}시간 ${mins}분` : `${hours}시간`;
+  };
+  
+  // 세션 데이터 가공
+  const formattedSessions = sessions.map(s => ({
+    session_id: s.session_id,
+    visitor_id: s.visitor_id,
+    start_time: s.start_time,
+    end_time: s.end_time,
+    duration_seconds: parseInt(s.duration_seconds) || 0,
+    duration_formatted: formatDuration(parseInt(s.duration_seconds) || 0),
+    pageview_count: parseInt(s.pageview_count) || 0,
+    total_scroll_px: parseInt(s.total_scroll_px) || 0,
+    entry_url: s.entry_url || '-',
+    exit_url: s.exit_url || '-',
+    is_converted: s.is_converted || false,
+    device_type: s.device_type || 'unknown',
+    browser: s.browser || 'unknown',
+    os: s.os || 'unknown',
+    ip_address: s.ip_address || 'unknown'
+  }));
+  
+  return {
+    success: true,
+    creative: { creative_name, utm_source, utm_medium, utm_campaign },
+    period: { start, end },
+    data: formattedSessions,
+    pagination: {
+      page,
+      limit,
+      total: totalCount,
+      totalPages: Math.ceil(totalCount / limit)
+    }
+  };
+}
+
+
+/**
+ * 특정 광고 소재의 진입 목록 조회 (View 상세)
+ * 각 진입 기록을 시간순으로 표시하며, 이전 진입과의 간격도 계산
+ */
+async function getCreativeEntries(params) {
+  const { creative_name, utm_source, utm_medium, utm_campaign, start, end, page = 1, limit = 50 } = params;
+  
+  // 파라미터 검증
+  validateCreativeParams(params);
+  
+  const { startDate, endDate } = parseDates(start, end);
+  
+  // 광고명 변형들 찾기
+  const creativeVariants = await getCreativeVariants(creative_name, startDate, endDate);
+  
+  // 진입 목록 및 총 개수 조회
+  const [entries, totalCount] = await Promise.all([
+    repository.getCreativeEntries({
+      creative_name: creativeVariants, utm_source, utm_medium, utm_campaign,
+      startDate, endDate, page, limit
+    }),
+    repository.getCreativeEntriesCount({
+      creative_name: creativeVariants, utm_source, utm_medium, utm_campaign,
+      startDate, endDate
+    })
+  ]);
+  
+  // 진입 데이터 가공 (간격 계산)
+  const formattedEntries = entries.map((entry, index) => {
+    // 이전 진입과의 간격 계산 (같은 visitor 내에서만)
+    let gapSeconds = null;
+    let gapFormatted = '-';
+    
+    if (entry.gap_seconds !== null) {
+      gapSeconds = parseInt(entry.gap_seconds);
+      if (gapSeconds < 60) {
+        gapFormatted = `+${gapSeconds}초`;
+      } else if (gapSeconds < 3600) {
+        const mins = Math.floor(gapSeconds / 60);
+        const secs = gapSeconds % 60;
+        gapFormatted = secs > 0 ? `+${mins}분 ${secs}초` : `+${mins}분`;
+      } else {
+        const hours = Math.floor(gapSeconds / 3600);
+        const mins = Math.floor((gapSeconds % 3600) / 60);
+        gapFormatted = mins > 0 ? `+${hours}시간 ${mins}분` : `+${hours}시간`;
+      }
+    }
+    
+    return {
+      id: entry.id,
+      entry_timestamp: entry.entry_timestamp,
+      visitor_id: entry.visitor_id,
+      session_id: entry.session_id,
+      sequence_order: entry.sequence_order,
+      gap_seconds: gapSeconds,
+      gap_formatted: gapFormatted
+    };
+  });
+  
+  return {
+    success: true,
+    creative: { creative_name, utm_source, utm_medium, utm_campaign },
+    period: { start, end },
+    data: formattedEntries,
+    pagination: {
+      page,
+      limit,
+      total: totalCount,
+      totalPages: Math.ceil(totalCount / limit)
+    }
+  };
+}
+
+/**
+ * 특정 광고 소재의 원본 URL (대표 랜딩 URL) 조회
+ * 
+ * @param {Object} params
+ * @returns {Object} 대표 URL 정보
+ */
+async function getCreativeOriginalUrl(params) {
+  const { creative_name, utm_source, utm_medium, utm_campaign, start, end } = params;
+  
+  // 파라미터 검증
+  validateCreativeParams(params);
+  
+  const { startDate, endDate } = parseDates(start, end);
+  
+  // 광고명 변형들 찾기
+  const creativeVariants = await getCreativeVariants(creative_name, startDate, endDate);
+  
+  // 대표 URL 조회 (가장 많이 유입된 entry_url)
+  const result = await repository.getCreativeOriginalUrl({
+    creative_name: creativeVariants,
+    utm_source,
+    utm_medium,
+    utm_campaign,
+    startDate,
+    endDate
+  });
+  
+  return {
+    success: true,
+    creative: { creative_name, utm_source, utm_medium, utm_campaign },
+    period: { start, end },
+    data: result
+  };
+}
 
 module.exports = {
   getCreativeOrders,
@@ -1168,5 +1402,8 @@ module.exports = {
   getCreativeLandingPages,
   compareCreatives,
   getRawTrafficData,
-  getRawAttributionData
+  getRawAttributionData,
+  getCreativeSessions,
+  getCreativeEntries,
+  getCreativeOriginalUrl
 };

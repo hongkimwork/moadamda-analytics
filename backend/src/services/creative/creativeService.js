@@ -5,7 +5,8 @@
 
 const { calculateCreativeAttribution } = require('../../utils/creativeAttribution');
 const repository = require('./creativeRepository');
-const { safeDecodeURIComponent, parseUtmFilters, validateSortColumn, isTruncated } = require('./utils');
+const { safeDecodeURIComponent, parseUtmFilters, validateSortColumn } = require('./utils');
+const { getMetaAdNames, mapToMetaAdName } = require('./metaAdNameMapping');
 
 /**
  * 광고 소재 성과 데이터 조회 및 분석
@@ -101,84 +102,69 @@ async function getCreativePerformance(params) {
     total_revenue: 0
   }));
 
-  // 8. 디코딩된 키 기준으로 중복 데이터 병합 (인코딩 차이로 인한 중복 해결)
-  const mergedDataMap = new Map();
+  // 8. 메타 광고명 기준으로 데이터 병합
+  // 메타 API에서 전체 광고명 목록 가져오기
+  const metaAdNames = await getMetaAdNames();
   
-  // 1단계: 정확히 일치하는 키로 먼저 그룹화
-  rawData.forEach(row => {
-    const key = `${row.creative_name}||${row.utm_source}||${row.utm_medium}||${row.utm_campaign}`;
+  // 메타 광고명별로 데이터 그룹화
+  const mergedDataMap = new Map();
+  const unmappedRows = [];
+  
+  for (const row of rawData) {
+    // 메타 광고명으로 매핑 시도
+    const metaName = await mapToMetaAdName(row.creative_name, metaAdNames);
     
-    if (mergedDataMap.has(key)) {
-      const existing = mergedDataMap.get(key);
-      // UV 합산
-      existing.unique_visitors += row.unique_visitors;
-      // View 합산
-      existing.total_views += row.total_views;
-      // 총 페이지뷰, 총 체류시간, 총 스크롤 합산 (나중에 평균 재계산용)
-      existing._total_pageviews += row.unique_visitors * row.avg_pageviews;
-      existing._total_duration += row.unique_visitors * row.avg_duration_seconds;
-      existing._total_scroll += row.unique_visitors * row.avg_scroll_px;
+    if (metaName) {
+      // 매핑 성공: 메타 광고명 기준으로 그룹화
+      // utm_source가 null인 경우도 동일 광고로 병합
+      const key = `${metaName}||${row.utm_medium}||${row.utm_campaign}`;
+      
+      if (mergedDataMap.has(key)) {
+        const existing = mergedDataMap.get(key);
+        existing.unique_visitors += row.unique_visitors;
+        existing.total_views += row.total_views;
+        existing._total_pageviews += row.unique_visitors * row.avg_pageviews;
+        existing._total_duration += row.unique_visitors * row.avg_duration_seconds;
+        existing._total_scroll += row.unique_visitors * row.avg_scroll_px;
+        // 원본 광고명들 추적 (상세 조회용)
+        if (!existing._variant_names.includes(row.creative_name)) {
+          existing._variant_names.push(row.creative_name);
+        }
+      } else {
+        mergedDataMap.set(key, {
+          creative_name: metaName, // 메타 광고명으로 통일
+          utm_source: row.utm_source || 'meta', // null이면 meta로
+          utm_medium: row.utm_medium,
+          utm_campaign: row.utm_campaign,
+          unique_visitors: row.unique_visitors,
+          total_views: row.total_views,
+          _total_pageviews: row.unique_visitors * row.avg_pageviews,
+          _total_duration: row.unique_visitors * row.avg_duration_seconds,
+          _total_scroll: row.unique_visitors * row.avg_scroll_px,
+          purchase_count: 0,
+          total_revenue: 0,
+          _variant_names: [row.creative_name] // 원본 광고명 추적
+        });
+      }
     } else {
-      mergedDataMap.set(key, {
+      // 매핑 실패: 그대로 유지 (깨진 문자, 메타에 없는 광고 등)
+      unmappedRows.push({
         ...row,
         _total_pageviews: row.unique_visitors * row.avg_pageviews,
         _total_duration: row.unique_visitors * row.avg_duration_seconds,
-        _total_scroll: row.unique_visitors * row.avg_scroll_px
+        _total_scroll: row.unique_visitors * row.avg_scroll_px,
+        _variant_names: [row.creative_name]
       });
-    }
-  });
-  
-  // 2단계: 잘린 광고명을 정상 광고명에 병합 (접두사 기반)
-  const entries = Array.from(mergedDataMap.entries());
-  const keysToDelete = new Set();
-  
-  for (let i = 0; i < entries.length; i++) {
-    const [shortKey, shortRow] = entries[i];
-    const shortName = shortRow.creative_name;
-    
-    // 이미 삭제 예정인 키는 스킵
-    if (keysToDelete.has(shortKey)) continue;
-    
-    // 광고명이 너무 짧으면 접두사 병합 하지 않음 (최소 20자)
-    if (shortName.length < 20) continue;
-    
-    for (let j = 0; j < entries.length; j++) {
-      if (i === j) continue;
-      
-      const [longKey, longRow] = entries[j];
-      const longName = longRow.creative_name;
-      
-      // 이미 삭제 예정인 키는 스킵
-      if (keysToDelete.has(longKey)) continue;
-      
-      // UTM 조합이 같아야 함
-      if (shortRow.utm_source !== longRow.utm_source ||
-          shortRow.utm_medium !== longRow.utm_medium ||
-          shortRow.utm_campaign !== longRow.utm_campaign) {
-        continue;
-      }
-      
-      // 짧은 광고명이 긴 광고명의 접두사인지 확인
-      if (longName.length > shortName.length && longName.startsWith(shortName)) {
-        // 잘린 것처럼 보이는 경우에만 병합
-        if (isTruncated(shortName, longName)) {
-          // 짧은 것의 데이터를 긴 것에 병합
-          longRow.unique_visitors += shortRow.unique_visitors;
-          longRow.total_views += shortRow.total_views;
-          longRow._total_pageviews += shortRow._total_pageviews;
-          longRow._total_duration += shortRow._total_duration;
-          longRow._total_scroll += shortRow._total_scroll;
-          
-          // 짧은 것은 삭제 예정
-          keysToDelete.add(shortKey);
-          break; // 하나에만 병합
-        }
-      }
     }
   }
   
-  // 삭제 예정인 키 제거
-  keysToDelete.forEach(key => mergedDataMap.delete(key));
+  // 매핑되지 않은 행들도 맵에 추가 (원래 키 그대로)
+  unmappedRows.forEach(row => {
+    const key = `${row.creative_name}||${row.utm_source}||${row.utm_medium}||${row.utm_campaign}`;
+    if (!mergedDataMap.has(key)) {
+      mergedDataMap.set(key, row);
+    }
+  });
   
   // 평균값 재계산 후 최종 data 배열 생성
   const data = Array.from(mergedDataMap.values()).map(row => ({
@@ -198,7 +184,8 @@ async function getCreativePerformance(params) {
       ? Math.round(row._total_scroll / row.unique_visitors) 
       : 0,
     purchase_count: row.purchase_count,
-    total_revenue: row.total_revenue
+    total_revenue: row.total_revenue,
+    _variant_names: row._variant_names // 상세 조회용 원본 광고명들
   }));
 
   // 9. 기여도 계산 (결제건 기여 포함 수, 결제건 기여 금액, 기여 결제건 총 결제금액)
@@ -224,12 +211,31 @@ async function getCreativePerformance(params) {
     };
   });
 
-  // 11. JavaScript에서 정렬 (기여도 컬럼인 경우)
-  if (!isDbSort) {
+  // 11. JavaScript에서 정렬 (기여도 컬럼이거나 DB 정렬 이후 병합 과정에서 순서가 섞인 경우)
+  if (true) { // 항상 JS 정렬 수행 (병합 로직 때문)
     finalData.sort((a, b) => {
-      const aVal = a[sortBy] || 0;
-      const bVal = b[sortBy] || 0;
-      return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+      let aVal = a[sortBy];
+      let bVal = b[sortBy];
+      
+      // 숫자로 변환 가능한 경우 숫자로 비교 (문자열 정렬 방지)
+      const numA = Number(aVal);
+      const numB = Number(bVal);
+      
+      if (!isNaN(numA) && !isNaN(numB)) {
+        aVal = numA;
+        bVal = numB;
+      } else {
+        // 문자열인 경우 null 처리 및 기본값
+        aVal = aVal || '';
+        bVal = bVal || '';
+      }
+      
+      if (aVal === bVal) return 0;
+      if (sortDirection === 'asc') {
+        return aVal > bVal ? 1 : -1;
+      } else {
+        return aVal < bVal ? 1 : -1;
+      }
     });
   }
 
