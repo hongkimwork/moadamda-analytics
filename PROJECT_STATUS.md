@@ -17,6 +17,10 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2026-01-26 | 모수평가 설정 기능 추가 | ScoreSettingsModal.jsx |
+| 2026-01-26 | 이상치필터 확장(PV/스크롤) | PerformanceFilters.jsx |
+| 2026-01-26 | 점수계산 로직 개선 | formatters.js |
+| 2026-01-26 | 여정카드 요약정보 추가 | JourneyMiniCard.jsx |
 | 2026-01-26 | 세션모달 UV/세션수 표시 | CreativeSessionsModal.jsx |
 | 2026-01-26 | 소재 모달 지표 색상/크기 조정 | CreativeOrdersModal.jsx |
 | 2026-01-26 | 소재 상세 모달 디자인 변경 | CreativeOrdersModal.jsx |
@@ -28,10 +32,6 @@
 | 2026-01-23 | View/UV 모달 분리 | CreativeEntriesModal.jsx |
 | 2026-01-23 | 취소주문 기여도 제외 | creativeAttribution.js |
 | 2026-01-23 | View를 진입횟수로 변경 | creativeRepository.js |
-| 2026-01-23 | 광고귀속 인앱대응 추가 | creativeAttribution.js |
-| 2026-01-23 | 인앱브라우저 UTM 복구 | ordersRepository.js |
-| 2026-01-22 | 평균PV 중복계산 버그 수정 | creativeRepository.js |
-| 2026-01-22 | 광고 성과 정렬 수정 | creativeService.js |
 
 ---
 
