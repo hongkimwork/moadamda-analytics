@@ -15,6 +15,7 @@ import CreativeOrdersModal from '../../components/CreativeOrdersModal';
 import CreativeSessionsModal from '../../components/CreativeSessionsModal';
 import CreativeEntriesModal from '../../components/CreativeEntriesModal';
 import TestResultModal from '../../components/TestResultModal';
+import ScoreSettingsModal from './components/ScoreSettingsModal';
 
 /**
  * 광고 소재 퍼포먼스 페이지
@@ -25,6 +26,9 @@ function CreativePerformance() {
   
   // 테스트 결과 모달 state
   const [testResultModalVisible, setTestResultModalVisible] = useState(false);
+  
+  // 점수 설정 모달 state
+  const [scoreSettingsModalVisible, setScoreSettingsModalVisible] = useState(false);
   
   // 세션 상세 모달 state (UV 클릭)
   const [sessionsModalVisible, setSessionsModalVisible] = useState(false);
@@ -53,6 +57,8 @@ function CreativePerformance() {
     currentPage,
     pageSize,
     maxDuration,
+    maxPv,
+    maxScroll,
     
     // 모달 상태
     ordersModalVisible,
@@ -64,7 +70,13 @@ function CreativePerformance() {
     setActiveUtmFilters,
     setQuickFilterSources,
     setMaxDuration,
+    setMaxPv,
+    setMaxScroll,
     setError,
+    
+    // 점수 설정
+    scoreSettings,
+    setScoreSettings,
     
     // 핸들러
     handleSearch,
@@ -184,6 +196,14 @@ function CreativePerformance() {
         onQuickFilterChange={setQuickFilterSources}
         onUtmFilterChange={setActiveUtmFilters}
         loading={loading}
+        maxDuration={maxDuration}
+        maxPv={maxPv}
+        maxScroll={maxScroll}
+        onMaxDurationChange={setMaxDuration}
+        onMaxPvChange={setMaxPv}
+        onMaxScrollChange={setMaxScroll}
+        scoreSettings={scoreSettings}
+        onScoreSettingsClick={() => setScoreSettingsModalVisible(true)}
       />
 
       {/* 에러 표시 */}
@@ -213,8 +233,7 @@ function CreativePerformance() {
         onViewSessions={handleViewSessions}
         onViewEntries={handleViewEntries}
         onViewOriginalUrl={handleViewOriginalUrl}
-        maxDuration={maxDuration}
-        onMaxDurationChange={setMaxDuration}
+        scoreSettings={scoreSettings}
       />
 
       {/* 주문 보기 모달 */}
@@ -322,6 +341,14 @@ function CreativePerformance() {
           </div>
         ) : null}
       </Modal>
+
+      {/* 점수 설정 모달 */}
+      <ScoreSettingsModal
+        visible={scoreSettingsModalVisible}
+        onClose={() => setScoreSettingsModalVisible(false)}
+        currentSettings={scoreSettings}
+        onSaveSuccess={(newSettings) => setScoreSettings(newSettings)}
+      />
     </div>
   );
 }

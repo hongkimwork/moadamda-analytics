@@ -1246,8 +1246,11 @@ async function getCreativeSessions({ creative_name, utm_source, utm_medium, utm_
 async function getCreativeSessionsCount({ creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate }) {
   const creativeNames = Array.isArray(creative_name) ? creative_name : [creative_name];
   
+  // UV(고유 방문자 수)와 세션 수를 함께 조회
   const query = `
-    SELECT COUNT(DISTINCT s.session_id) as total
+    SELECT 
+      COUNT(DISTINCT us.visitor_id) as uv_count,
+      COUNT(DISTINCT s.session_id) as total
     FROM utm_sessions us
     JOIN sessions s ON us.session_id = s.session_id
     JOIN visitors v ON us.visitor_id = v.visitor_id
@@ -1269,7 +1272,10 @@ async function getCreativeSessionsCount({ creative_name, utm_source, utm_medium,
     endDate
   ]);
   
-  return parseInt(result.rows[0]?.total) || 0;
+  return {
+    uvCount: parseInt(result.rows[0]?.uv_count) || 0,
+    total: parseInt(result.rows[0]?.total) || 0
+  };
 }
 
 /**

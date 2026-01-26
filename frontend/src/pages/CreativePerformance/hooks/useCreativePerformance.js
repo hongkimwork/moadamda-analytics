@@ -6,6 +6,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { fetchCreativePerformance } from '../services/creativePerformanceApi';
+import { fetchScoreSettings } from '../services/scoreSettingsApi';
 
 /**
  * 광고 소재 퍼포먼스 데이터 관리 훅
@@ -45,12 +46,35 @@ export const useCreativePerformance = () => {
   // UTM Source 퀵 필터 state (기본값: 메타 그룹 소스)
   const [quickFilterSources, setQuickFilterSources] = useState(['meta', 'instagram', 'ig']);
 
-  // 이상치 기준 state (초 단위, 기본값 1분=60초)
-  const [maxDuration, setMaxDuration] = useState(60);
+  // 이상치 기준 state
+  const [maxDuration, setMaxDuration] = useState(60);    // 체류시간 (초 단위, 기본값 1분=60초)
+  const [maxPv, setMaxPv] = useState(15);                // PV (기본값 15)
+  const [maxScroll, setMaxScroll] = useState(10000);     // 스크롤 (px 단위, 기본값 10,000px)
 
   // 모달 state
   const [ordersModalVisible, setOrdersModalVisible] = useState(false);
   const [selectedCreative, setSelectedCreative] = useState(null);
+
+  // 점수 설정 state
+  const [scoreSettings, setScoreSettings] = useState(null);
+  const [scoreSettingsLoading, setScoreSettingsLoading] = useState(true);
+
+  // 점수 설정 조회
+  useEffect(() => {
+    const loadScoreSettings = async () => {
+      try {
+        const result = await fetchScoreSettings();
+        if (result.success) {
+          setScoreSettings(result.data);
+        }
+      } catch (error) {
+        console.error('점수 설정 조회 실패:', error);
+      } finally {
+        setScoreSettingsLoading(false);
+      }
+    };
+    loadScoreSettings();
+  }, []);
 
   // 요약 통계 계산
   const summaryStats = useMemo(() => {
@@ -105,7 +129,9 @@ export const useCreativePerformance = () => {
         search: searchTerm,
         sort_by: sortField,
         sort_order: sortOrder,
-        max_duration: maxDuration
+        max_duration: maxDuration,
+        max_pv: maxPv,
+        max_scroll: maxScroll
       };
 
       // 동적 UTM 필터 + 퀵 필터 병합
@@ -145,7 +171,7 @@ export const useCreativePerformance = () => {
   // 의존성 변경 시 재조회
   useEffect(() => {
     fetchData();
-  }, [currentPage, pageSize, filters, searchTerm, sortField, sortOrder, activeUtmFilters, quickFilterSources, maxDuration]);
+  }, [currentPage, pageSize, filters, searchTerm, sortField, sortOrder, activeUtmFilters, quickFilterSources, maxDuration, maxPv, maxScroll]);
 
   // 검색 핸들러
   const handleSearch = (term) => {
@@ -219,10 +245,17 @@ export const useCreativePerformance = () => {
     activeUtmFilters,
     quickFilterSources,
     maxDuration,
+    maxPv,
+    maxScroll,
     
     // 모달 상태
     ordersModalVisible,
     selectedCreative,
+    
+    // 점수 설정 상태
+    scoreSettings,
+    scoreSettingsLoading,
+    setScoreSettings,
     
     // 상태 변경 함수
     setOrdersModalVisible,
@@ -230,6 +263,8 @@ export const useCreativePerformance = () => {
     setActiveUtmFilters,
     setQuickFilterSources,
     setMaxDuration,
+    setMaxPv,
+    setMaxScroll,
     setError,
     
     // 핸들러

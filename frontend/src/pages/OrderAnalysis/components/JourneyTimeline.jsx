@@ -191,15 +191,31 @@ export function JourneyTimeline({ journey, userMappings, order, findMatchingMapp
         paddingBottom: '16px',
         borderBottom: `1px solid ${journey.color}20`
       }}>
-        <h3 style={{
-          margin: 0,
-          fontSize: '15px',
-          fontWeight: '700',
-          color: journey.color,
-          letterSpacing: '-0.01em'
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '16px'
         }}>
-          {journey.label}
-        </h3>
+          <h3 style={{
+            margin: 0,
+            fontSize: '15px',
+            fontWeight: '700',
+            color: journey.color,
+            letterSpacing: '-0.01em'
+          }}>
+            {journey.label}
+          </h3>
+          <div style={{
+            display: 'flex',
+            gap: '12px',
+            fontSize: '12px',
+            color: '#6b7280'
+          }}>
+            <span>PV: <strong style={{ color: '#374151' }}>{journey.pageCount}</strong></span>
+            <span>체류시간: <strong style={{ color: '#374151' }}>{journey.duration}</strong></span>
+          </div>
+        </div>
       </div>
 
       {/* 숨겨진 측정용 컨테이너 */}

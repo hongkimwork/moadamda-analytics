@@ -26,7 +26,9 @@ async function getCreativeAggregation({
   sortColumn,
   sortDirectionSQL,
   queryParams,
-  maxDurationSeconds = 300
+  maxDurationSeconds = 300,
+  maxPvCount = 15,
+  maxScrollPx = 10000
 }) {
   // 카페24 호환: visitors 테이블과 조인하여 봇 트래픽 제외
   // FIX (2026-01-23): View를 "진입 횟수"로 변경
@@ -103,25 +105,31 @@ async function getCreativeAggregation({
       GROUP BY session_id
     ),
     session_metrics AS (
-      -- 고유 세션 기준 평균 지표 집계
+      -- 고유 세션 기준 평균 지표 집계 (이상치 제외)
       SELECT 
         us.creative_name,
         us.utm_source,
         us.utm_medium,
         us.utm_campaign,
         ROUND(
-          COALESCE(AVG(us.pageview_count)::NUMERIC, 0),
+          COALESCE(
+            AVG(CASE WHEN us.pageview_count <= ${maxPvCount} THEN us.pageview_count ELSE NULL END)::NUMERIC,
+            0
+          ),
           1
         ) as avg_pageviews,
         ROUND(
           COALESCE(
-            AVG(CASE WHEN us.duration_seconds < ${maxDurationSeconds} THEN us.duration_seconds ELSE NULL END)::NUMERIC,
+            AVG(CASE WHEN us.duration_seconds <= ${maxDurationSeconds} THEN us.duration_seconds ELSE NULL END)::NUMERIC,
             0
           ),
           1
         ) as avg_duration_seconds,
         ROUND(
-          COALESCE(AVG(sd.total_scroll_px), 0)::NUMERIC,
+          COALESCE(
+            AVG(CASE WHEN sd.total_scroll_px <= ${maxScrollPx} THEN sd.total_scroll_px ELSE NULL END)::NUMERIC,
+            0
+          ),
           0
         ) as avg_scroll_px
       FROM unique_sessions us

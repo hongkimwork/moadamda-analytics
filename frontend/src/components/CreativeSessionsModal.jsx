@@ -14,6 +14,7 @@ function CreativeSessionsModal({ visible, onClose, creative, dateRange }) {
   const [loading, setLoading] = useState(false);
   const [sessions, setSessions] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0 });
+  const [summary, setSummary] = useState({ uvCount: 0, totalSessions: 0 });
 
   useEffect(() => {
     if (visible && creative && dateRange) {
@@ -38,6 +39,7 @@ function CreativeSessionsModal({ visible, onClose, creative, dateRange }) {
       if (response.data.success) {
         setSessions(response.data.data || []);
         setPagination(response.data.pagination || { page: 1, limit: 50, total: 0 });
+        setSummary(response.data.summary || { uvCount: 0, totalSessions: 0 });
       }
     } catch (error) {
       console.error('세션 목록 조회 실패:', error);
@@ -261,10 +263,17 @@ function CreativeSessionsModal({ visible, onClose, creative, dateRange }) {
       {creative && (
         <div style={{ marginBottom: 16, padding: '12px 16px', background: 'linear-gradient(135deg, #f0f5ff 0%, #e6f4ff 100%)', borderRadius: 8, border: '1px solid #d6e4ff' }}>
           <div style={{ fontSize: 15, fontWeight: 600, color: '#1d39c4', marginBottom: 8 }}>{creative.creative_name}</div>
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <Tag color="blue">{creative.utm_source}</Tag>
-            <Tag color="cyan">{creative.utm_medium}</Tag>
-            <Tag color="purple">{creative.utm_campaign}</Tag>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <Tag color="blue">{creative.utm_source}</Tag>
+              <Tag color="cyan">{creative.utm_medium}</Tag>
+              <Tag color="purple">{creative.utm_campaign}</Tag>
+            </div>
+            <Text style={{ fontSize: 13, color: '#595959' }}>
+              순 방문자(UV) <Text strong style={{ color: '#1890ff' }}>{summary.uvCount.toLocaleString()}명</Text>
+              {' / '}
+              총 <Text strong style={{ color: '#389e0d' }}>{summary.totalSessions.toLocaleString()}개</Text> 세션
+            </Text>
           </div>
         </div>
       )}

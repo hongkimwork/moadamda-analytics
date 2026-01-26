@@ -3,28 +3,10 @@
 // ============================================================================
 
 import React, { useMemo } from 'react';
-import { Card, Table, Tooltip, Dropdown, Button, message, Select } from 'antd';
+import { Card, Table, Tooltip, Dropdown, Button, message } from 'antd';
 import { ShoppingCart, Link } from 'lucide-react';
 import { formatDuration, formatCurrency, formatNumber, calculateTrafficScores } from '../utils/formatters';
 import { getRowKey } from '../utils/helpers';
-
-// 이상치 기준 옵션 생성 (30초~10분, 30초 단위)
-const durationOptions = [];
-for (let seconds = 30; seconds <= 600; seconds += 30) {
-  const minutes = Math.floor(seconds / 60);
-  const remainSeconds = seconds % 60;
-  
-  let label;
-  if (seconds < 60) {
-    label = `${seconds}초`;
-  } else if (remainSeconds === 0) {
-    label = `${minutes}분`;
-  } else {
-    label = `${minutes}분 ${remainSeconds}초`;
-  }
-  
-  durationOptions.push({ value: seconds, label });
-}
 
 /**
  * 퍼포먼스 테이블 컴포넌트
@@ -43,11 +25,10 @@ function PerformanceTable({
   onViewSessions,
   onViewEntries,
   onViewOriginalUrl,
-  maxDuration,
-  onMaxDurationChange
+  scoreSettings
 }) {
-  // 모수 평가 점수 계산 (필터된 데이터 기준)
-  const trafficScores = useMemo(() => calculateTrafficScores(data), [data]);
+  // 모수 평가 점수 계산 (사용자 설정 기반)
+  const trafficScores = useMemo(() => calculateTrafficScores(data, scoreSettings), [data, scoreSettings]);
 
   // 점수에 따른 색상 반환
   const getScoreColor = (score) => {
@@ -205,17 +186,8 @@ function PerformanceTable({
     },
     {
       title: (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-          <span style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>평균<br />체류시간</span>
-          <Select
-            size="small"
-            value={maxDuration}
-            onChange={onMaxDurationChange}
-            options={durationOptions}
-            style={{ width: 85, fontSize: 11 }}
-            onClick={(e) => e.stopPropagation()}
-            popupMatchSelectWidth={false}
-          />
+        <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>
+          평균<br />체류시간
         </div>
       ),
       dataIndex: 'avg_duration_seconds',
@@ -274,58 +246,42 @@ function PerformanceTable({
       title: (
         <Tooltip
           title={
-            <div style={{ padding: '4px' }}>
-              <div style={{ marginBottom: '12px', fontWeight: 600, fontSize: '14px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '8px' }}>
-                📊 모수 평가 점수 기준
-              </div>
-              
-              <div style={{ marginBottom: '16px' }}>
-                <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: '12px', marginBottom: '6px' }}>계산 방식 (상대 평가)</div>
-                <table style={{ width: '100%', fontSize: '13px', borderCollapse: 'collapse' }}>
-                  <tbody>
-                    <tr>
-                      <td style={{ padding: '2px 12px 2px 0' }}>• 평균 스크롤</td>
-                      <td style={{ padding: '2px 0', fontWeight: 700, textAlign: 'right', color: '#ffc069' }}>30%</td>
-                    </tr>
-                    <tr>
-                      <td style={{ padding: '2px 12px 2px 0' }}>• 평균 PV</td>
-                      <td style={{ padding: '2px 0', fontWeight: 700, textAlign: 'right', color: '#bae7ff' }}>35%</td>
-                    </tr>
-                    <tr>
-                      <td style={{ padding: '2px 12px 2px 0' }}>• 체류시간</td>
-                      <td style={{ padding: '2px 0', fontWeight: 700, textAlign: 'right', color: '#d9f7be' }}>35%</td>
-                    </tr>
-                  </tbody>
-                </table>
-                <div style={{ marginTop: '8px', fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>
-                  * 스크롤 0인 경우 해당 항목 0점 처리
+            scoreSettings ? (
+              <div style={{ padding: '4px' }}>
+                <div style={{ marginBottom: '12px', fontWeight: 600, fontSize: '14px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '8px' }}>
+                  📊 모수 평가 점수 기준
+                </div>
+                
+                <div style={{ marginBottom: '16px' }}>
+                  <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: '12px', marginBottom: '6px' }}>
+                    평가 방식: {scoreSettings.evaluation_type === 'relative' ? '상대평가' : '절대평가'}
+                  </div>
+                  <table style={{ width: '100%', fontSize: '13px', borderCollapse: 'collapse' }}>
+                    <tbody>
+                      <tr>
+                        <td style={{ padding: '2px 12px 2px 0' }}>• 평균 스크롤</td>
+                        <td style={{ padding: '2px 0', fontWeight: 700, textAlign: 'right', color: '#ffc069' }}>{scoreSettings.weight_scroll}%</td>
+                      </tr>
+                      <tr>
+                        <td style={{ padding: '2px 12px 2px 0' }}>• 평균 PV</td>
+                        <td style={{ padding: '2px 0', fontWeight: 700, textAlign: 'right', color: '#bae7ff' }}>{scoreSettings.weight_pv}%</td>
+                      </tr>
+                      <tr>
+                        <td style={{ padding: '2px 12px 2px 0' }}>• 체류시간</td>
+                        <td style={{ padding: '2px 0', fontWeight: 700, textAlign: 'right', color: '#d9f7be' }}>{scoreSettings.weight_duration}%</td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
-
-              <div>
-                <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: '12px', marginBottom: '6px' }}>등급 가이드</div>
-                <table style={{ width: '100%', fontSize: '13px', borderCollapse: 'collapse' }}>
-                  <tbody>
-                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                      <td style={{ padding: '6px 0' }}><span style={{ color: '#52c41a', marginRight: '6px' }}>●</span> 우수</td>
-                      <td style={{ padding: '6px 0', textAlign: 'right' }}>80점 ~</td>
-                    </tr>
-                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                      <td style={{ padding: '6px 0' }}><span style={{ color: '#1890ff', marginRight: '6px' }}>●</span> 양호</td>
-                      <td style={{ padding: '6px 0', textAlign: 'right' }}>60점 ~</td>
-                    </tr>
-                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                      <td style={{ padding: '6px 0' }}><span style={{ color: '#faad14', marginRight: '6px' }}>●</span> 보통</td>
-                      <td style={{ padding: '6px 0', textAlign: 'right' }}>40점 ~</td>
-                    </tr>
-                    <tr>
-                      <td style={{ padding: '6px 0' }}><span style={{ color: '#ff4d4f', marginRight: '6px' }}>●</span> 개선</td>
-                      <td style={{ padding: '6px 0', textAlign: 'right' }}>~ 39점</td>
-                    </tr>
-                  </tbody>
-                </table>
+            ) : (
+              <div style={{ padding: '4px' }}>
+                <div style={{ fontSize: '13px' }}>
+                  모수 평가 기준이 설정되지 않았습니다.<br/>
+                  상단의 "모수 평가 기준 설정" 버튼을 클릭하여 설정해주세요.
+                </div>
               </div>
-            </div>
+            )
           }
           overlayStyle={{ maxWidth: '300px' }}
         >
@@ -338,39 +294,107 @@ function PerformanceTable({
       width: 75,
       align: 'center',
       render: (_, record) => {
+        // 설정이 없으면 "-" 표시
+        if (!scoreSettings) {
+          return (
+            <span style={{ fontSize: '13px', color: '#9ca3af' }}>-</span>
+          );
+        }
+
         const key = `${record.utm_source || ''}_${record.utm_campaign || ''}_${record.utm_medium || ''}_${record.creative_name || ''}`;
         const scoreData = trafficScores.get(key);
-        const score = scoreData?.score || 0;
+        
+        // 데이터 부족
+        if (!scoreData || scoreData.score === null) {
+          return (
+            <Tooltip title="데이터 부족">
+              <span style={{ fontSize: '13px', color: '#9ca3af' }}>-</span>
+            </Tooltip>
+          );
+        }
+
+        const score = scoreData.score;
         const color = getScoreColor(score);
-        // const grade = getScoreGrade(score); // 미사용 변수 제거
 
         return (
           <div style={{
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: '4px 10px',
-            borderRadius: '12px',
-            backgroundColor: `${color}15`,
-            border: `1px solid ${color}40`
+            gap: '4px'
           }}>
-            <span style={{
-              fontSize: '13px',
-              fontWeight: 700,
-              color: color
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '4px 10px',
+              borderRadius: '12px',
+              backgroundColor: `${color}15`,
+              border: `1px solid ${color}40`
             }}>
-              {score}
-            </span>
+              <span style={{
+                fontSize: '13px',
+                fontWeight: 700,
+                color: color
+              }}>
+                {score}
+              </span>
+            </div>
+            {scoreData.hasWarning && (
+              <Tooltip title={scoreData.warningMessage}>
+                <span style={{ color: '#faad14', fontSize: '14px', cursor: 'help' }}>⚠️</span>
+              </Tooltip>
+            )}
           </div>
         );
       },
       sorter: (a, b) => {
+        if (!scoreSettings) return 0;
         const keyA = `${a.utm_source || ''}_${a.utm_campaign || ''}_${a.utm_medium || ''}_${a.creative_name || ''}`;
         const keyB = `${b.utm_source || ''}_${b.utm_campaign || ''}_${b.utm_medium || ''}_${b.creative_name || ''}`;
         const scoreA = trafficScores.get(keyA)?.score || 0;
         const scoreB = trafficScores.get(keyB)?.score || 0;
         return scoreA - scoreB;
       },
+      showSorterTooltip: false
+    },
+    {
+      title: (
+        <Tooltip
+          title={
+            <div style={{ whiteSpace: 'pre-line' }}>
+              {`구매 직전 마지막으로 본 광고로서 구매한 횟수입니다.
+다른 광고를 봤더라도 마지막에 이 광고를 보고 구매했다면 카운트됩니다.
+
+예시: 철수가 10만원 구매
+• 광고 여정: A 광고 → B 광고 → C 광고 → 구매
+• 결과: A 광고 0건, B 광고 0건, C 광고 +1건
+
+💡 이 숫자가 높으면?
+→ 이 광고가 구매 결정의 마지막 터치포인트로 많이 작용했다는 의미`}
+            </div>
+          }
+          overlayStyle={{ maxWidth: '420px' }}
+        >
+          <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>
+            막타<br />횟수
+          </div>
+        </Tooltip>
+      ),
+      dataIndex: 'last_touch_count',
+      key: 'last_touch_count',
+      width: 60,
+      align: 'center',
+      render: (num) => (
+        <span style={{
+          color: num > 0 ? '#0958d9' : '#9ca3af',
+          fontWeight: num > 0 ? 600 : 400,
+          fontSize: '13px'
+        }}>
+          {formatNumber(num)}
+        </span>
+      ),
+      sorter: true,
       showSorterTooltip: false
     },
     {
@@ -451,7 +475,7 @@ function PerformanceTable({
           overlayStyle={{ maxWidth: '380px' }}
         >
           <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>
-            영향 준<br />주문 수
+            기여한<br />주문 수
           </div>
         </Tooltip>
       ),
@@ -462,45 +486,6 @@ function PerformanceTable({
       render: (num) => (
         <span style={{
           color: num > 0 ? '#389e0d' : '#9ca3af',
-          fontWeight: num > 0 ? 600 : 400,
-          fontSize: '13px'
-        }}>
-          {formatNumber(num)}
-        </span>
-      ),
-      sorter: true,
-      showSorterTooltip: false
-    },
-    {
-      title: (
-        <Tooltip
-          title={
-            <div style={{ whiteSpace: 'pre-line' }}>
-              {`구매 직전 마지막으로 본 광고로서 구매한 횟수입니다.
-다른 광고를 봤더라도 마지막에 이 광고를 보고 구매했다면 카운트됩니다.
-
-예시: 철수가 10만원 구매
-• 광고 여정: A 광고 → B 광고 → C 광고 → 구매
-• 결과: A 광고 0건, B 광고 0건, C 광고 +1건
-
-💡 이 숫자가 높으면?
-→ 이 광고가 구매 결정의 마지막 터치포인트로 많이 작용했다는 의미`}
-            </div>
-          }
-          overlayStyle={{ maxWidth: '420px' }}
-        >
-          <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>
-            막타<br />횟수
-          </div>
-        </Tooltip>
-      ),
-      dataIndex: 'last_touch_count',
-      key: 'last_touch_count',
-      width: 60,
-      align: 'center',
-      render: (num) => (
-        <span style={{
-          color: num > 0 ? '#0958d9' : '#9ca3af',
           fontWeight: num > 0 ? 600 : 400,
           fontSize: '13px'
         }}>
@@ -532,7 +517,7 @@ function PerformanceTable({
           overlayStyle={{ maxWidth: '400px' }}
         >
           <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>
-            기여한<br />매출액
+            기여한<br />결제액
           </div>
         </Tooltip>
       ),
@@ -583,18 +568,18 @@ function PerformanceTable({
               
               <div style={{ marginBottom: '16px', fontSize: '13px', lineHeight: '1.6' }}>
                 이 광고를 통해 유입된 방문자 1명당<br/>
-                기여한 <strong>평균 매출</strong>입니다.
+                기여한 <strong>평균 결제액</strong>입니다.
               </div>
 
               <div style={{ marginBottom: '16px', backgroundColor: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '4px' }}>
                 <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: '12px', marginBottom: '4px' }}>계산 방식</div>
-                <div style={{ fontSize: '13px', fontFamily: 'monospace' }}>기여한 매출액 ÷ UV (순 방문자)</div>
+                <div style={{ fontSize: '13px', fontFamily: 'monospace' }}>기여한 결제액 ÷ UV (순 방문자)</div>
               </div>
 
               <div style={{ marginBottom: '16px' }}>
                 <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: '12px', marginBottom: '6px' }}>예시</div>
                 <div style={{ fontSize: '13px', paddingLeft: '8px', borderLeft: '2px solid rgba(255,255,255,0.2)' }}>
-                  매출 100만원 / 방문자 100명<br/>
+                  결제액 100만원 / 방문자 100명<br/>
                   = <span style={{ color: '#bae7ff', fontWeight: 600 }}>1명당 10,000원 가치</span>
                 </div>
               </div>
@@ -605,7 +590,7 @@ function PerformanceTable({
                 </div>
                 <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.9)' }}>
                   이 숫자가 높을수록 적은 방문자로도<br/>
-                  높은 매출을 만드는 <strong>효율적인 광고</strong>입니다.
+                  높은 결제액을 만드는 <strong>효율적인 광고</strong>입니다.
                 </div>
               </div>
             </div>

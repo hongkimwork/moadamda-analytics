@@ -4,6 +4,7 @@ const db = require('../utils/database');
 const { calculateCreativeAttribution } = require('../utils/creativeAttribution');
 const creativeService = require('../services/creative/creativeService');
 const detailService = require('../services/creative/detailService');
+const scoreSettingsService = require('../services/scoreSettings/scoreSettingsService');
 
 /**
  * GET /api/creative-performance
@@ -300,7 +301,7 @@ router.post('/creative-performance/raw-traffic', async (req, res) => {
  *  - end: 종료일 (YYYY-MM-DD) - 필수
  * 
  * Response:
- *  - summary: 영향 준 주문 수, 막타 횟수, 막타 결제액, 기여한 매출액
+ *  - summary: 기여한 주문 수, 막타 횟수, 막타 결제액, 기여한 결제액
  *  - orders: 주문별 기여도 상세 (역할, 기여 비율, 기여 금액)
  */
 router.post('/creative-performance/raw-attribution', async (req, res) => {
@@ -438,6 +439,91 @@ router.post('/creative-performance/original-url', async (req, res) => {
       success: false,
       error: 'Failed to fetch creative original URL',
       message: error.message 
+    });
+  }
+});
+
+// ============================================================================
+// 모수 평가 기준 설정 API
+// ============================================================================
+
+/**
+ * GET /api/creative-performance/score-settings
+ * 현재 점수 평가 기준 설정 조회
+ * 
+ * Response:
+ *  - success: boolean
+ *  - data: 설정 데이터 또는 null (미설정 시)
+ */
+router.get('/creative-performance/score-settings', async (req, res) => {
+  try {
+    const result = await scoreSettingsService.getSettings();
+    res.json(result);
+  } catch (error) {
+    console.error('Score settings GET API error:', error);
+    res.status(500).json({
+      success: false,
+      error: '설정을 불러오는 중 오류가 발생했습니다.',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/creative-performance/score-settings
+ * 점수 평가 기준 설정 저장
+ * 
+ * Request Body:
+ *  - evaluation_type: 'relative' | 'absolute'
+ *  - weight_scroll: number (0-100)
+ *  - weight_pv: number (0-100)
+ *  - weight_duration: number (0-100)
+ *  - scroll_config: { boundaries: number[], scores: number[] }
+ *  - pv_config: { boundaries: number[], scores: number[] }
+ *  - duration_config: { boundaries: number[], scores: number[] }
+ * 
+ * Response:
+ *  - success: boolean
+ *  - data: 저장된 설정 데이터
+ *  - warnings: 경고 메시지 배열 (저장은 됨)
+ *  - errors: 오류 메시지 배열 (저장 실패 시)
+ */
+router.post('/creative-performance/score-settings', async (req, res) => {
+  try {
+    const result = await scoreSettingsService.saveSettings(req.body);
+    
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    
+    res.json(result);
+  } catch (error) {
+    console.error('Score settings POST API error:', error);
+    res.status(500).json({
+      success: false,
+      error: '설정을 저장하는 중 오류가 발생했습니다.',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * DELETE /api/creative-performance/score-settings
+ * 점수 평가 기준 설정 삭제 (초기화)
+ * 
+ * Response:
+ *  - success: boolean
+ */
+router.delete('/creative-performance/score-settings', async (req, res) => {
+  try {
+    const result = await scoreSettingsService.deleteSettings();
+    res.json(result);
+  } catch (error) {
+    console.error('Score settings DELETE API error:', error);
+    res.status(500).json({
+      success: false,
+      error: '설정을 삭제하는 중 오류가 발생했습니다.',
+      message: error.message
     });
   }
 });

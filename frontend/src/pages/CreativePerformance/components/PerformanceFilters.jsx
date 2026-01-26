@@ -4,14 +4,42 @@
 // ============================================================================
 
 import { useState, useEffect } from 'react';
-import { Card, Divider, DatePicker } from 'antd';
-import { Search, X, RotateCcw, Calendar, Layers } from 'lucide-react';
+import { Card, Divider, DatePicker, Select } from 'antd';
+import { Search, X, RotateCcw, Calendar, Layers, AlertTriangle, Settings } from 'lucide-react';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ko';
 import DynamicUtmFilterBar from '../../../components/DynamicUtmFilterBar';
 import UtmSourceQuickFilter from '../../../components/UtmSourceQuickFilter';
+import ScoreSettingsCard from './ScoreSettingsCard';
 
 const { RangePicker } = DatePicker;
+
+// 이상치 기준 옵션 생성 (30초~10분, 30초 단위)
+const durationOptions = [];
+for (let seconds = 30; seconds <= 600; seconds += 30) {
+  const minutes = Math.floor(seconds / 60);
+  const remainSeconds = seconds % 60;
+  
+  let label;
+  if (seconds < 60) {
+    label = `${seconds}초`;
+  } else if (remainSeconds === 0) {
+    label = `${minutes}분`;
+  } else {
+    label = `${minutes}분 ${remainSeconds}초`;
+  }
+  
+  durationOptions.push({ value: seconds, label });
+}
+
+// PV 옵션 (5, 10, 15, 20, 25, 30, 35)
+const pvOptions = [5, 10, 15, 20, 25, 30, 35].map(v => ({ value: v, label: `${v}` }));
+
+// 스크롤 옵션 (5,000px ~ 30,000px, 5,000px 단위)
+const scrollOptions = [];
+for (let px = 5000; px <= 30000; px += 5000) {
+  scrollOptions.push({ value: px, label: `${px.toLocaleString()}px` });
+}
 
 /**
  * Segmented Button - 높이 36px 통일
@@ -126,7 +154,15 @@ function PerformanceFilters({
   filters,
   onQuickFilterChange,
   onUtmFilterChange,
-  loading
+  loading,
+  maxDuration,
+  maxPv,
+  maxScroll,
+  onMaxDurationChange,
+  onMaxPvChange,
+  onMaxScrollChange,
+  scoreSettings,
+  onScoreSettingsClick
 }) {
   const defaultQuickDate = '30days';
   const [searchTerm, setSearchTerm] = useState('');
@@ -339,6 +375,110 @@ function PerformanceFilters({
               onFilterChange={onUtmFilterChange}
               loading={loading}
               excludeValues={{ utm_source: ['viral'] }}
+            />
+          </div>
+        </div>
+      </Card>
+
+      {/* 이상치 값 제외 필터 영역 */}
+      <Card 
+        size="small" 
+        style={{ 
+          marginBottom: '20px',
+          borderRadius: '12px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+          border: '1px solid #e8eaed'
+        }}
+      >
+        <div style={{ 
+          display: 'flex', 
+          gap: '24px',
+          flexWrap: 'wrap'
+        }}>
+          {/* 좌측: 이상치 값 제외 필터 */}
+          <div style={{ flex: '1 1 45%', minWidth: '300px' }}>
+            <div style={{ 
+              marginBottom: '12px', 
+              fontSize: '14px', 
+              color: '#374151', 
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <AlertTriangle size={18} strokeWidth={2} style={{ color: '#faad14' }} />
+              이상치 값 제외 필터
+            </div>
+            <div style={{ 
+              display: 'flex', 
+              gap: '16px', 
+              flexWrap: 'wrap',
+              alignItems: 'center'
+            }}>
+              {/* 체류시간 초과 제외 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '13px', color: '#5f6368', fontWeight: 500 }}>체류시간</span>
+                <Select
+                  size="small"
+                  value={maxDuration}
+                  onChange={onMaxDurationChange}
+                  options={durationOptions}
+                  style={{ width: 100 }}
+                  disabled={loading}
+                />
+                <span style={{ fontSize: '13px', color: '#5f6368' }}>초과 제외</span>
+              </div>
+              
+              {/* PV 초과 제외 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '13px', color: '#5f6368', fontWeight: 500 }}>PV</span>
+                <Select
+                  size="small"
+                  value={maxPv}
+                  onChange={onMaxPvChange}
+                  options={pvOptions}
+                  style={{ width: 70 }}
+                  disabled={loading}
+                />
+                <span style={{ fontSize: '13px', color: '#5f6368' }}>초과 제외</span>
+              </div>
+              
+              {/* 스크롤 초과 제외 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '13px', color: '#5f6368', fontWeight: 500 }}>스크롤</span>
+                <Select
+                  size="small"
+                  value={maxScroll}
+                  onChange={onMaxScrollChange}
+                  options={scrollOptions}
+                  style={{ width: 110 }}
+                  disabled={loading}
+                />
+                <span style={{ fontSize: '13px', color: '#5f6368' }}>초과 제외</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 구분선 */}
+          <Divider type="vertical" style={{ height: 'auto', margin: '0' }} />
+
+          {/* 우측: 모수 평가 기준 설정 */}
+          <div style={{ flex: '1 1 45%', minWidth: '300px' }}>
+            <div style={{ 
+              marginBottom: '12px', 
+              fontSize: '14px', 
+              color: '#374151', 
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <Settings size={18} strokeWidth={2} style={{ color: '#722ed1' }} />
+              모수 평가 기준
+            </div>
+            <ScoreSettingsCard
+              settings={scoreSettings}
+              onClick={onScoreSettingsClick}
             />
           </div>
         </div>

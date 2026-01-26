@@ -1231,8 +1231,8 @@ async function getCreativeSessions(params) {
   // 광고명 변형들 찾기
   const creativeVariants = await getCreativeVariants(creative_name, startDate, endDate);
   
-  // 세션 목록 및 총 개수 조회 (변형들 모두 포함)
-  const [sessions, totalCount] = await Promise.all([
+  // 세션 목록 및 총 개수/UV 조회 (변형들 모두 포함)
+  const [sessions, countResult] = await Promise.all([
     repository.getCreativeSessions({
       creative_name: creativeVariants, utm_source, utm_medium, utm_campaign,
       startDate, endDate, page, limit
@@ -1242,6 +1242,8 @@ async function getCreativeSessions(params) {
       startDate, endDate
     })
   ]);
+  
+  const { uvCount, total: totalCount } = countResult;
   
   // 체류시간 포맷 함수
   const formatDuration = (seconds) => {
@@ -1281,6 +1283,10 @@ async function getCreativeSessions(params) {
     creative: { creative_name, utm_source, utm_medium, utm_campaign },
     period: { start, end },
     data: formattedSessions,
+    summary: {
+      uvCount,
+      totalSessions: totalCount
+    },
     pagination: {
       page,
       limit,

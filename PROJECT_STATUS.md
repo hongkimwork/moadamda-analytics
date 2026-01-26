@@ -17,6 +17,10 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2026-01-26 | 세션모달 UV/세션수 표시 | CreativeSessionsModal.jsx |
+| 2026-01-26 | 소재 모달 지표 색상/크기 조정 | CreativeOrdersModal.jsx |
+| 2026-01-26 | 소재 상세 모달 디자인 변경 | CreativeOrdersModal.jsx |
+| 2026-01-26 | 광고 성과 테이블 컬럼 변경 | PerformanceTable.jsx |
 | 2026-01-23 | 광고 소재 성과 개선 배포 | creative-performance.js |
 | 2026-01-23 | 세션PV→총PV 컬럼명 변경 | CreativeOrdersModal.jsx |
 | 2026-01-23 | 평균스크롤 합계방식 변경 | creativeRepository.js |
@@ -28,10 +32,6 @@
 | 2026-01-23 | 인앱브라우저 UTM 복구 | ordersRepository.js |
 | 2026-01-22 | 평균PV 중복계산 버그 수정 | creativeRepository.js |
 | 2026-01-22 | 광고 성과 정렬 수정 | creativeService.js |
-| 2026-01-22 | 메타광고명 병합 기능 | metaAdNameMapping.js |
-| 2026-01-21 | 카페24 중복제거 건수 표시 | OurDataCompare/index.jsx |
-| 2026-01-21 | 요약 카드 순서 변경 | OurDataCompare/index.jsx |
-| 2026-01-21 | 탭 변경 시 페이지 리셋 | OurDataCompare/index.jsx |
 
 ---
 

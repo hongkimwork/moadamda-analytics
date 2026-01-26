@@ -282,70 +282,168 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
   const OrdersTab = () => (
     <>
       {/* 요약 통계 */}
-      <Row gutter={[12, 12]} style={{ marginBottom: 20 }}>
-        <Col span={4}>
-          <Card size="small" style={{ textAlign: 'center', background: '#fafafa' }}>
-            <Statistic
-              title={<span style={{ fontSize: 13, color: '#000000' }}>영향준 주문</span>}
-              value={summary.total_orders}
-              suffix="건"
-              valueStyle={{ fontSize: 18, fontWeight: 600 }}
-            />
-          </Card>
-        </Col>
-        <Col span={4}>
-          <Card size="small" style={{ textAlign: 'center', background: '#f0f5ff' }}>
-            <Statistic
-              title={<span style={{ fontSize: 13, color: '#000000' }}>막타 주문</span>}
-              value={summary.last_touch_orders}
-              suffix={<span style={{ fontSize: 12 }}>건 ({summary.last_touch_ratio}%)</span>}
-              valueStyle={{ fontSize: 18, fontWeight: 600, color: '#1677ff' }}
-            />
-          </Card>
-        </Col>
-        <Col span={4}>
-          <Card size="small" style={{ textAlign: 'center', background: '#fff7e6' }}>
-            <Statistic
-              title={<span style={{ fontSize: 13, color: '#000000' }}>어시 주문</span>}
-              value={summary.assist_orders}
-              suffix={<span style={{ fontSize: 12 }}>건 ({summary.assist_ratio}%)</span>}
-              valueStyle={{ fontSize: 18, fontWeight: 600, color: '#d48806' }}
-            />
-          </Card>
-        </Col>
-        <Col span={4}>
-          <Card size="small" style={{ textAlign: 'center', background: '#fff1f0' }}>
-            <Statistic
-              title={<span style={{ fontSize: 13, color: '#000000' }}>순수 전환</span>}
-              value={summary.single_touch_orders}
-              suffix="건"
-              valueStyle={{ fontSize: 18, fontWeight: 600, color: '#cf1322' }}
-            />
-          </Card>
-        </Col>
-        <Col span={4}>
-          <Card size="small" style={{ textAlign: 'center', background: '#f6ffed' }}>
-            <Statistic
-              title={<span style={{ fontSize: 13, color: '#000000' }}>기여한 매출액</span>}
-              value={summary.attributed_revenue}
-              suffix="원"
-              valueStyle={{ fontSize: 18, fontWeight: 600, color: '#52c41a' }}
-              formatter={(value) => parseInt(value).toLocaleString()}
-            />
-          </Card>
-        </Col>
-        <Col span={4}>
-          <Card size="small" style={{ textAlign: 'center', background: '#e6f4ff' }}>
-            <Statistic
-              title={<span style={{ fontSize: 13, color: '#000000' }}>막타 결제액</span>}
-              value={summary.last_touch_revenue}
-              suffix="원"
-              valueStyle={{ fontSize: 18, fontWeight: 600, color: '#0958d9' }}
-              formatter={(value) => parseInt(value).toLocaleString()}
-            />
-          </Card>
-        </Col>
-      </Row>
+      <div style={{ 
+        display: 'flex', 
+        gap: '12px',
+        flexWrap: 'wrap',
+        marginBottom: '20px'
+      }}>
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '12px 16px',
+          background: '#fff',
+          borderRadius: '12px',
+          border: '1px solid #e8eaed',
+          flex: 1,
+          minWidth: '160px',
+          textAlign: 'center'
+        }}>
+          <Text style={{ fontSize: '12px', display: 'block', marginBottom: '2px', color: '#374151' }}>
+            기여한 주문 수
+          </Text>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+            <span style={{ fontSize: '19px', fontWeight: 700, color: '#1a1a1a' }}>
+              {summary.total_orders.toLocaleString()}
+            </span>
+            <span style={{ fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>
+              건
+            </span>
+          </div>
+        </div>
+
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '12px 16px',
+          background: '#fff',
+          borderRadius: '12px',
+          border: '1px solid #e8eaed',
+          flex: 1,
+          minWidth: '160px',
+          textAlign: 'center'
+        }}>
+          <Text style={{ fontSize: '12px', display: 'block', marginBottom: '2px', color: '#374151' }}>
+            막타 주문
+          </Text>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+            <span style={{ fontSize: '19px', fontWeight: 700, color: '#1677ff' }}>
+              {summary.last_touch_orders.toLocaleString()}
+            </span>
+            <span style={{ fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>
+              건 ({summary.last_touch_ratio}%)
+            </span>
+          </div>
+        </div>
+
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '12px 16px',
+          background: '#fff',
+          borderRadius: '12px',
+          border: '1px solid #e8eaed',
+          flex: 1,
+          minWidth: '160px',
+          textAlign: 'center'
+        }}>
+          <Text style={{ fontSize: '12px', display: 'block', marginBottom: '2px', color: '#374151' }}>
+            어시 주문
+          </Text>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+            <span style={{ fontSize: '19px', fontWeight: 700, color: '#d48806' }}>
+              {summary.assist_orders.toLocaleString()}
+            </span>
+            <span style={{ fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>
+              건 ({summary.assist_ratio}%)
+            </span>
+          </div>
+        </div>
+
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '12px 16px',
+          background: '#fff',
+          borderRadius: '12px',
+          border: '1px solid #e8eaed',
+          flex: 1,
+          minWidth: '160px',
+          textAlign: 'center'
+        }}>
+          <Text style={{ fontSize: '12px', display: 'block', marginBottom: '2px', color: '#374151' }}>
+            순수 전환
+          </Text>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+            <span style={{ fontSize: '19px', fontWeight: 700, color: '#faad14' }}>
+              {summary.single_touch_orders.toLocaleString()}
+            </span>
+            <span style={{ fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>
+              건
+            </span>
+          </div>
+        </div>
+
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '12px 16px',
+          background: '#fff',
+          borderRadius: '12px',
+          border: '1px solid #e8eaed',
+          flex: 1,
+          minWidth: '160px',
+          textAlign: 'center'
+        }}>
+          <Text style={{ fontSize: '12px', display: 'block', marginBottom: '2px', color: '#374151' }}>
+            기여한 결제액
+          </Text>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+            <span style={{ fontSize: '19px', fontWeight: 700, color: '#52c41a' }}>
+              {parseInt(summary.attributed_revenue).toLocaleString()}
+            </span>
+            <span style={{ fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>
+              원
+            </span>
+          </div>
+        </div>
+
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '12px 16px',
+          background: '#fff',
+          borderRadius: '12px',
+          border: '1px solid #e8eaed',
+          flex: 1,
+          minWidth: '160px',
+          textAlign: 'center'
+        }}>
+          <Text style={{ fontSize: '12px', display: 'block', marginBottom: '2px', color: '#374151' }}>
+            막타 결제액
+          </Text>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+            <span style={{ fontSize: '19px', fontWeight: 700, color: '#0958d9' }}>
+              {parseInt(summary.last_touch_revenue).toLocaleString()}
+            </span>
+            <span style={{ fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>
+              원
+            </span>
+          </div>
+        </div>
+      </div>
 
       {/* 주문 목록 테이블 */}
       {orders.length > 0 ? (

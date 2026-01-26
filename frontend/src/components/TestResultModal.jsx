@@ -607,7 +607,7 @@ function TestResultModal({ visible, onClose }) {
                               )
                             },
                             {
-                              title: '영향 준 주문 수',
+                              title: '기여한 주문 수',
                               dataIndex: 'contributed_orders_count',
                               key: 'contributed_orders_count',
                               width: 120,
@@ -617,7 +617,7 @@ function TestResultModal({ visible, onClose }) {
                               )
                             },
                             {
-                              title: '기여 매출액',
+                              title: '기여한 결제액',
                               dataIndex: 'attributed_revenue',
                               key: 'attributed_revenue',
                               width: 120,
@@ -657,7 +657,7 @@ function TestResultModal({ visible, onClose }) {
                           style={{ marginBottom: '8px' }}
                         />
                         <div style={{ fontSize: '12px', color: '#8c8c8c', paddingLeft: '8px' }}>
-                          → 위 광고들의 "영향 준 주문 수"에 이 주문이 +1 카운트되어야 합니다
+                          → 위 광고들의 "기여한 주문 수"에 이 주문이 +1 카운트되어야 합니다
                         </div>
                       </div>
 
