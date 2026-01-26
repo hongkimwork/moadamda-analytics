@@ -143,13 +143,14 @@ async function mapToMetaAdName(truncatedName, metaAdNames = null) {
  * 
  * 중요: "잘린" 광고명만 변형으로 인정
  * - DB 광고명이 메타 광고명보다 짧고, 메타 광고명이 DB 광고명으로 시작하는 경우만 변형
- * - "...1초"와 "...1초 - 사본"은 별도 광고 (사본이 원본의 변형이 아님)
+ * - 단, DB 광고명이 메타에 별도로 등록된 광고면 변형이 아님 (예: "...1초"와 "...1초 - 사본")
  * 
  * @param {string} metaAdName - 정상 메타 광고명
  * @param {string[]} dbCreativeNames - DB에 있는 모든 광고명 목록
+ * @param {string[]} metaAdNames - 메타 API에서 가져온 광고명 목록 (옵션)
  * @returns {string[]} - 매핑되는 모든 광고명 배열 (정상 광고명 포함)
  */
-function getAllVariantNames(metaAdName, dbCreativeNames) {
+function getAllVariantNames(metaAdName, dbCreativeNames, metaAdNames = []) {
   if (!metaAdName || !dbCreativeNames || dbCreativeNames.length === 0) {
     return metaAdName ? [metaAdName] : [];
   }
@@ -162,6 +163,9 @@ function getAllVariantNames(metaAdName, dbCreativeNames) {
     
     // 깨진 문자 포함 시 제외
     if (dbName.includes('\uFFFD') || dbName.includes('�')) continue;
+    
+    // 메타에 별도로 등록된 광고면 변형이 아님 (별도 광고)
+    if (metaAdNames.includes(dbName)) continue;
     
     // 잘린 광고명 매칭: DB 이름이 메타 이름보다 짧고, 메타 이름이 DB 이름으로 시작하는 경우
     // (URL 인코딩 등으로 광고명이 잘린 경우만 변형으로 인정)

@@ -38,8 +38,12 @@ async function getCreativeVariants(creative_name, startDate, endDate) {
   // DB에서 해당 기간 내 존재하는 광고명 목록 조회
   const dbCreativeNames = await getDbCreativeNames(startDate, endDate);
   
+  // 메타 API에서 등록된 광고명 목록 조회 (별도 광고 판별용)
+  const metaAdNames = await getMetaAdNames();
+  
   // 요청받은 광고명이 메타 광고명인 경우 변형들 찾기
-  const variants = getAllVariantNames(creative_name, dbCreativeNames);
+  // 메타에 별도로 등록된 광고는 변형에서 제외
+  const variants = getAllVariantNames(creative_name, dbCreativeNames, metaAdNames);
   
   return variants.length > 0 ? variants : [creative_name];
 }
@@ -388,7 +392,7 @@ async function getCreativeOrders(params) {
         description: '어시로 기여 (50%를 어시 수로 분배)'
       },
       total_attributed: Math.round(totalAttributedRevenue),
-      formula: '기여한 매출액 = 막타100% + 막타50% + 어시기여'
+      formula: '기여한 결제액 = 막타100% + 막타50% + 어시기여'
     }
   };
 }
