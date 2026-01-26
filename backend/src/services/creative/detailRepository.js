@@ -45,7 +45,7 @@ async function getCreativeVisitors({ creative_name, utm_source, utm_medium, utm_
   // utm_source가 '-'이면 null도 포함해서 조회
   const sourceCondition = utm_source === '-' 
     ? `(COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $${creativeNames.length + 1} OR us.utm_params->>'utm_source' IS NULL)`
-    : `(COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $${creativeNames.length + 1} OR us.utm_params->>'utm_source' IS NULL OR us.utm_params->>'utm_source' = 'meta')`;
+    : `(COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $${creativeNames.length + 1} )`;
   
   const query = `
     SELECT DISTINCT us.visitor_id
@@ -136,7 +136,7 @@ async function getDailyTrend({ creative_name, utm_source, utm_medium, utm_campai
       FROM utm_sessions us
       JOIN visitors v ON us.visitor_id = v.visitor_id
       WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = ANY($1)
-        AND (COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2 OR us.utm_params->>'utm_source' IS NULL OR us.utm_params->>'utm_source' = 'meta')
+        AND (COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2 )
         AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
         AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
         AND us.entry_timestamp >= $5
@@ -188,7 +188,7 @@ async function getDeviceStats({ creative_name, utm_source, utm_medium, utm_campa
       FROM utm_sessions us
       JOIN visitors v ON us.visitor_id = v.visitor_id
       WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = ANY($1)
-        AND (COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2 OR us.utm_params->>'utm_source' IS NULL OR us.utm_params->>'utm_source' = 'meta')
+        AND (COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2 )
         AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
         AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
         AND us.entry_timestamp >= $5
@@ -648,7 +648,7 @@ async function getRawSessions({ creative_name, utm_source, utm_medium, utm_campa
       AND c.timestamp <= us.entry_timestamp + INTERVAL '30 days'
       AND c.order_status = 'confirmed'
     WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = ANY($1)
-      AND (COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2 OR us.utm_params->>'utm_source' IS NULL OR us.utm_params->>'utm_source' = 'meta')
+      AND (COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2 )
       AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
       AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
       AND us.entry_timestamp >= $5
@@ -690,7 +690,7 @@ async function getRawSessionsCount({ creative_name, utm_source, utm_medium, utm_
         AND c.timestamp <= us.entry_timestamp + INTERVAL '30 days'
         AND c.order_status = 'confirmed'
       WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = ANY($1)
-        AND (COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2 OR us.utm_params->>'utm_source' IS NULL OR us.utm_params->>'utm_source' = 'meta')
+        AND (COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2 )
         AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
         AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
         AND us.entry_timestamp >= $5
@@ -726,7 +726,7 @@ async function getRawTrafficSummary({ creative_name, utm_source, utm_medium, utm
     FROM utm_sessions us
     JOIN visitors v ON us.visitor_id = v.visitor_id
     WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = ANY($1)
-      AND (COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2 OR us.utm_params->>'utm_source' IS NULL OR us.utm_params->>'utm_source' = 'meta')
+      AND (COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2 )
       AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
       AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
       AND us.entry_timestamp >= $5
@@ -1208,7 +1208,7 @@ async function getCreativeSessions({ creative_name, utm_source, utm_medium, utm_
       FROM utm_sessions us
       JOIN visitors v2 ON us.visitor_id = v2.visitor_id
       WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = ANY($1)
-        AND (COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2 OR us.utm_params->>'utm_source' IS NULL OR us.utm_params->>'utm_source' = 'meta')
+        AND (COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2 )
         AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
         AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
         AND us.entry_timestamp >= $5
@@ -1252,7 +1252,7 @@ async function getCreativeSessionsCount({ creative_name, utm_source, utm_medium,
     JOIN sessions s ON us.session_id = s.session_id
     JOIN visitors v ON us.visitor_id = v.visitor_id
     WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = ANY($1)
-      AND (COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2 OR us.utm_params->>'utm_source' IS NULL OR us.utm_params->>'utm_source' = 'meta')
+      AND (COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2 )
       AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
       AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
       AND us.entry_timestamp >= $5
@@ -1308,7 +1308,7 @@ async function getCreativeEntries({ creative_name, utm_source, utm_medium, utm_c
       FROM utm_sessions us
       JOIN visitors v ON us.visitor_id = v.visitor_id
       WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = ANY($1)
-        AND (COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2 OR us.utm_params->>'utm_source' IS NULL OR us.utm_params->>'utm_source' = 'meta')
+        AND (COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2 )
         AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
         AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
         AND us.entry_timestamp >= $5
@@ -1359,7 +1359,7 @@ async function getCreativeEntriesCount({ creative_name, utm_source, utm_medium, 
     FROM utm_sessions us
     JOIN visitors v ON us.visitor_id = v.visitor_id
     WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = ANY($1)
-      AND (COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2 OR us.utm_params->>'utm_source' IS NULL OR us.utm_params->>'utm_source' = 'meta')
+      AND (COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2 )
       AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
       AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
       AND us.entry_timestamp >= $5
