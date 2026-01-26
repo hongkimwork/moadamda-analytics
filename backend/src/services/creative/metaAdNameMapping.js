@@ -140,6 +140,11 @@ async function mapToMetaAdName(truncatedName, metaAdNames = null) {
 /**
  * 정상 메타 광고명에 매핑되는 모든 변형 광고명들을 찾기
  * (상세 API에서 사용: 정상 광고명 클릭 시 잘린 광고명 데이터도 포함해서 조회)
+ * 
+ * 중요: "잘린" 광고명만 변형으로 인정
+ * - DB 광고명이 메타 광고명보다 짧고, 메타 광고명이 DB 광고명으로 시작하는 경우만 변형
+ * - "...1초"와 "...1초 - 사본"은 별도 광고 (사본이 원본의 변형이 아님)
+ * 
  * @param {string} metaAdName - 정상 메타 광고명
  * @param {string[]} dbCreativeNames - DB에 있는 모든 광고명 목록
  * @returns {string[]} - 매핑되는 모든 광고명 배열 (정상 광고명 포함)
@@ -158,17 +163,18 @@ function getAllVariantNames(metaAdName, dbCreativeNames) {
     // 깨진 문자 포함 시 제외
     if (dbName.includes('\uFFFD') || dbName.includes('�')) continue;
     
-    // 접두사 매칭: DB 이름이 메타 이름의 접두사인 경우
-    if (dbName.length >= 13 && metaAdName.startsWith(dbName)) {
+    // 잘린 광고명 매칭: DB 이름이 메타 이름보다 짧고, 메타 이름이 DB 이름으로 시작하는 경우
+    // (URL 인코딩 등으로 광고명이 잘린 경우만 변형으로 인정)
+    if (dbName.length >= 13 && dbName.length < metaAdName.length && metaAdName.startsWith(dbName)) {
       variants.add(dbName);
       continue;
     }
     
-    // 공백 제거 후 비교
-    if (dbName.length >= 30) {
+    // 공백 제거 후 비교 (잘린 경우만)
+    if (dbName.length >= 30 && dbName.length < metaAdName.length) {
       const noSpaceDb = dbName.replace(/\s+/g, '');
       const noSpaceMeta = metaAdName.replace(/\s+/g, '');
-      if (noSpaceMeta.startsWith(noSpaceDb)) {
+      if (noSpaceMeta.startsWith(noSpaceDb) && noSpaceDb.length < noSpaceMeta.length) {
         variants.add(dbName);
       }
     }
