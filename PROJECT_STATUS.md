@@ -17,6 +17,7 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2026-01-27 | URL utm_content 디코딩 추가 | detailService.js |
 | 2026-01-27 | 빈문자열 '-' 변환 버그수정 | creativeService.js |
 | 2026-01-27 | 원본URL 빈문자열 버그수정 | detailService.js |
 | 2026-01-27 | 트래커 UTM % 파싱 수정 | tracker-v052.js |
