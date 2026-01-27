@@ -35,6 +35,9 @@ async function getCreativeAggregation({
   // - 기존: 고유 세션 수 (같은 세션에서 여러 번 진입해도 1번)
   // - 변경: 광고 클릭 → 진입 횟수 (같은 세션에서 여러 번 진입하면 각각 카운트)
   // - 평균 지표(PV, 체류시간, 스크롤)는 고유 세션 기준 유지
+  // FIX (2026-01-27): utm_source 빈 문자열 처리 통일
+  // - 기존: utm_source 그대로 사용 → 빈 문자열과 'meta'가 별도 행으로 분리
+  // - 변경: COALESCE(NULLIF(...), '-') 적용 → 기여도 계산 쿼리와 동일하게 처리
   const dataQuery = `
     WITH all_entries AS (
       -- 모든 진입 기록 (View 계산용)
@@ -42,9 +45,9 @@ async function getCreativeAggregation({
         us.session_id,
         us.visitor_id,
         us.utm_params->>'utm_content' as creative_name,
-        us.utm_params->>'utm_source' as utm_source,
-        us.utm_params->>'utm_medium' as utm_medium,
-        us.utm_params->>'utm_campaign' as utm_campaign
+        COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') as utm_source,
+        COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') as utm_medium,
+        COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') as utm_campaign
       FROM utm_sessions us
       JOIN visitors v ON us.visitor_id = v.visitor_id
       WHERE us.utm_params->>'utm_content' IS NOT NULL
@@ -58,17 +61,17 @@ async function getCreativeAggregation({
       -- 고유 세션 (평균 지표 계산용)
       SELECT DISTINCT ON (
         us.utm_params->>'utm_content',
-        us.utm_params->>'utm_source', 
-        us.utm_params->>'utm_medium',
-        us.utm_params->>'utm_campaign',
+        COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-'), 
+        COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-'),
+        COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-'),
         us.session_id
       )
         us.session_id,
         us.visitor_id,
         us.utm_params->>'utm_content' as creative_name,
-        us.utm_params->>'utm_source' as utm_source,
-        us.utm_params->>'utm_medium' as utm_medium,
-        us.utm_params->>'utm_campaign' as utm_campaign,
+        COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') as utm_source,
+        COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') as utm_medium,
+        COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') as utm_campaign,
         s.pageview_count,
         s.duration_seconds
       FROM utm_sessions us
@@ -80,7 +83,7 @@ async function getCreativeAggregation({
         AND v.is_bot = false
         ${searchCondition}
         ${utmFilterConditions}
-      ORDER BY us.utm_params->>'utm_content', us.utm_params->>'utm_source', us.utm_params->>'utm_medium', us.utm_params->>'utm_campaign', us.session_id
+      ORDER BY us.utm_params->>'utm_content', COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-'), COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-'), COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-'), us.session_id
     ),
     entry_counts AS (
       -- 광고별 진입 횟수 집계
