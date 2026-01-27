@@ -125,8 +125,10 @@ async function getCreativePerformance(params) {
     
     if (metaName) {
       // 매핑 성공: 메타 광고명 기준으로 그룹화
-      // utm_source가 null인 경우도 동일 광고로 병합
+      // utm_source가 '-' 또는 null인 경우도 동일 광고로 병합
       const key = `${metaName}||${row.utm_medium}||${row.utm_campaign}`;
+      // FIX (2026-01-27): utm_source가 '-'인 경우 'meta'로 통일
+      const normalizedUtmSource = (row.utm_source === '-' || !row.utm_source) ? 'meta' : row.utm_source;
       
       if (mergedDataMap.has(key)) {
         const existing = mergedDataMap.get(key);
@@ -142,7 +144,7 @@ async function getCreativePerformance(params) {
       } else {
         mergedDataMap.set(key, {
           creative_name: metaName, // 메타 광고명으로 통일
-          utm_source: row.utm_source || 'meta', // null이면 meta로
+          utm_source: normalizedUtmSource, // '-'이면 meta로
           utm_medium: row.utm_medium,
           utm_campaign: row.utm_campaign,
           unique_visitors: row.unique_visitors,
