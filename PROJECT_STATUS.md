@@ -17,6 +17,7 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2026-01-27 | 빈문자열 '-' 변환 버그수정 | creativeService.js |
 | 2026-01-27 | 원본URL 빈문자열 버그수정 | detailService.js |
 | 2026-01-27 | 트래커 UTM % 파싱 수정 | tracker-v052.js |
 | 2026-01-27 | 소재상세 모달 여정컬럼 삭제 | CreativeOrdersModal.jsx |
@@ -31,7 +32,6 @@
 | 2026-01-26 | 소재 모달 지표 색상/크기 조정 | CreativeOrdersModal.jsx |
 | 2026-01-26 | 소재 상세 모달 디자인 변경 | CreativeOrdersModal.jsx |
 | 2026-01-26 | 광고 성과 테이블 컬럼 변경 | PerformanceTable.jsx |
-| 2026-01-23 | 광고 소재 성과 개선 배포 | creative-performance.js |
 
 ---
 
