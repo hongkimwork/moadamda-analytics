@@ -17,6 +17,7 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2026-01-27 | 배포매뉴얼 경로 오류 수정 | deploy.mdc |
 | 2026-01-27 | 배포매뉴얼 컨테이너 재시작 추가 | deploy.mdc |
 | 2026-01-27 | 모수 구간 추가/삭제 기능 | ScoreSettingsModal.jsx |
 | 2026-01-27 | 모수모달 위치 상단 조정 | ScoreSettingsModal.jsx |
@@ -31,7 +32,6 @@
 | 2026-01-27 | 광고접촉/여정 불일치 해결 | detailRepository.js |
 | 2026-01-27 | 고객여정 날짜표시 버그수정 | ordersService.js |
 | 2026-01-26 | 모수평가 설정 기능 추가 | ScoreSettingsModal.jsx |
-| 2026-01-26 | 이상치필터 확장(PV/스크롤) | PerformanceFilters.jsx |
 
 ---
 
