@@ -20,11 +20,17 @@ export function formatDuration(seconds) {
 /**
  * 연속 중복 페이지 제거 함수
  * 같은 URL을 연속으로 방문한 경우 하나로 통합하고 체류시간 합산
+ * FIX (2026-01-27): 시간 간격이 5분 이상이면 별개 방문으로 취급
+ *   - 기존: 같은 URL이면 시간 간격과 관계없이 무조건 병합 → 광고 유입 시점 손실
+ *   - 수정: 5분 이상 간격이면 별개 방문으로 처리 → 광고 유입 시점 보존
  * @param {Array} pages - 페이지 배열
  * @returns {Array} 중복이 제거된 페이지 배열
  */
 export function removeConcecutiveDuplicates(pages) {
   if (!pages || pages.length === 0) return [];
+
+  // 별개 방문으로 취급할 시간 간격 임계값 (5분 = 300,000ms)
+  const TIME_GAP_THRESHOLD_MS = 300000;
 
   const result = [];
   let current = null;
@@ -39,10 +45,21 @@ export function removeConcecutiveDuplicates(pages) {
       const prevUrl = current.clean_url || current.page_url;
 
       if (currentUrl === prevUrl) {
-        // 같은 URL 연속 방문 - 체류시간만 합산 (최대 600초 제한)
-        const combinedTime = (current.time_spent_seconds || 0) + (page.time_spent_seconds || 0);
-        current.time_spent_seconds = Math.min(combinedTime, 600);
-        // timestamp는 첫 방문 시간 유지
+        // 같은 URL 연속 방문 - 시간 간격 확인
+        const currentTimestamp = new Date(page.timestamp).getTime();
+        const prevTimestamp = new Date(current.timestamp).getTime();
+        const timeDiff = currentTimestamp - prevTimestamp;
+
+        if (timeDiff < TIME_GAP_THRESHOLD_MS) {
+          // 5분 미만 간격 - 체류시간만 합산 (최대 600초 제한)
+          const combinedTime = (current.time_spent_seconds || 0) + (page.time_spent_seconds || 0);
+          current.time_spent_seconds = Math.min(combinedTime, 600);
+          // timestamp는 첫 방문 시간 유지
+        } else {
+          // 5분 이상 간격 - 별개 방문으로 처리 (광고 유입 시점 보존)
+          result.push(current);
+          current = { ...page };
+        }
       } else {
         // 다른 URL - 이전 것을 결과에 추가하고 새로 시작
         result.push(current);
