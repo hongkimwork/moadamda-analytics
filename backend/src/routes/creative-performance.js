@@ -423,7 +423,10 @@ router.post('/creative-performance/entries', async (req, res) => {
  */
 router.post('/creative-performance/original-url', async (req, res) => {
   try {
+    // DEBUG: 요청 파라미터 로깅
+    console.log('[DEBUG] original-url request:', JSON.stringify(req.body));
     const result = await detailService.getCreativeOriginalUrl(req.body);
+    console.log('[DEBUG] original-url result:', JSON.stringify(result));
     res.json(result);
   } catch (error) {
     console.error('Creative original URL API error:', error);
