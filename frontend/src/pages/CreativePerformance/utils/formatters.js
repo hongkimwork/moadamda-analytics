@@ -46,10 +46,10 @@ export const formatNumber = (num) => {
 };
 
 /**
- * 상대평가: 순위 기반 점수 계산
+ * 상대평가: 순위 기반 점수 계산 (동적 구간 지원)
  * @param {number} rank - 순위 (0-based, 동점자 고려된 순위)
  * @param {number} totalCount - 전체 개수
- * @param {Object} config - 구간 설정 { boundaries: [10, 30, 60], scores: [100, 80, 50, 20] }
+ * @param {Object} config - 구간 설정 { boundaries: [10, 30, 60, ...], scores: [100, 80, 50, 20, ...] }
  * @returns {number} 점수
  */
 const calculateRelativeScore = (rank, totalCount, config) => {
@@ -58,12 +58,15 @@ const calculateRelativeScore = (rank, totalCount, config) => {
   // 상위 몇 %인지 계산 (동점자는 같은 순위이므로 rank+1 사용)
   const percentile = ((rank + 1) / totalCount) * 100;
   
-  // 구간에 따른 점수 반환
+  // 동적 구간에 따른 점수 반환
   const { boundaries, scores } = config;
-  if (percentile <= boundaries[0]) return scores[0];
-  if (percentile <= boundaries[1]) return scores[1];
-  if (percentile <= boundaries[2]) return scores[2];
-  return scores[3];
+  for (let i = 0; i < boundaries.length; i++) {
+    if (percentile <= boundaries[i]) {
+      return scores[i];
+    }
+  }
+  // 어떤 구간에도 해당하지 않으면 마지막 점수 (그 외 나머지)
+  return scores[scores.length - 1];
 };
 
 /**
@@ -95,17 +98,21 @@ const createRankMap = (sortedData, getValue, getKey) => {
 };
 
 /**
- * 절대평가: 수치 기반 점수 계산
+ * 절대평가: 수치 기반 점수 계산 (동적 구간 지원)
  * @param {number} value - 실제 수치
- * @param {Object} config - 구간 설정 { boundaries: [120, 60, 30], scores: [100, 80, 50, 20] }
+ * @param {Object} config - 구간 설정 { boundaries: [120, 60, 30, ...], scores: [100, 80, 50, 20, ...] }
  * @returns {number} 점수
  */
 const calculateAbsoluteScore = (value, config) => {
   const { boundaries, scores } = config;
-  if (value >= boundaries[0]) return scores[0];
-  if (value >= boundaries[1]) return scores[1];
-  if (value >= boundaries[2]) return scores[2];
-  return scores[3];
+  // 동적 구간: 가장 높은 경계값부터 체크 (내림차순)
+  for (let i = 0; i < boundaries.length; i++) {
+    if (value >= boundaries[i]) {
+      return scores[i];
+    }
+  }
+  // 어떤 구간에도 해당하지 않으면 마지막 점수 (그 외 나머지)
+  return scores[scores.length - 1];
 };
 
 /**

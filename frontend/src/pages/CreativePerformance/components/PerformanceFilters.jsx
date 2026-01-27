@@ -5,7 +5,10 @@
 
 import { useState, useEffect } from 'react';
 import { Card, Divider, DatePicker, Select } from 'antd';
-import { Search, X, RotateCcw, Calendar, Layers, AlertTriangle, Settings } from 'lucide-react';
+import { 
+  Search, X, RotateCcw, Calendar, Layers, AlertTriangle, Settings,
+  Clock, Eye, MousePointerClick
+} from 'lucide-react';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ko';
 import DynamicUtmFilterBar from '../../../components/DynamicUtmFilterBar';
@@ -328,23 +331,11 @@ function PerformanceFilters({
           border: '1px solid #e8eaed'
         }}
       >
-        <div style={{ 
-          display: 'flex', 
-          gap: '24px',
-          flexWrap: 'wrap'
-        }}>
+        <div className="flex gap-6 flex-wrap">
           {/* 좌측: UTM Source 퀵 필터 */}
-          <div style={{ flex: '1 1 45%', minWidth: '300px' }}>
-            <div style={{ 
-              marginBottom: '12px', 
-              fontSize: '14px', 
-              color: '#374151', 
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}>
-              <Layers size={18} strokeWidth={2} style={{ color: '#1890ff' }} />
+          <div className="flex-1 min-w-[300px]">
+            <div className="mb-3 text-sm text-gray-700 font-semibold flex items-center gap-2">
+              <Layers size={18} strokeWidth={2} className="text-blue-500" />
               광고 플랫폼
             </div>
             <UtmSourceQuickFilter
@@ -354,20 +345,12 @@ function PerformanceFilters({
           </div>
 
           {/* 구분선 */}
-          <Divider type="vertical" style={{ height: 'auto', margin: '0' }} />
+          <Divider type="vertical" className="h-auto m-0" />
 
           {/* 우측: 동적 UTM 필터 */}
-          <div style={{ flex: '1 1 45%', minWidth: '300px' }}>
-            <div style={{ 
-              marginBottom: '12px', 
-              fontSize: '14px', 
-              color: '#374151', 
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}>
-              <Search size={18} strokeWidth={2} style={{ color: '#1890ff' }} />
+          <div className="flex-1 min-w-[300px]">
+            <div className="mb-3 text-sm text-gray-700 font-semibold flex items-center gap-2">
+              <Search size={18} strokeWidth={2} className="text-blue-500" />
               UTM 필터
             </div>
             <DynamicUtmFilterBar
@@ -390,34 +373,20 @@ function PerformanceFilters({
           border: '1px solid #e8eaed'
         }}
       >
-        <div style={{ 
-          display: 'flex', 
-          gap: '24px',
-          flexWrap: 'wrap'
-        }}>
+        <div className="flex gap-6 flex-wrap">
           {/* 좌측: 이상치 값 제외 필터 */}
-          <div style={{ flex: '1 1 45%', minWidth: '300px' }}>
-            <div style={{ 
-              marginBottom: '12px', 
-              fontSize: '14px', 
-              color: '#374151', 
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}>
-              <AlertTriangle size={18} strokeWidth={2} style={{ color: '#faad14' }} />
+          <div className="flex-1 min-w-[300px]">
+            <div className="mb-3 text-sm text-gray-700 font-semibold flex items-center gap-2">
+              <AlertTriangle size={18} strokeWidth={2} className="text-amber-500" />
               이상치 값 제외 필터
             </div>
-            <div style={{ 
-              display: 'flex', 
-              gap: '16px', 
-              flexWrap: 'wrap',
-              alignItems: 'center'
-            }}>
+            <div className="flex gap-3 flex-wrap items-center">
               {/* 체류시간 초과 제외 */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ fontSize: '13px', color: '#5f6368', fontWeight: 500 }}>체류시간</span>
+              <div className="flex items-center gap-2 bg-gray-50 px-3 h-[42px] rounded-lg border border-gray-100">
+                <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
+                  <Clock size={14} className="text-green-500" />
+                  <span>체류시간</span>
+                </div>
                 <Select
                   size="small"
                   value={maxDuration}
@@ -425,13 +394,18 @@ function PerformanceFilters({
                   options={durationOptions}
                   style={{ width: 100 }}
                   disabled={loading}
+                  bordered={false}
+                  className="bg-white rounded border border-gray-200"
                 />
-                <span style={{ fontSize: '13px', color: '#5f6368' }}>초과 제외</span>
+                <span className="text-xs text-gray-400">초과 제외</span>
               </div>
               
               {/* PV 초과 제외 */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ fontSize: '13px', color: '#5f6368', fontWeight: 500 }}>PV</span>
+              <div className="flex items-center gap-2 bg-gray-50 px-3 h-[42px] rounded-lg border border-gray-100">
+                <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
+                  <Eye size={14} className="text-purple-500" />
+                  <span>PV</span>
+                </div>
                 <Select
                   size="small"
                   value={maxPv}
@@ -439,13 +413,18 @@ function PerformanceFilters({
                   options={pvOptions}
                   style={{ width: 70 }}
                   disabled={loading}
+                  bordered={false}
+                  className="bg-white rounded border border-gray-200"
                 />
-                <span style={{ fontSize: '13px', color: '#5f6368' }}>초과 제외</span>
+                <span className="text-xs text-gray-400">초과 제외</span>
               </div>
               
               {/* 스크롤 초과 제외 */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ fontSize: '13px', color: '#5f6368', fontWeight: 500 }}>스크롤</span>
+              <div className="flex items-center gap-2 bg-gray-50 px-3 h-[42px] rounded-lg border border-gray-100">
+                <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
+                  <MousePointerClick size={14} className="text-blue-500" />
+                  <span>스크롤</span>
+                </div>
                 <Select
                   size="small"
                   value={maxScroll}
@@ -453,27 +432,21 @@ function PerformanceFilters({
                   options={scrollOptions}
                   style={{ width: 110 }}
                   disabled={loading}
+                  bordered={false}
+                  className="bg-white rounded border border-gray-200"
                 />
-                <span style={{ fontSize: '13px', color: '#5f6368' }}>초과 제외</span>
+                <span className="text-xs text-gray-400">초과 제외</span>
               </div>
             </div>
           </div>
 
           {/* 구분선 */}
-          <Divider type="vertical" style={{ height: 'auto', margin: '0' }} />
+          <Divider type="vertical" className="h-auto m-0" />
 
           {/* 우측: 모수 평가 기준 설정 */}
-          <div style={{ flex: '1 1 45%', minWidth: '300px' }}>
-            <div style={{ 
-              marginBottom: '12px', 
-              fontSize: '14px', 
-              color: '#374151', 
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}>
-              <Settings size={18} strokeWidth={2} style={{ color: '#722ed1' }} />
+          <div className="flex-1 min-w-[300px]">
+            <div className="mb-3 text-sm text-gray-700 font-semibold flex items-center gap-2">
+              <Settings size={18} strokeWidth={2} className="text-purple-600" />
               모수 평가 기준
             </div>
             <ScoreSettingsCard

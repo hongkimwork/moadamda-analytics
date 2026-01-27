@@ -4,6 +4,10 @@
 
 const repository = require('./scoreSettingsRepository');
 
+// 최대/최소 구간 수
+const MAX_BOUNDARIES = 10;
+const MIN_BOUNDARIES = 1;
+
 /**
  * 설정 유효성 검사
  * @param {Object} settings - 설정 데이터
@@ -47,17 +51,24 @@ const validateSettings = (settings) => {
       return;
     }
 
-    // 경계값 개수 검사 (4구간이면 경계값 3개)
-    if (config.boundaries.length !== 3) {
-      errors.push(`${name} 경계값은 3개여야 합니다.`);
+    // 경계값 개수 검사 (동적: 최소 1개 ~ 최대 10개)
+    if (config.boundaries.length < MIN_BOUNDARIES) {
+      errors.push(`${name}에 최소 ${MIN_BOUNDARIES}개의 구간이 필요합니다.`);
+      return;
+    }
+    if (config.boundaries.length > MAX_BOUNDARIES) {
+      errors.push(`${name}은 최대 ${MAX_BOUNDARIES}개 구간까지만 가능합니다.`);
+      return;
     }
 
-    // 점수 개수 검사 (4구간이면 점수 4개)
-    if (config.scores.length !== 4) {
-      errors.push(`${name} 점수는 4개여야 합니다.`);
+    // 점수 개수 검사 (경계값 개수 + 1 = 점수 개수)
+    const expectedScores = config.boundaries.length + 1;
+    if (config.scores.length !== expectedScores) {
+      errors.push(`${name} 점수 개수가 올바르지 않습니다. (경계값 ${config.boundaries.length}개면 점수 ${expectedScores}개 필요)`);
+      return;
     }
 
-    // 경계값 순서 검사 (내림차순이어야 함 - 상위 10% < 상위 30% < 상위 60%)
+    // 경계값 순서 검사
     // 상대평가: 퍼센트 기준 (오름차순)
     // 절대평가: 수치 기준 (내림차순 - 120초 > 60초 > 30초)
     if (settings.evaluation_type === 'relative') {

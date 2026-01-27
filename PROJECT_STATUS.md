@@ -17,6 +17,10 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2026-01-27 | 모수 구간 추가/삭제 기능 | ScoreSettingsModal.jsx |
+| 2026-01-27 | 모수모달 위치 상단 조정 | ScoreSettingsModal.jsx |
+| 2026-01-27 | 모수설정 모달 높이/스크롤 수정 | ScoreSettingsModal.jsx |
+| 2026-01-27 | 백엔드/프론트 재빌드 | docker-compose |
 | 2026-01-27 | URL utm_content 디코딩 추가 | detailService.js |
 | 2026-01-27 | 빈문자열 '-' 변환 버그수정 | creativeService.js |
 | 2026-01-27 | 원본URL 빈문자열 버그수정 | detailService.js |
@@ -28,11 +32,6 @@
 | 2026-01-26 | 모수평가 설정 기능 추가 | ScoreSettingsModal.jsx |
 | 2026-01-26 | 이상치필터 확장(PV/스크롤) | PerformanceFilters.jsx |
 | 2026-01-26 | 점수계산 로직 개선 | formatters.js |
-| 2026-01-26 | 여정카드 요약정보 추가 | JourneyMiniCard.jsx |
-| 2026-01-26 | 세션모달 UV/세션수 표시 | CreativeSessionsModal.jsx |
-| 2026-01-26 | 소재 모달 지표 색상/크기 조정 | CreativeOrdersModal.jsx |
-| 2026-01-26 | 소재 상세 모달 디자인 변경 | CreativeOrdersModal.jsx |
-| 2026-01-26 | 광고 성과 테이블 컬럼 변경 | PerformanceTable.jsx |
 
 ---
 
