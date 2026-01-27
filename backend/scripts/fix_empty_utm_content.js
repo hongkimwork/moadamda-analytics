@@ -60,7 +60,6 @@ async function fixEmptyUtmContent() {
       WHERE (us.utm_params->>'utm_content' = '' OR us.utm_params->>'utm_content' IS NULL)
         AND s.entry_url LIKE '%utm_content=%'
         AND s.entry_url NOT LIKE '%utm_content=&%'
-        AND s.entry_url NOT LIKE '%utm_content=%25%25%'
       ORDER BY us.entry_timestamp DESC
     `;
     
