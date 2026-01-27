@@ -267,6 +267,10 @@ async function getOrderDetail(orderId) {
   // 3. 병렬로 여정 데이터 조회
   // getUtmHistory: session_id를 추가로 전달 (인앱 브라우저 쿠키 문제 대응)
   // FIX (2026-01-27): 구매일(order.timestamp) 전달하여 Attribution Window (30일) 적용
+  // FIX (2026-01-27): 타임존 문제 - DB timestamp는 KST로 저장되어 있으므로 로컬 시간 문자열로 변환
+  const d = new Date(order.timestamp);
+  const localTimestamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}.${String(d.getMilliseconds()).padStart(3, '0')}`;
+  
   const [
     purchaseJourneyRows,
     previousVisitsRows,
@@ -276,7 +280,7 @@ async function getOrderDetail(orderId) {
   ] = await Promise.all([
     repository.getPurchaseJourney(order.visitor_id, order.timestamp),
     repository.getPreviousVisits(order.visitor_id, order.timestamp),
-    repository.getUtmHistory(order.visitor_id, order.session_id, order.timestamp),
+    repository.getUtmHistory(order.visitor_id, order.session_id, localTimestamp),
     order.ip_address && order.ip_address !== 'unknown'
       ? repository.getSameIpVisits(order.ip_address, order.session_id)
       : Promise.resolve([]),
