@@ -220,18 +220,6 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange }) {
     },
     {
       title: (
-        <Tooltip title="고객이 구매 전 본 고유 광고 개수">
-          <span style={{ cursor: 'help' }}>여정</span>
-        </Tooltip>
-      ),
-      dataIndex: 'journey_creative_count',
-      key: 'journey_creative_count',
-      width: 65,
-      align: 'center',
-      render: (count) => <Tag color="purple">{count}개</Tag>
-    },
-    {
-      title: (
         <Tooltip title="이 광고가 해당 주문에서 기여한 비율">
           <span style={{ cursor: 'help' }}>기여율</span>
         </Tooltip>
