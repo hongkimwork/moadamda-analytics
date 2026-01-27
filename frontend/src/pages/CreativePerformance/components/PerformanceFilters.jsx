@@ -397,7 +397,7 @@ function PerformanceFilters({
                   bordered={false}
                   className="bg-white rounded border border-gray-200"
                 />
-                <span className="text-xs text-gray-400">초과 제외</span>
+                <span className="text-xs text-gray-600">초과 제외</span>
               </div>
               
               {/* PV 초과 제외 */}
@@ -416,7 +416,7 @@ function PerformanceFilters({
                   bordered={false}
                   className="bg-white rounded border border-gray-200"
                 />
-                <span className="text-xs text-gray-400">초과 제외</span>
+                <span className="text-xs text-gray-600">초과 제외</span>
               </div>
               
               {/* 스크롤 초과 제외 */}
@@ -435,7 +435,7 @@ function PerformanceFilters({
                   bordered={false}
                   className="bg-white rounded border border-gray-200"
                 />
-                <span className="text-xs text-gray-400">초과 제외</span>
+                <span className="text-xs text-gray-600">초과 제외</span>
               </div>
             </div>
           </div>
