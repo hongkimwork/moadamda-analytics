@@ -356,6 +356,10 @@ async function getPreviousVisits(visitorId, purchaseTimestamp) {
 /**
  * UTM 히스토리 조회 (병합 적용)
  * 
+ * FIX (2026-01-27): Attribution Window (구매일 기준 30일) 필터 추가
+ *   - 기존: 기간 제한 없이 전체 UTM 히스토리 조회 → 광고 소재 상세 모달과 불일치
+ *   - 수정: 구매일 기준 30일 이내 UTM 히스토리만 조회 → 일관성 유지
+ * 
  * 인앱 브라우저 쿠키 문제 대응:
  * - 인앱 브라우저에서 쿠키가 저장되지 않으면 visitor_id가 중복 생성됨
  * - conversions.visitor_id와 utm_sessions.visitor_id가 다를 수 있음
@@ -363,8 +367,13 @@ async function getPreviousVisits(visitorId, purchaseTimestamp) {
  * 
  * @param {string} visitorId - conversions 테이블의 visitor_id
  * @param {string} sessionId - conversions 테이블의 session_id (optional, for fallback)
+ * @param {Date|string} purchaseTimestamp - 구매일시 (Attribution Window 계산용)
+ * @param {number} attributionWindowDays - Attribution Window 일수 (기본 30일)
  */
-async function getUtmHistory(visitorId, sessionId = null) {
+async function getUtmHistory(visitorId, sessionId = null, purchaseTimestamp = null, attributionWindowDays = 30) {
+  // Attribution Window 적용 여부 결정
+  const hasAttributionFilter = purchaseTimestamp !== null;
+  
   const query = `
     WITH 
     -- session_id 기반으로 실제 visitor_id 찾기 (인앱 브라우저 쿠키 문제 대응)
@@ -393,6 +402,11 @@ async function getUtmHistory(visitorId, sessionId = null) {
         us.sequence_order
       FROM utm_sessions us
       WHERE us.visitor_id IN (SELECT visitor_id FROM target_visitors)
+        ${hasAttributionFilter ? `
+        -- FIX (2026-01-27): Attribution Window 적용 (구매일 기준 30일 이내만)
+        AND us.entry_timestamp >= ($3::timestamp - INTERVAL '${attributionWindowDays} days')
+        AND us.entry_timestamp <= $3::timestamp
+        ` : ''}
     ),
     with_gaps AS (
       SELECT
@@ -447,7 +461,11 @@ async function getUtmHistory(visitorId, sessionId = null) {
     ORDER BY entry_timestamp ASC
   `;
 
-  const result = await db.query(query, [visitorId, sessionId]);
+  const params = hasAttributionFilter 
+    ? [visitorId, sessionId, purchaseTimestamp]
+    : [visitorId, sessionId];
+    
+  const result = await db.query(query, params);
   return result.rows;
 }
 

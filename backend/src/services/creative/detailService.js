@@ -286,6 +286,14 @@ async function getCreativeOrders(params) {
   
   // 기여 주문의 visitor들에 대한 추가 정보 조회
   const contributedVisitorArray = Array.from(contributedVisitorIds);
+  
+  // FIX (2026-01-27): 광고 접촉 횟수 계산 시 구매일 기준 Attribution Window 적용
+  // 각 구매자의 구매일을 전달하여 구매일 기준 30일 이내 세션만 집계
+  const purchaserOrders = contributedOrders.map(order => ({
+    visitor_id: order.visitor_id,
+    order_date: order.order_date
+  }));
+  
   const [sessionInfoMap, touchCountMap, visitCountMap] = await Promise.all([
     repository.getVisitorSessionInfoForCreative({
       visitorIds: contributedVisitorArray,
@@ -298,13 +306,12 @@ async function getCreativeOrders(params) {
       maxDurationSeconds
     }),
     repository.getCreativeTouchCounts({
-      visitorIds: contributedVisitorArray,
+      purchaserOrders,
       creative_name,
       utm_source,
       utm_medium,
       utm_campaign,
-      startDate,
-      endDate
+      attributionWindowDays: ATTRIBUTION_WINDOW_DAYS
     }),
     repository.getVisitorTotalVisits({ visitorIds: contributedVisitorArray })
   ]);

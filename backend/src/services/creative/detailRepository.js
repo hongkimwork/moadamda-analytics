@@ -879,30 +879,47 @@ async function getVisitorSessionInfoForCreative({ visitorIds, creative_name, utm
 /**
  * visitor별 특정 광고 접촉 횟수 조회 (고유 세션 수)
  * FIX (2026-01-23): 조회 기간 필터 추가 + 세션 중복 제거
+ * FIX (2026-01-27): Attribution Window (구매일 기준 30일) 적용으로 변경
+ *   - 기존: 조회 기간 내 세션만 집계 → 여정 컬럼과 불일치 발생
+ *   - 수정: 각 구매자의 구매일 기준 30일 이내 세션 집계 → 여정과 일관성 유지
  * 카페24 호환: visitors 테이블과 조인하여 봇 트래픽 제외
+ * 
+ * @param {Object} params
+ * @param {Array} params.purchaserOrders - [{visitor_id, order_date}] 구매자별 구매일 정보
+ * @param {string} params.creative_name - 광고 소재 이름
+ * @param {string} params.utm_source - UTM Source
+ * @param {string} params.utm_medium - UTM Medium
+ * @param {string} params.utm_campaign - UTM Campaign
+ * @param {number} params.attributionWindowDays - Attribution Window 일수 (기본 30일)
  */
-async function getCreativeTouchCounts({ visitorIds, creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate }) {
-  if (visitorIds.length === 0) return {};
+async function getCreativeTouchCounts({ purchaserOrders, creative_name, utm_source, utm_medium, utm_campaign, attributionWindowDays = 30 }) {
+  if (!purchaserOrders || purchaserOrders.length === 0) return {};
   
-  // 같은 세션에서 여러 번 클릭해도 1회로 카운트 (고유 세션 수)
+  // 구매자별 구매일 기준 30일 이내 세션만 집계
+  // VALUES로 (visitor_id, order_date) 쌍을 전달하여 각 구매자별로 Attribution Window 적용
+  const orderPairs = purchaserOrders.map(o => `('${o.visitor_id}'::text, '${new Date(o.order_date).toISOString()}'::timestamp)`).join(',');
+  
   const query = `
+    WITH purchaser_dates AS (
+      SELECT * FROM (VALUES ${orderPairs}) AS t(visitor_id, order_date)
+    )
     SELECT 
       us.visitor_id,
       COUNT(DISTINCT us.session_id) as touch_count
     FROM utm_sessions us
     JOIN visitors v ON us.visitor_id = v.visitor_id
-    WHERE us.visitor_id = ANY($1)
-      AND REPLACE(us.utm_params->>'utm_content', '+', ' ') = $2
-      AND COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $3
-      AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $4
-      AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $5
-      AND us.entry_timestamp >= $6
-      AND us.entry_timestamp <= $7
+    JOIN purchaser_dates pd ON us.visitor_id = pd.visitor_id
+    WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = $1
+      AND COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2
+      AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
+      AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
+      AND us.entry_timestamp >= pd.order_date - INTERVAL '${attributionWindowDays} days'
+      AND us.entry_timestamp <= pd.order_date
       AND v.is_bot = false
     GROUP BY us.visitor_id
   `;
   
-  const result = await db.query(query, [visitorIds, creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate]);
+  const result = await db.query(query, [creative_name, utm_source, utm_medium, utm_campaign]);
   
   const touchCountMap = {};
   result.rows.forEach(row => {

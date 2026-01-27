@@ -266,6 +266,7 @@ async function getOrderDetail(orderId) {
 
   // 3. 병렬로 여정 데이터 조회
   // getUtmHistory: session_id를 추가로 전달 (인앱 브라우저 쿠키 문제 대응)
+  // FIX (2026-01-27): 구매일(order.timestamp) 전달하여 Attribution Window (30일) 적용
   const [
     purchaseJourneyRows,
     previousVisitsRows,
@@ -275,7 +276,7 @@ async function getOrderDetail(orderId) {
   ] = await Promise.all([
     repository.getPurchaseJourney(order.visitor_id, order.timestamp),
     repository.getPreviousVisits(order.visitor_id, order.timestamp),
-    repository.getUtmHistory(order.visitor_id, order.session_id),
+    repository.getUtmHistory(order.visitor_id, order.session_id, order.timestamp),
     order.ip_address && order.ip_address !== 'unknown'
       ? repository.getSameIpVisits(order.ip_address, order.session_id)
       : Promise.resolve([]),
