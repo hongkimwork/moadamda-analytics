@@ -196,13 +196,25 @@ async function buildExternalPaymentResponse(order) {
 }
 
 /**
+ * Date 객체를 로컬 시간대 기준 YYYY-MM-DD 문자열로 변환
+ * (toISOString은 UTC 기준이라 KST에서 하루 앞당겨지는 버그 방지)
+ */
+function formatDateLocal(date) {
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
  * 과거 방문을 날짜별로 그룹화
  */
 function groupVisitsByDate(visits) {
   const grouped = {};
 
   visits.forEach(row => {
-    const date = row.visit_date.toISOString().split('T')[0];
+    const date = formatDateLocal(row.visit_date);
     if (!grouped[date]) {
       grouped[date] = [];
     }

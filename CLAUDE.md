@@ -13,7 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **로컬 개발**:
   - 백엔드 API: http://localhost:3003
   - 프론트엔드 대시보드: http://localhost:3030
-- **현재 트래커 버전**: tracker-v049.js (PROJECT_STATUS.md 참조)
+- **현재 트래커 버전**: tracker-v051.js (최신 버전은 PROJECT_STATUS.md에서 확인)
 
 ## 시스템 아키텍처
 
