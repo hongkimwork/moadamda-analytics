@@ -17,6 +17,7 @@
 
 | 날짜 | 작업 내용 | 수정 파일 |
 |------|---------|----------|
+| 2026-01-27 | 광고접촉/여정 불일치 해결 | detailRepository.js |
 | 2026-01-27 | 고객여정 날짜표시 버그수정 | ordersService.js |
 | 2026-01-26 | 모수평가 설정 기능 추가 | ScoreSettingsModal.jsx |
 | 2026-01-26 | 이상치필터 확장(PV/스크롤) | PerformanceFilters.jsx |
@@ -31,7 +32,6 @@
 | 2026-01-23 | 평균스크롤 합계방식 변경 | creativeRepository.js |
 | 2026-01-23 | 세션모달 스크롤컬럼 추가 | CreativeSessionsModal.jsx |
 | 2026-01-23 | View/UV 모달 분리 | CreativeEntriesModal.jsx |
-| 2026-01-23 | 취소주문 기여도 제외 | creativeAttribution.js |
 
 ---
 
