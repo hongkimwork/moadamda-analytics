@@ -63,10 +63,17 @@ function parseDates(start, end) {
 
 /**
  * 기본 파라미터 검증 (creative + dates)
+ * FIX (2026-01-27): creative_name 빈 문자열 허용
+ * - 실제로 utm_content가 빈 문자열로 저장된 데이터가 존재함
+ * - 빈 문자열도 유효한 creative_name으로 처리
  */
 function validateCreativeParams({ creative_name, utm_source, utm_medium, utm_campaign, start, end }) {
-  if (!creative_name || !utm_source || !utm_medium || !utm_campaign || !start || !end) {
-    throw new Error('creative_name, utm_source, utm_medium, utm_campaign, start, end are required');
+  // creative_name은 빈 문자열도 허용 (undefined/null만 거부)
+  if (creative_name === undefined || creative_name === null) {
+    throw new Error('creative_name is required');
+  }
+  if (!utm_source || !utm_medium || !utm_campaign || !start || !end) {
+    throw new Error('utm_source, utm_medium, utm_campaign, start, end are required');
   }
 }
 

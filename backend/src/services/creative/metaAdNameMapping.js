@@ -159,14 +159,26 @@ async function mapToMetaAdName(truncatedName, metaAdNames = null) {
  * - DB 광고명이 메타 광고명보다 짧고, 메타 광고명이 DB 광고명으로 시작하는 경우만 변형
  * - 단, DB 광고명이 메타에 별도로 등록된 광고면 변형이 아님 (예: "...1초"와 "...1초 - 사본")
  * 
+ * FIX (2026-01-27): 빈 문자열 처리
+ * - metaAdName이 빈 문자열이어도 유효한 값으로 처리
+ * - 실제로 utm_content가 빈 문자열로 저장된 데이터가 존재함
+ * 
  * @param {string} metaAdName - 정상 메타 광고명
  * @param {string[]} dbCreativeNames - DB에 있는 모든 광고명 목록
  * @param {string[]} metaAdNames - 메타 API에서 가져온 광고명 목록 (옵션)
  * @returns {string[]} - 매핑되는 모든 광고명 배열 (정상 광고명 포함)
  */
 function getAllVariantNames(metaAdName, dbCreativeNames, metaAdNames = []) {
-  if (!metaAdName || !dbCreativeNames || dbCreativeNames.length === 0) {
-    return metaAdName ? [metaAdName] : [];
+  // null/undefined만 거부, 빈 문자열은 유효한 값으로 처리
+  if (metaAdName === null || metaAdName === undefined) {
+    return [];
+  }
+  if (!dbCreativeNames || dbCreativeNames.length === 0) {
+    return [metaAdName];
+  }
+  // 빈 문자열인 경우 변형 찾기 로직 스킵하고 그대로 반환
+  if (metaAdName === '') {
+    return [metaAdName];
   }
   
   const variants = new Set([metaAdName]);
