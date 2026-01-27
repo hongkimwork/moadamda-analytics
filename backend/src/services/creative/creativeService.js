@@ -96,11 +96,14 @@ async function getCreativePerformance(params) {
   ]);
 
   // 7. 응답 데이터 가공 (URL 디코딩 포함)
+  // FIX (2026-01-27): 빈 문자열도 유효한 값으로 유지 (|| 대신 ?? 사용)
+  // - utm_content가 빈 문자열인 경우가 실제로 존재함
+  // - 빈 문자열을 '-'로 변환하면 원본 URL 조회 등에서 문제 발생
   const rawData = rawDataRows.map(row => ({
-    creative_name: safeDecodeURIComponent(row.creative_name || '-'),
-    utm_source: safeDecodeURIComponent(row.utm_source || '-'),
-    utm_medium: safeDecodeURIComponent(row.utm_medium || '-'),
-    utm_campaign: safeDecodeURIComponent(row.utm_campaign || '-'),
+    creative_name: safeDecodeURIComponent(row.creative_name ?? '-'),
+    utm_source: safeDecodeURIComponent(row.utm_source ?? '-'),
+    utm_medium: safeDecodeURIComponent(row.utm_medium ?? '-'),
+    utm_campaign: safeDecodeURIComponent(row.utm_campaign ?? '-'),
     unique_visitors: parseInt(row.unique_visitors) || 0,
     total_views: parseInt(row.total_views) || 0,
     avg_pageviews: parseFloat(row.avg_pageviews) || 0,
