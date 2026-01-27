@@ -895,9 +895,15 @@ async function getVisitorSessionInfoForCreative({ visitorIds, creative_name, utm
 async function getCreativeTouchCounts({ purchaserOrders, creative_name, utm_source, utm_medium, utm_campaign, attributionWindowDays = 30 }) {
   if (!purchaserOrders || purchaserOrders.length === 0) return {};
   
+  // DEBUG: purchaserOrders 확인
+  console.log('[DEBUG getCreativeTouchCounts] purchaserOrders sample:', JSON.stringify(purchaserOrders.slice(0, 2)));
+  console.log('[DEBUG getCreativeTouchCounts] creative_name:', creative_name);
+  
   // 구매자별 구매일 기준 30일 이내 세션만 집계
   // VALUES로 (visitor_id, order_date) 쌍을 전달하여 각 구매자별로 Attribution Window 적용
   const orderPairs = purchaserOrders.map(o => `('${o.visitor_id}'::text, '${new Date(o.order_date).toISOString()}'::timestamp)`).join(',');
+  
+  console.log('[DEBUG getCreativeTouchCounts] orderPairs sample:', orderPairs.substring(0, 200));
   
   const query = `
     WITH purchaser_dates AS (
