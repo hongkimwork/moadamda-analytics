@@ -896,13 +896,14 @@ async function getCreativeTouchCounts({ purchaserOrders, creative_name, utm_sour
   if (!purchaserOrders || purchaserOrders.length === 0) return {};
   
   // FIX (2026-01-27): toISOString()은 UTC로 변환되어 타임존 문제 발생
-  // timestamptz로 캐스팅하여 PostgreSQL이 올바르게 비교하도록 수정
+  // DB의 entry_timestamp는 KST로 저장되어 있으므로, 로컬 시간 형식으로 변환해야 함
   // 구매자별 구매일 기준 30일 이내 세션만 집계
   // VALUES로 (visitor_id, order_date) 쌍을 전달하여 각 구매자별로 Attribution Window 적용
   const orderPairs = purchaserOrders.map(o => {
-    // order_date를 ISO 문자열로 변환 (timestamptz로 캐스팅하여 타임존 정보 유지)
-    const dateStr = new Date(o.order_date).toISOString();
-    return `('${o.visitor_id}'::text, '${dateStr}'::timestamptz)`;
+    // order_date를 로컬 시간 문자열로 변환 (DB의 timestamp와 동일한 형식)
+    const d = new Date(o.order_date);
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}.${String(d.getMilliseconds()).padStart(3, '0')}`;
+    return `('${o.visitor_id}'::text, '${dateStr}'::timestamp)`;
   }).join(',');
   
   const query = `
