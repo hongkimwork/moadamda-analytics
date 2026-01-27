@@ -304,7 +304,10 @@ function CreativePerformance() {
           <div>
             <div style={{ marginBottom: '16px' }}>
               <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>광고 소재 이름</div>
-              <div style={{ fontSize: '14px', fontWeight: 600 }}>{originalUrlData.creative_name}</div>
+              <div style={{ fontSize: '14px', fontWeight: 600 }}>
+                {/* URL에서 디코딩된 광고 소재 이름이 있으면 표시, 없으면 기존 값 */}
+                {originalUrlData.decoded_creative_name || originalUrlData.creative_name || '-'}
+              </div>
             </div>
             
             {originalUrlData.full_url ? (

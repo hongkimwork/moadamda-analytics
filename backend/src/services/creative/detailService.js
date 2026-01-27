@@ -1385,6 +1385,42 @@ async function getCreativeEntries(params) {
 }
 
 /**
+ * URL에서 utm_content를 추출하고 디코딩
+ * 메타 광고에서 77%처럼 %가 제대로 인코딩 안 된 경우 처리
+ * @param {string} url - 전체 URL
+ * @returns {string|null} 디코딩된 utm_content 또는 null
+ */
+function extractAndDecodeUtmContent(url) {
+  if (!url) return null;
+  
+  try {
+    const urlObj = new URL(url);
+    const utmContent = urlObj.searchParams.get('utm_content');
+    if (!utmContent) return null;
+    
+    // 이미 디코딩된 상태로 반환됨 (URL 클래스가 자동 디코딩)
+    return utmContent;
+  } catch (e) {
+    // URL 파싱 실패 시 수동 추출 시도
+    try {
+      const match = url.match(/[?&]utm_content=([^&]*)/);
+      if (!match) return null;
+      
+      let encoded = match[1];
+      
+      // 잘못된 % 인코딩 수정: % 뒤에 두 자리 hex가 아닌 경우 %25로 변환
+      // 예: 77%%20 → 77%25%20 (77% 공백)
+      encoded = encoded.replace(/%(?![0-9A-Fa-f]{2})/g, '%25');
+      
+      return decodeURIComponent(encoded);
+    } catch (e2) {
+      console.warn('[getCreativeOriginalUrl] utm_content 디코딩 실패:', e2.message);
+      return null;
+    }
+  }
+}
+
+/**
  * 특정 광고 소재의 원본 URL (대표 랜딩 URL) 조회
  * 
  * @param {Object} params
@@ -1411,11 +1447,18 @@ async function getCreativeOriginalUrl(params) {
     endDate
   });
   
+  // URL에서 utm_content 추출 및 디코딩하여 원본 광고 소재 이름 반환
+  const decodedCreativeName = extractAndDecodeUtmContent(result.full_url);
+  
   return {
     success: true,
     creative: { creative_name, utm_source, utm_medium, utm_campaign },
     period: { start, end },
-    data: result
+    data: {
+      ...result,
+      // 디코딩된 원본 광고 소재 이름 추가
+      decoded_creative_name: decodedCreativeName
+    }
   };
 }
 
