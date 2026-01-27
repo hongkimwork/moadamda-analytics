@@ -45,6 +45,9 @@ function callMetaApiSimple(endpoint, params = {}) {
 
 /**
  * 메타 API에서 전체 광고명 목록 가져오기 (캐시 적용)
+ * FIX (2026-01-27): DB의 meta_ads 테이블에서도 광고명 가져오기
+ * - 메타 API는 ACTIVE/PAUSED 상태만 반환하므로 ARCHIVED 광고가 누락됨
+ * - DB에 저장된 광고명도 함께 사용하여 누락 방지
  * @returns {Promise<string[]>} - 고유한 광고명 배열
  */
 async function getMetaAdNames() {
@@ -54,7 +57,7 @@ async function getMetaAdNames() {
   }
 
   try {
-    // 광고명만 가져오기 (fields 최소화로 데이터 양 줄임)
+    // 1. 메타 API에서 ACTIVE/PAUSED 광고명 가져오기
     const [activeResult, pausedResult] = await Promise.all([
       callMetaApiSimple(`${META_AD_ACCOUNT_ID}/ads`, {
         fields: 'name',
@@ -68,16 +71,27 @@ async function getMetaAdNames() {
       })
     ]);
     
-    const allAds = [...(activeResult.data || []), ...(pausedResult.data || [])];
+    const apiAds = [...(activeResult.data || []), ...(pausedResult.data || [])];
+    const apiNames = apiAds.map(ad => ad.name).filter(Boolean);
     
-    // 고유한 광고명 추출
-    const uniqueNames = [...new Set(allAds.map(ad => ad.name).filter(Boolean))];
+    // 2. DB의 meta_ads 테이블에서 광고명 가져오기 (ARCHIVED 포함)
+    let dbNames = [];
+    try {
+      const db = require('../../utils/database');
+      const dbResult = await db.query('SELECT DISTINCT name FROM meta_ads WHERE name IS NOT NULL');
+      dbNames = dbResult.rows.map(row => row.name);
+    } catch (dbError) {
+      console.warn('[MetaAdNameMapping] Failed to fetch ad names from DB:', dbError.message);
+    }
+    
+    // 3. API + DB 광고명 합치기 (중복 제거)
+    const uniqueNames = [...new Set([...apiNames, ...dbNames])];
     
     // 캐시 저장
     metaAdNamesCache = uniqueNames;
     metaAdNamesCacheTime = Date.now();
     
-    console.log(`[MetaAdNameMapping] Loaded ${uniqueNames.length} ad names from Meta API`);
+    console.log(`[MetaAdNameMapping] Loaded ${uniqueNames.length} ad names (API: ${apiNames.length}, DB: ${dbNames.length})`);
     
     return uniqueNames;
   } catch (error) {
