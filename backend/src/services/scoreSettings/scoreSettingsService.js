@@ -35,6 +35,16 @@ const validateSettings = (settings) => {
     errors.push('평가 방식은 relative 또는 absolute여야 합니다.');
   }
 
+  // 상대평가 세부 방식 검사 (상대평가일 때만)
+  if (settings.evaluation_type === 'relative') {
+    if (settings.relative_mode && !['range', 'percentile'].includes(settings.relative_mode)) {
+      errors.push('상대평가 세부 방식은 range 또는 percentile이어야 합니다.');
+    }
+  }
+
+  // 백분위 방식 여부 확인 (구간 설정 검증 스킵용)
+  const isPercentileMode = settings.evaluation_type === 'relative' && settings.relative_mode === 'percentile';
+
   // 활성화된 지표 수 검사
   if (enabledMetrics.length < MIN_METRICS) {
     errors.push(`최소 ${MIN_METRICS}개의 지표를 선택해야 합니다.`);
@@ -66,18 +76,19 @@ const validateSettings = (settings) => {
     }
   });
 
-  // 활성화된 지표의 구간 설정 검사
-  enabledMetrics.forEach(metric => {
-    const def = METRIC_DEFINITIONS[metric];
-    if (!def) return;
+  // 활성화된 지표의 구간 설정 검사 (백분위 방식이면 스킵)
+  if (!isPercentileMode) {
+    enabledMetrics.forEach(metric => {
+      const def = METRIC_DEFINITIONS[metric];
+      if (!def) return;
 
-    const config = settings[def.configField];
-    const name = def.name;
+      const config = settings[def.configField];
+      const name = def.name;
 
-    if (!config || !config.boundaries || !config.scores) {
-      errors.push(`${name} 구간 설정이 올바르지 않습니다.`);
-      return;
-    }
+      if (!config || !config.boundaries || !config.scores) {
+        errors.push(`${name} 구간 설정이 올바르지 않습니다.`);
+        return;
+      }
 
     // 경계값 개수 검사 (동적: 최소 1개 ~ 최대 10개)
     if (config.boundaries.length < MIN_BOUNDARIES) {
@@ -124,7 +135,8 @@ const validateSettings = (settings) => {
         break;
       }
     }
-  });
+    });
+  } // end of !isPercentileMode
 
   return {
     valid: errors.length === 0,

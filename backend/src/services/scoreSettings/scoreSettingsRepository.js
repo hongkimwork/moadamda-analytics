@@ -13,6 +13,7 @@ const getSettings = async () => {
     SELECT 
       id,
       evaluation_type,
+      relative_mode,
       weight_scroll,
       weight_pv,
       weight_duration,
@@ -43,6 +44,7 @@ const getSettings = async () => {
 const saveSettings = async (settings) => {
   const {
     evaluation_type,
+    relative_mode,
     weight_scroll,
     weight_pv,
     weight_duration,
@@ -65,24 +67,26 @@ const saveSettings = async (settings) => {
       UPDATE score_settings
       SET 
         evaluation_type = $1,
-        weight_scroll = $2,
-        weight_pv = $3,
-        weight_duration = $4,
-        weight_view = $5,
-        weight_uv = $6,
-        scroll_config = $7,
-        pv_config = $8,
-        duration_config = $9,
-        view_config = $10,
-        uv_config = $11,
-        enabled_metrics = $12,
+        relative_mode = $2,
+        weight_scroll = $3,
+        weight_pv = $4,
+        weight_duration = $5,
+        weight_view = $6,
+        weight_uv = $7,
+        scroll_config = $8,
+        pv_config = $9,
+        duration_config = $10,
+        view_config = $11,
+        uv_config = $12,
+        enabled_metrics = $13,
         updated_at = NOW()
-      WHERE id = $13
+      WHERE id = $14
       RETURNING *
     `;
     
     const result = await db.query(query, [
       evaluation_type,
+      relative_mode || 'range',
       weight_scroll,
       weight_pv,
       weight_duration,
@@ -103,6 +107,7 @@ const saveSettings = async (settings) => {
     const query = `
       INSERT INTO score_settings (
         evaluation_type,
+        relative_mode,
         weight_scroll,
         weight_pv,
         weight_duration,
@@ -114,12 +119,13 @@ const saveSettings = async (settings) => {
         view_config,
         uv_config,
         enabled_metrics
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       RETURNING *
     `;
     
     const result = await db.query(query, [
       evaluation_type,
+      relative_mode || 'range',
       weight_scroll,
       weight_pv,
       weight_duration,

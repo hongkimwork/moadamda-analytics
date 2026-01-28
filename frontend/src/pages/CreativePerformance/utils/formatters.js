@@ -70,6 +70,25 @@ const calculateRelativeScore = (rank, totalCount, config) => {
 };
 
 /**
+ * 백분위 방식: 순위 기반 연속 점수 계산
+ * 공식: 백분위 점수 = (1 - 순위/전체) × 100
+ * @param {number} rank - 순위 (0-based, 동점자 고려된 순위)
+ * @param {number} totalCount - 전체 개수
+ * @returns {number} 점수 (1~99, 반올림)
+ */
+const calculatePercentileScore = (rank, totalCount) => {
+  if (totalCount === 0) return 0;
+  if (totalCount === 1) return 100; // 1개만 있으면 100점
+  
+  // 백분위 점수 = (1 - (순위 / (전체-1))) × 100
+  // rank는 0-based이므로 0이면 1등
+  const score = Math.round((1 - rank / (totalCount - 1)) * 100);
+  
+  // 최소 1점, 최대 100점 보장
+  return Math.max(1, Math.min(100, score));
+};
+
+/**
  * 동점자를 고려한 순위 맵 생성
  * @param {Array} sortedData - 정렬된 데이터 배열
  * @param {Function} getValue - 값을 추출하는 함수
@@ -131,6 +150,7 @@ export const calculateTrafficScores = (data, settings = null) => {
 
   const {
     evaluation_type,
+    relative_mode = 'range', // 'range' (구간 점수) 또는 'percentile' (백분위)
     weight_scroll = 0,
     weight_pv = 0,
     weight_duration = 0,
@@ -143,6 +163,9 @@ export const calculateTrafficScores = (data, settings = null) => {
     uv_config,
     enabled_metrics = ['scroll', 'pv', 'duration']
   } = settings;
+
+  // 백분위 방식 여부
+  const isPercentileMode = evaluation_type === 'relative' && relative_mode === 'percentile';
 
   const totalCount = data.length;
   const scoreMap = new Map();
@@ -188,7 +211,8 @@ export const calculateTrafficScores = (data, settings = null) => {
     
     enabled_metrics.forEach(metric => {
       const def = metricDefinitions[metric];
-      if (def && def.config) {
+      // 백분위 방식이면 config 없이도 순위 맵 생성
+      if (def && (isPercentileMode || def.config)) {
         const sorted = [...data].sort((a, b) => (def.getValue(b)) - (def.getValue(a)));
         rankMaps[metric] = createRankMap(sorted, def.getValue, getKey);
       }
@@ -208,7 +232,8 @@ export const calculateTrafficScores = (data, settings = null) => {
 
     enabled_metrics.forEach(metric => {
       const def = metricDefinitions[metric];
-      if (!def || !def.config) return;
+      // 백분위 방식이면 config가 없어도 됨
+      if (!def || (!isPercentileMode && !def.config)) return;
 
       const value = def.getValue(item);
       const isZero = value === 0;
@@ -218,8 +243,15 @@ export const calculateTrafficScores = (data, settings = null) => {
       if (!isZero) {
         if (evaluation_type === 'relative') {
           const rank = rankMaps[metric]?.get(key) || 0;
-          score = calculateRelativeScore(rank, totalCount, def.config);
+          if (isPercentileMode) {
+            // 백분위 방식: 연속적 점수
+            score = calculatePercentileScore(rank, totalCount);
+          } else {
+            // 구간 점수 방식
+            score = calculateRelativeScore(rank, totalCount, def.config);
+          }
         } else {
+          // 절대평가
           score = calculateAbsoluteScore(value, def.config);
         }
       }
@@ -256,7 +288,8 @@ export const calculateTrafficScores = (data, settings = null) => {
         view: weight_view,
         uv: weight_uv
       },
-      deductedPercent: totalDeducted
+      deductedPercent: totalDeducted,
+      isPercentileMode
     });
   });
 
