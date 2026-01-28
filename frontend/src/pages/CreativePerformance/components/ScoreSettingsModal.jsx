@@ -85,7 +85,11 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
     if (visible) {
       if (currentSettings) {
         // 기존 설정이 있으면 확인 모드로 시작
-        setSettings(currentSettings);
+        // relative_mode가 없는 기존 데이터를 위해 기본값 'range' 설정
+        setSettings({
+          ...currentSettings,
+          relative_mode: currentSettings.relative_mode || 'range'
+        });
         setCurrentStep(2);
         setIsViewMode(true);
       } else {
@@ -280,64 +284,69 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
       newErrors.push(`선택된 지표의 가중치 합계가 ${weightSum}%입니다. 100%가 되어야 합니다.`);
     }
 
-    // 활성화된 지표의 구간 설정 검사
-    enabledMetrics.forEach(metricKey => {
-      const metricDef = METRIC_DEFINITIONS.find(m => m.key === metricKey);
-      if (!metricDef) return;
+    // 백분위 방식 여부 확인 (백분위 방식이면 구간 설정 검사 스킵)
+    const isPercentileMode = settings.evaluation_type === 'relative' && settings.relative_mode === 'percentile';
 
-      const config = settings[metricDef.configField];
-      const name = metricDef.label;
-      
-      // 최소 구간 개수 검사
-      if (!config || !config.boundaries || config.boundaries.length < MIN_BOUNDARIES) {
-        newErrors.push(`${name}에 최소 ${MIN_BOUNDARIES}개의 구간이 필요합니다.`);
-        return;
-      }
+    // 활성화된 지표의 구간 설정 검사 (백분위 방식이면 스킵)
+    if (!isPercentileMode) {
+      enabledMetrics.forEach(metricKey => {
+        const metricDef = METRIC_DEFINITIONS.find(m => m.key === metricKey);
+        if (!metricDef) return;
 
-      // 최대 구간 개수 검사
-      if (config.boundaries.length > MAX_BOUNDARIES) {
-        newErrors.push(`${name}은 최대 ${MAX_BOUNDARIES}개 구간까지만 가능합니다.`);
-        return;
-      }
+        const config = settings[metricDef.configField];
+        const name = metricDef.label;
+        
+        // 최소 구간 개수 검사
+        if (!config || !config.boundaries || config.boundaries.length < MIN_BOUNDARIES) {
+          newErrors.push(`${name}에 최소 ${MIN_BOUNDARIES}개의 구간이 필요합니다.`);
+          return;
+        }
 
-      // 점수 개수 검사 (경계값 + 1 = 점수 개수)
-      if (config.scores.length !== config.boundaries.length + 1) {
-        newErrors.push(`${name}의 점수 개수가 올바르지 않습니다.`);
-        return;
-      }
-      
-      // 경계값 순서 검사
-      if (settings.evaluation_type === 'relative') {
-        // 상대평가: 오름차순 (10 < 30 < 60)
-        for (let i = 0; i < config.boundaries.length - 1; i++) {
-          if (config.boundaries[i] >= config.boundaries[i + 1]) {
-            newErrors.push(`${name} 경계값은 순서대로 커야 합니다.`);
+        // 최대 구간 개수 검사
+        if (config.boundaries.length > MAX_BOUNDARIES) {
+          newErrors.push(`${name}은 최대 ${MAX_BOUNDARIES}개 구간까지만 가능합니다.`);
+          return;
+        }
+
+        // 점수 개수 검사 (경계값 + 1 = 점수 개수)
+        if (config.scores.length !== config.boundaries.length + 1) {
+          newErrors.push(`${name}의 점수 개수가 올바르지 않습니다.`);
+          return;
+        }
+        
+        // 경계값 순서 검사
+        if (settings.evaluation_type === 'relative') {
+          // 상대평가: 오름차순 (10 < 30 < 60)
+          for (let i = 0; i < config.boundaries.length - 1; i++) {
+            if (config.boundaries[i] >= config.boundaries[i + 1]) {
+              newErrors.push(`${name} 경계값은 순서대로 커야 합니다.`);
+              break;
+            }
+          }
+        } else {
+          // 절대평가: 내림차순 (120 > 60 > 30)
+          for (let i = 0; i < config.boundaries.length - 1; i++) {
+            if (config.boundaries[i] <= config.boundaries[i + 1]) {
+              newErrors.push(`${name} 경계값은 순서대로 작아져야 합니다.`);
+              break;
+            }
+          }
+        }
+
+        // 점수 순서 검사 (내림차순)
+        for (let i = 0; i < config.scores.length - 1; i++) {
+          if (config.scores[i] <= config.scores[i + 1]) {
+            newErrors.push(`${name} 점수는 순서대로 작아져야 합니다.`);
             break;
           }
         }
-      } else {
-        // 절대평가: 내림차순 (120 > 60 > 30)
-        for (let i = 0; i < config.boundaries.length - 1; i++) {
-          if (config.boundaries[i] <= config.boundaries[i + 1]) {
-            newErrors.push(`${name} 경계값은 순서대로 작아져야 합니다.`);
-            break;
-          }
-        }
-      }
 
-      // 점수 순서 검사 (내림차순)
-      for (let i = 0; i < config.scores.length - 1; i++) {
-        if (config.scores[i] <= config.scores[i + 1]) {
-          newErrors.push(`${name} 점수는 순서대로 작아져야 합니다.`);
-          break;
+        // 최고 점수 경고
+        if (config.scores[0] !== 100) {
+          newWarnings.push(`${name}의 최고 점수가 ${config.scores[0]}점입니다.`);
         }
-      }
-
-      // 최고 점수 경고
-      if (config.scores[0] !== 100) {
-        newWarnings.push(`${name}의 최고 점수가 ${config.scores[0]}점입니다.`);
-      }
-    });
+      });
+    }
 
     setErrors(newErrors);
     setWarnings(newWarnings);
