@@ -8,6 +8,19 @@ const repository = require('./scoreSettingsRepository');
 const MAX_BOUNDARIES = 10;
 const MIN_BOUNDARIES = 1;
 
+// 최소/최대 선택 지표 수
+const MIN_METRICS = 3;
+const MAX_METRICS = 5;
+
+// 지표 정의
+const METRIC_DEFINITIONS = {
+  scroll: { field: 'weight_scroll', configField: 'scroll_config', name: '스크롤' },
+  pv: { field: 'weight_pv', configField: 'pv_config', name: 'PV' },
+  duration: { field: 'weight_duration', configField: 'duration_config', name: '체류시간' },
+  view: { field: 'weight_view', configField: 'view_config', name: 'View' },
+  uv: { field: 'weight_uv', configField: 'uv_config', name: 'UV' }
+};
+
 /**
  * 설정 유효성 검사
  * @param {Object} settings - 설정 데이터
@@ -15,36 +28,51 @@ const MIN_BOUNDARIES = 1;
  */
 const validateSettings = (settings) => {
   const errors = [];
+  const enabledMetrics = settings.enabled_metrics || ['scroll', 'pv', 'duration'];
 
   // 평가 방식 검사
   if (!settings.evaluation_type || !['relative', 'absolute'].includes(settings.evaluation_type)) {
     errors.push('평가 방식은 relative 또는 absolute여야 합니다.');
   }
 
-  // 가중치 검사
-  const weightSum = (settings.weight_scroll || 0) + (settings.weight_pv || 0) + (settings.weight_duration || 0);
+  // 활성화된 지표 수 검사
+  if (enabledMetrics.length < MIN_METRICS) {
+    errors.push(`최소 ${MIN_METRICS}개의 지표를 선택해야 합니다.`);
+  }
+  if (enabledMetrics.length > MAX_METRICS) {
+    errors.push(`최대 ${MAX_METRICS}개의 지표만 선택할 수 있습니다.`);
+  }
+
+  // 활성화된 지표의 가중치 합계 검사
+  let weightSum = 0;
+  enabledMetrics.forEach(metric => {
+    const def = METRIC_DEFINITIONS[metric];
+    if (def) {
+      weightSum += (settings[def.field] || 0);
+    }
+  });
+  
   if (weightSum !== 100) {
-    errors.push(`가중치 합계가 ${weightSum}%입니다. 100%가 되어야 합니다.`);
+    errors.push(`선택된 지표의 가중치 합계가 ${weightSum}%입니다. 100%가 되어야 합니다.`);
   }
 
-  // 각 가중치 범위 검사
-  if (settings.weight_scroll < 0 || settings.weight_scroll > 100) {
-    errors.push('스크롤 가중치는 0~100 사이여야 합니다.');
-  }
-  if (settings.weight_pv < 0 || settings.weight_pv > 100) {
-    errors.push('PV 가중치는 0~100 사이여야 합니다.');
-  }
-  if (settings.weight_duration < 0 || settings.weight_duration > 100) {
-    errors.push('체류시간 가중치는 0~100 사이여야 합니다.');
-  }
+  // 각 가중치 범위 검사 (모든 지표)
+  Object.entries(METRIC_DEFINITIONS).forEach(([metric, def]) => {
+    const weight = settings[def.field];
+    if (weight !== undefined && weight !== null) {
+      if (weight < 0 || weight > 100) {
+        errors.push(`${def.name} 가중치는 0~100 사이여야 합니다.`);
+      }
+    }
+  });
 
-  // 구간 설정 검사
-  const configFields = ['scroll_config', 'pv_config', 'duration_config'];
-  const configNames = ['스크롤', 'PV', '체류시간'];
+  // 활성화된 지표의 구간 설정 검사
+  enabledMetrics.forEach(metric => {
+    const def = METRIC_DEFINITIONS[metric];
+    if (!def) return;
 
-  configFields.forEach((field, index) => {
-    const config = settings[field];
-    const name = configNames[index];
+    const config = settings[def.configField];
+    const name = def.name;
 
     if (!config || !config.boundaries || !config.scores) {
       errors.push(`${name} 구간 설정이 올바르지 않습니다.`);
@@ -111,13 +139,15 @@ const validateSettings = (settings) => {
  */
 const getWarnings = (settings) => {
   const warnings = [];
+  const enabledMetrics = settings.enabled_metrics || ['scroll', 'pv', 'duration'];
 
-  const configFields = ['scroll_config', 'pv_config', 'duration_config'];
-  const configNames = ['스크롤', 'PV', '체류시간'];
+  // 활성화된 지표만 경고 체크
+  enabledMetrics.forEach(metric => {
+    const def = METRIC_DEFINITIONS[metric];
+    if (!def) return;
 
-  configFields.forEach((field, index) => {
-    const config = settings[field];
-    const name = configNames[index];
+    const config = settings[def.configField];
+    const name = def.name;
 
     if (config && config.scores && config.scores[0] !== 100) {
       warnings.push(`${name}의 최고 점수가 ${config.scores[0]}점입니다. 100점이 아니면 최종 점수가 낮게 나올 수 있습니다.`);

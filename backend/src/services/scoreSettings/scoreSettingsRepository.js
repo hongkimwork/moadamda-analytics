@@ -16,9 +16,14 @@ const getSettings = async () => {
       weight_scroll,
       weight_pv,
       weight_duration,
+      weight_view,
+      weight_uv,
       scroll_config,
       pv_config,
       duration_config,
+      view_config,
+      uv_config,
+      enabled_metrics,
       created_at,
       updated_at
     FROM score_settings
@@ -41,9 +46,14 @@ const saveSettings = async (settings) => {
     weight_scroll,
     weight_pv,
     weight_duration,
+    weight_view,
+    weight_uv,
     scroll_config,
     pv_config,
-    duration_config
+    duration_config,
+    view_config,
+    uv_config,
+    enabled_metrics
   } = settings;
 
   // 기존 설정 확인
@@ -58,11 +68,16 @@ const saveSettings = async (settings) => {
         weight_scroll = $2,
         weight_pv = $3,
         weight_duration = $4,
-        scroll_config = $5,
-        pv_config = $6,
-        duration_config = $7,
+        weight_view = $5,
+        weight_uv = $6,
+        scroll_config = $7,
+        pv_config = $8,
+        duration_config = $9,
+        view_config = $10,
+        uv_config = $11,
+        enabled_metrics = $12,
         updated_at = NOW()
-      WHERE id = $8
+      WHERE id = $13
       RETURNING *
     `;
     
@@ -71,9 +86,14 @@ const saveSettings = async (settings) => {
       weight_scroll,
       weight_pv,
       weight_duration,
+      weight_view || 0,
+      weight_uv || 0,
       JSON.stringify(scroll_config),
       JSON.stringify(pv_config),
       JSON.stringify(duration_config),
+      JSON.stringify(view_config),
+      JSON.stringify(uv_config),
+      enabled_metrics,
       existing.id
     ]);
     
@@ -86,10 +106,15 @@ const saveSettings = async (settings) => {
         weight_scroll,
         weight_pv,
         weight_duration,
+        weight_view,
+        weight_uv,
         scroll_config,
         pv_config,
-        duration_config
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        duration_config,
+        view_config,
+        uv_config,
+        enabled_metrics
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING *
     `;
     
@@ -98,9 +123,14 @@ const saveSettings = async (settings) => {
       weight_scroll,
       weight_pv,
       weight_duration,
+      weight_view || 0,
+      weight_uv || 0,
       JSON.stringify(scroll_config),
       JSON.stringify(pv_config),
-      JSON.stringify(duration_config)
+      JSON.stringify(duration_config),
+      JSON.stringify(view_config),
+      JSON.stringify(uv_config),
+      enabled_metrics
     ]);
     
     return result.rows[0];

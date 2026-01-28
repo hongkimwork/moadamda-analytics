@@ -30,6 +30,18 @@ const { Panel } = Collapse;
 const MAX_BOUNDARIES = 10;
 // 최소 구간 수
 const MIN_BOUNDARIES = 1;
+// 최소/최대 선택 지표 수
+const MIN_METRICS = 3;
+const MAX_METRICS = 5;
+
+// 지표 정의
+const METRIC_DEFINITIONS = [
+  { key: 'scroll', field: 'weight_scroll', configField: 'scroll_config', label: '평균 스크롤', icon: <MousePointerClick size={16} />, unit: { relative: '%', absolute: 'px' } },
+  { key: 'pv', field: 'weight_pv', configField: 'pv_config', label: '평균 PV', icon: <Eye size={16} />, unit: { relative: '%', absolute: '개' } },
+  { key: 'duration', field: 'weight_duration', configField: 'duration_config', label: '평균 체류시간', icon: <Clock size={16} />, unit: { relative: '%', absolute: '초' } },
+  { key: 'view', field: 'weight_view', configField: 'view_config', label: 'View', icon: <BarChart2 size={16} />, unit: { relative: '%', absolute: '회' } },
+  { key: 'uv', field: 'weight_uv', configField: 'uv_config', label: 'UV', icon: <TrendingUp size={16} />, unit: { relative: '%', absolute: '명' } }
+];
 
 // 기본 설정값
 const DEFAULT_SETTINGS = {
@@ -37,16 +49,23 @@ const DEFAULT_SETTINGS = {
   weight_scroll: 30,
   weight_pv: 35,
   weight_duration: 35,
+  weight_view: 0,
+  weight_uv: 0,
   scroll_config: { boundaries: [10, 30, 60], scores: [100, 80, 50, 20] },
   pv_config: { boundaries: [10, 30, 60], scores: [100, 80, 50, 20] },
-  duration_config: { boundaries: [10, 30, 60], scores: [100, 80, 50, 20] }
+  duration_config: { boundaries: [10, 30, 60], scores: [100, 80, 50, 20] },
+  view_config: { boundaries: [10, 30, 60], scores: [100, 80, 50, 20] },
+  uv_config: { boundaries: [10, 30, 60], scores: [100, 80, 50, 20] },
+  enabled_metrics: ['scroll', 'pv', 'duration']
 };
 
 // 절대평가 기본 경계값
 const ABSOLUTE_DEFAULTS = {
   scroll_config: { boundaries: [3000, 1500, 500], scores: [100, 80, 50, 20] },
   pv_config: { boundaries: [5, 3, 2], scores: [100, 80, 50, 20] },
-  duration_config: { boundaries: [120, 60, 30], scores: [100, 80, 50, 20] }
+  duration_config: { boundaries: [120, 60, 30], scores: [100, 80, 50, 20] },
+  view_config: { boundaries: [1000, 500, 100], scores: [100, 80, 50, 20] },
+  uv_config: { boundaries: [500, 200, 50], scores: [100, 80, 50, 20] }
 };
 
 /**
@@ -93,8 +112,46 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
         evaluation_type: type,
         scroll_config: { boundaries: [10, 30, 60], scores: [100, 80, 50, 20] },
         pv_config: { boundaries: [10, 30, 60], scores: [100, 80, 50, 20] },
-        duration_config: { boundaries: [10, 30, 60], scores: [100, 80, 50, 20] }
+        duration_config: { boundaries: [10, 30, 60], scores: [100, 80, 50, 20] },
+        view_config: { boundaries: [10, 30, 60], scores: [100, 80, 50, 20] },
+        uv_config: { boundaries: [10, 30, 60], scores: [100, 80, 50, 20] }
       });
+    }
+  };
+
+  // 지표 활성화/비활성화 토글
+  const handleToggleMetric = (metricKey) => {
+    const enabledMetrics = settings.enabled_metrics || ['scroll', 'pv', 'duration'];
+    const isEnabled = enabledMetrics.includes(metricKey);
+    
+    if (isEnabled) {
+      // 비활성화 시도
+      if (enabledMetrics.length <= MIN_METRICS) {
+        message.warning(`최소 ${MIN_METRICS}개의 지표를 선택해야 합니다.`);
+        return;
+      }
+      // 해당 지표 제거 (가중치는 유지하여 합계 부족 경고 표시)
+      setSettings(prev => ({
+        ...prev,
+        enabled_metrics: enabledMetrics.filter(m => m !== metricKey)
+      }));
+    } else {
+      // 활성화 (0%로 추가)
+      if (enabledMetrics.length >= MAX_METRICS) {
+        message.warning(`최대 ${MAX_METRICS}개의 지표만 선택할 수 있습니다.`);
+        return;
+      }
+      const metricDef = METRIC_DEFINITIONS.find(m => m.key === metricKey);
+      setSettings(prev => ({
+        ...prev,
+        enabled_metrics: [...enabledMetrics, metricKey],
+        [metricDef.field]: 0 // 0%로 추가
+      }));
+    }
+    
+    // 에러 초기화
+    if (errors.length > 0) {
+      setErrors([]);
     }
   };
 
@@ -202,25 +259,36 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
   const validate = () => {
     const newErrors = [];
     const newWarnings = [];
+    const enabledMetrics = settings.enabled_metrics || ['scroll', 'pv', 'duration'];
 
-    // 가중치 합계 검사
-    const weightSum = settings.weight_scroll + settings.weight_pv + settings.weight_duration;
-    if (weightSum !== 100) {
-      newErrors.push(`가중치 합계가 ${weightSum}%입니다. 100%가 되어야 합니다.`);
+    // 활성화된 지표 수 검사
+    if (enabledMetrics.length < MIN_METRICS) {
+      newErrors.push(`최소 ${MIN_METRICS}개의 지표를 선택해야 합니다.`);
     }
 
-    // 구간 설정 검사
-    const configs = [
-      { field: 'scroll_config', name: '스크롤' },
-      { field: 'pv_config', name: 'PV' },
-      { field: 'duration_config', name: '체류시간' }
-    ];
+    // 선택된 지표의 가중치 합계 검사
+    let weightSum = 0;
+    enabledMetrics.forEach(metricKey => {
+      const metricDef = METRIC_DEFINITIONS.find(m => m.key === metricKey);
+      if (metricDef) {
+        weightSum += (settings[metricDef.field] || 0);
+      }
+    });
+    
+    if (weightSum !== 100) {
+      newErrors.push(`선택된 지표의 가중치 합계가 ${weightSum}%입니다. 100%가 되어야 합니다.`);
+    }
 
-    configs.forEach(({ field, name }) => {
-      const config = settings[field];
+    // 활성화된 지표의 구간 설정 검사
+    enabledMetrics.forEach(metricKey => {
+      const metricDef = METRIC_DEFINITIONS.find(m => m.key === metricKey);
+      if (!metricDef) return;
+
+      const config = settings[metricDef.configField];
+      const name = metricDef.label;
       
       // 최소 구간 개수 검사
-      if (!config.boundaries || config.boundaries.length < MIN_BOUNDARIES) {
+      if (!config || !config.boundaries || config.boundaries.length < MIN_BOUNDARIES) {
         newErrors.push(`${name}에 최소 ${MIN_BOUNDARIES}개의 구간이 필요합니다.`);
         return;
       }
@@ -414,12 +482,25 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
     </div>
   );
 
+  // 선택된 지표의 가중치 합계 계산
+  const getEnabledWeightSum = () => {
+    const enabledMetrics = settings.enabled_metrics || ['scroll', 'pv', 'duration'];
+    return enabledMetrics.reduce((sum, metricKey) => {
+      const metricDef = METRIC_DEFINITIONS.find(m => m.key === metricKey);
+      return sum + (metricDef ? (settings[metricDef.field] || 0) : 0);
+    }, 0);
+  };
+
   // 2단계: 세부 설정
-  const renderStep2 = () => (
+  const renderStep2 = () => {
+    const enabledMetrics = settings.enabled_metrics || ['scroll', 'pv', 'duration'];
+    const weightSum = getEnabledWeightSum();
+
+    return (
     <div className="py-4">
       {/* 가중치 설정 */}
       <div className="mb-8 bg-white p-5 rounded-lg border border-gray-100 shadow-sm">
-        <div className="flex items-center mb-6">
+        <div className="flex items-center mb-4">
           <div className="bg-blue-100 p-1.5 rounded-md mr-2">
             <Settings size={18} className="text-blue-600" />
           </div>
@@ -427,48 +508,62 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
           <span className="ml-2 text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">합계 100%</span>
         </div>
         
-        <div className="flex flex-col gap-6 px-2">
-          {[
-            { field: 'weight_scroll', label: '평균 스크롤', icon: <MousePointerClick size={16} /> },
-            { field: 'weight_pv', label: '평균 PV', icon: <Eye size={16} /> },
-            { field: 'weight_duration', label: '평균 체류시간', icon: <Clock size={16} /> }
-          ].map(({ field, label, icon }) => (
-            <div key={field} className="flex items-center gap-4">
-              <div className="w-32 flex items-center gap-2 text-sm font-medium text-gray-600">
-                {icon} {label}
-              </div>
-              <div className="flex-1">
-                <Slider
-                  min={0}
-                  max={100}
-                  value={settings[field]}
-                  onChange={(value) => handleWeightChange(field, value)}
-                  trackStyle={{ backgroundColor: '#3b82f6' }}
-                  handleStyle={{ borderColor: '#3b82f6', boxShadow: 'none' }}
+        {/* 안내 문구 */}
+        <div className="mb-4 p-3 bg-blue-50 rounded-lg text-xs text-blue-700 flex items-start gap-2">
+          <Info size={14} className="mt-0.5 flex-shrink-0" />
+          <span>체크박스로 평가에 사용할 지표를 선택하세요. 최소 {MIN_METRICS}개, 최대 {MAX_METRICS}개까지 선택 가능합니다.</span>
+        </div>
+        
+        <div className="flex flex-col gap-4 px-2">
+          {METRIC_DEFINITIONS.map(({ key, field, label, icon }) => {
+            const isEnabled = enabledMetrics.includes(key);
+            return (
+              <div key={field} className={`flex items-center gap-4 p-2 rounded-lg transition-colors ${isEnabled ? 'bg-white' : 'bg-gray-50'}`}>
+                {/* 체크박스 */}
+                <input
+                  type="checkbox"
+                  checked={isEnabled}
+                  onChange={() => handleToggleMetric(key)}
+                  className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
                 />
+                <div className={`w-32 flex items-center gap-2 text-sm font-medium ${isEnabled ? 'text-gray-700' : 'text-gray-400'}`}>
+                  {icon} {label}
+                </div>
+                <div className="flex-1">
+                  <Slider
+                    min={0}
+                    max={100}
+                    value={settings[field] || 0}
+                    onChange={(value) => handleWeightChange(field, value)}
+                    disabled={!isEnabled}
+                    trackStyle={{ backgroundColor: isEnabled ? '#3b82f6' : '#d1d5db' }}
+                    handleStyle={{ borderColor: isEnabled ? '#3b82f6' : '#d1d5db', boxShadow: 'none' }}
+                  />
+                </div>
+                <div className="w-20">
+                  <InputNumber
+                    className="w-full"
+                    min={0}
+                    max={100}
+                    value={settings[field] || 0}
+                    onChange={(value) => handleWeightChange(field, value || 0)}
+                    disabled={!isEnabled}
+                    formatter={value => `${value}%`}
+                    parser={value => value.replace('%', '')}
+                  />
+                </div>
               </div>
-              <div className="w-20">
-                <InputNumber
-                  className="w-full"
-                  min={0}
-                  max={100}
-                  value={settings[field]}
-                  onChange={(value) => handleWeightChange(field, value || 0)}
-                  formatter={value => `${value}%`}
-                  parser={value => value.replace('%', '')}
-                />
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
         
         {/* 합계 표시 */}
         <div className={`
           mt-6 text-right text-sm font-medium flex justify-end items-center gap-2
-          ${(settings.weight_scroll + settings.weight_pv + settings.weight_duration) === 100 ? 'text-green-600' : 'text-red-500'}
+          ${weightSum === 100 ? 'text-green-600' : 'text-red-500'}
         `}>
-          <span>합계: {settings.weight_scroll + settings.weight_pv + settings.weight_duration}%</span>
-          {(settings.weight_scroll + settings.weight_pv + settings.weight_duration) === 100 ? (
+          <span>선택된 지표 합계: {weightSum}%</span>
+          {weightSum === 100 ? (
             <CheckCircle2 size={16} />
           ) : (
             <AlertCircle size={16} />
@@ -484,6 +579,7 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
               <BarChart2 size={18} className="text-purple-600" />
             </div>
             <span className="text-base font-bold text-gray-800">지표별 구간 상세 설정</span>
+            <span className="ml-2 text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">선택된 지표만</span>
           </div>
           <Tooltip title={settings.evaluation_type === 'relative' ? '상위 몇 %에 해당하면 몇 점을 줄지 설정합니다.' : '수치가 얼마 이상이면 몇 점을 줄지 설정합니다.'}>
             <div className="flex items-center gap-1 text-xs text-gray-500 cursor-help bg-white px-2 py-1 rounded border border-gray-200">
@@ -494,20 +590,18 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
         </div>
 
         <Collapse 
-          defaultActiveKey={['scroll_config']} 
+          defaultActiveKey={enabledMetrics.length > 0 ? [METRIC_DEFINITIONS.find(m => m.key === enabledMetrics[0])?.configField] : []} 
           ghost 
           expandIcon={({ isActive }) => <ChevronRight size={16} className={`text-gray-400 transition-transform ${isActive ? 'rotate-90' : ''}`} />}
           className="bg-white"
         >
-          {[
-            { field: 'scroll_config', label: '평균 스크롤', unit: settings.evaluation_type === 'relative' ? '%' : 'px' },
-            { field: 'pv_config', label: '평균 PV', unit: settings.evaluation_type === 'relative' ? '%' : '개' },
-            { field: 'duration_config', label: '평균 체류시간', unit: settings.evaluation_type === 'relative' ? '%' : '초' }
-          ].map(({ field, label, unit }) => (
-            <Panel header={<span className="font-medium text-gray-700">{label}</span>} key={field} className="border-b border-gray-50 last:border-0">
-              {renderConfigPanel(field, unit)}
-            </Panel>
-          ))}
+          {METRIC_DEFINITIONS
+            .filter(m => enabledMetrics.includes(m.key))
+            .map(({ key, configField, label, unit }) => (
+              <Panel header={<span className="font-medium text-gray-700">{label}</span>} key={configField} className="border-b border-gray-50 last:border-0">
+                {renderConfigPanel(configField, settings.evaluation_type === 'relative' ? unit.relative : unit.absolute)}
+              </Panel>
+            ))}
         </Collapse>
       </div>
 
@@ -542,6 +636,7 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
       )}
     </div>
   );
+  };
 
   // 구간 설정 패널
   const renderConfigPanel = (configField, unit) => {
@@ -671,7 +766,27 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
   };
 
   // 3단계: 확인
-  const renderStep3 = () => (
+  const renderStep3 = () => {
+    const enabledMetrics = settings.enabled_metrics || ['scroll', 'pv', 'duration'];
+    
+    // 지표별 색상 매핑
+    const metricColors = {
+      scroll: 'bg-blue-100 text-blue-700',
+      pv: 'bg-purple-100 text-purple-700',
+      duration: 'bg-green-100 text-green-700',
+      view: 'bg-orange-100 text-orange-700',
+      uv: 'bg-teal-100 text-teal-700'
+    };
+    
+    const metricIconColors = {
+      scroll: 'text-blue-500',
+      pv: 'text-purple-500',
+      duration: 'text-green-500',
+      view: 'text-orange-500',
+      uv: 'text-teal-500'
+    };
+    
+    return (
     <div className="py-6">
       <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
         <div className="flex flex-col gap-6 mb-6 pb-6 border-b border-gray-200">
@@ -688,17 +803,15 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
             </div>
             
             <div className="flex-1">
-              <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">지표별 중요도</div>
-              <div className="flex gap-3 flex-wrap">
-                {[
-                  { label: '스크롤', value: settings.weight_scroll, color: 'bg-blue-100 text-blue-700' },
-                  { label: 'PV', value: settings.weight_pv, color: 'bg-purple-100 text-purple-700' },
-                  { label: '체류시간', value: settings.weight_duration, color: 'bg-green-100 text-green-700' }
-                ].map((item, i) => (
-                  <div key={i} className={`px-3 py-1.5 rounded-lg text-sm font-medium ${item.color}`}>
-                    {item.label} <span className="font-bold ml-1">{item.value}%</span>
-                  </div>
-                ))}
+              <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">지표별 중요도 ({enabledMetrics.length}개 선택)</div>
+              <div className="flex gap-2 flex-wrap">
+                {METRIC_DEFINITIONS
+                  .filter(m => enabledMetrics.includes(m.key))
+                  .map(m => (
+                    <div key={m.key} className={`px-3 py-1.5 rounded-lg text-sm font-medium ${metricColors[m.key]}`}>
+                      {m.label} <span className="font-bold ml-1">{settings[m.field] || 0}%</span>
+                    </div>
+                  ))}
               </div>
             </div>
           </div>
@@ -707,72 +820,72 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
         <div>
           <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">구간별 점수 상세</div>
           <div className="flex flex-col gap-3">
-            {[
-              { field: 'scroll_config', label: '스크롤', unit: settings.evaluation_type === 'relative' ? '%' : 'px' },
-              { field: 'pv_config', label: 'PV', unit: settings.evaluation_type === 'relative' ? '%' : '개' },
-              { field: 'duration_config', label: '체류시간', unit: settings.evaluation_type === 'relative' ? '%' : '초' }
-            ].map(({ field, label, unit }) => {
-              const config = settings[field];
-              const isRelative = settings.evaluation_type === 'relative';
-              const boundaryCount = config.boundaries.length;
+            {METRIC_DEFINITIONS
+              .filter(m => enabledMetrics.includes(m.key))
+              .map(({ key, configField, label, icon, unit }) => {
+                const config = settings[configField];
+                const isRelative = settings.evaluation_type === 'relative';
+                const boundaryCount = config?.boundaries?.length || 0;
+                const unitStr = isRelative ? unit.relative : unit.absolute;
               
-              // 동적 구간 텍스트 생성 헬퍼
-              const getRangeText = (index) => {
-                if (index >= boundaryCount) {
-                  // 그 외 나머지
-                  if (isRelative) {
-                    return `상위 ${parseInt(config.boundaries[boundaryCount - 1]) + 1} ~ 100%`;
-                  } else {
-                    return `${config.boundaries[boundaryCount - 1]}${unit} 미만`;
+                // 동적 구간 텍스트 생성 헬퍼
+                const getRangeText = (index) => {
+                  if (!config || !config.boundaries) return '';
+                  if (index >= boundaryCount) {
+                    // 그 외 나머지
+                    if (isRelative) {
+                      return `상위 ${parseInt(config.boundaries[boundaryCount - 1]) + 1} ~ 100%`;
+                    } else {
+                      return `${config.boundaries[boundaryCount - 1]}${unitStr} 미만`;
+                    }
                   }
-                }
-                
-                if (isRelative) {
-                  // 상대평가 (오름차순)
-                  if (index === 0) return `상위 1 ~ ${config.boundaries[0]}%`;
-                  return `상위 ${parseInt(config.boundaries[index - 1]) + 1} ~ ${config.boundaries[index]}%`;
-                } else {
-                  // 절대평가 (내림차순)
-                  if (index === 0) return `${config.boundaries[0]}${unit} 이상`;
-                  return `${config.boundaries[index]} ~ ${config.boundaries[index - 1]} 미만`;
-                }
-              };
+                  
+                  if (isRelative) {
+                    // 상대평가 (오름차순)
+                    if (index === 0) return `상위 1 ~ ${config.boundaries[0]}%`;
+                    return `상위 ${parseInt(config.boundaries[index - 1]) + 1} ~ ${config.boundaries[index]}%`;
+                  } else {
+                    // 절대평가 (내림차순)
+                    if (index === 0) return `${config.boundaries[0]}${unitStr} 이상`;
+                    return `${config.boundaries[index]} ~ ${config.boundaries[index - 1]} 미만`;
+                  }
+                };
 
-              return (
-                <div key={field} className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm flex flex-col">
-                  <div className="bg-gray-50 px-4 py-2 border-b border-gray-100 font-bold text-gray-700 text-sm flex justify-between items-center">
-                    <span className="flex items-center gap-1.5">
-                      {field === 'scroll_config' && <MousePointerClick size={14} className="text-blue-500" />}
-                      {field === 'pv_config' && <Eye size={14} className="text-purple-500" />}
-                      {field === 'duration_config' && <Clock size={14} className="text-green-500" />}
-                      {label}
-                      <span className="text-xs font-normal text-gray-400">({boundaryCount}개 구간)</span>
-                    </span>
-                  </div>
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-gray-50/50 text-gray-500 text-xs border-b border-gray-100">
-                        <th className="px-4 py-2 text-left font-medium w-2/3 whitespace-nowrap">실제 구간</th>
-                        <th className="px-4 py-2 text-center font-medium w-1/3 border-l border-gray-100 whitespace-nowrap">점수</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                      {/* 동적 구간 + 그 외 나머지 */}
-                      {[...Array(boundaryCount + 1)].map((_, idx) => (
-                        <tr key={idx} className={`hover:bg-gray-50/50 transition-colors ${idx === boundaryCount ? 'bg-gray-50' : ''}`}>
-                          <td className="px-4 py-2 text-gray-600 text-xs whitespace-nowrap">
-                            {idx === boundaryCount ? <span className="font-medium">그 외 나머지</span> : getRangeText(idx)}
-                          </td>
-                          <td className="px-4 py-2 text-center font-bold text-gray-800 border-l border-gray-50 whitespace-nowrap">
-                            {config.scores[idx]}점
-                          </td>
+                if (!config) return null;
+
+                return (
+                  <div key={configField} className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm flex flex-col">
+                    <div className="bg-gray-50 px-4 py-2 border-b border-gray-100 font-bold text-gray-700 text-sm flex justify-between items-center">
+                      <span className="flex items-center gap-1.5">
+                        <span className={metricIconColors[key]}>{icon}</span>
+                        {label}
+                        <span className="text-xs font-normal text-gray-400">({boundaryCount}개 구간)</span>
+                      </span>
+                    </div>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-gray-50/50 text-gray-500 text-xs border-b border-gray-100">
+                          <th className="px-4 py-2 text-left font-medium w-2/3 whitespace-nowrap">실제 구간</th>
+                          <th className="px-4 py-2 text-center font-medium w-1/3 border-l border-gray-100 whitespace-nowrap">점수</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              );
-            })}
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {/* 동적 구간 + 그 외 나머지 */}
+                        {[...Array(boundaryCount + 1)].map((_, idx) => (
+                          <tr key={idx} className={`hover:bg-gray-50/50 transition-colors ${idx === boundaryCount ? 'bg-gray-50' : ''}`}>
+                            <td className="px-4 py-2 text-gray-600 text-xs whitespace-nowrap">
+                              {idx === boundaryCount ? <span className="font-medium">그 외 나머지</span> : getRangeText(idx)}
+                            </td>
+                            <td className="px-4 py-2 text-center font-bold text-gray-800 border-l border-gray-50 whitespace-nowrap">
+                              {config.scores[idx]}점
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })}
           </div>
         </div>
       </div>
@@ -793,6 +906,7 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
       )}
     </div>
   );
+  };
 
   // 푸터 버튼
   const renderFooter = () => {
