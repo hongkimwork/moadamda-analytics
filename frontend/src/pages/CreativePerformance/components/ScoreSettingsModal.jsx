@@ -917,6 +917,19 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
                   <><TrendingUp className="text-green-500" /> 절대평가</>
                 )}
               </div>
+              {settings.evaluation_type === 'relative' && (
+                <div className="mt-1 text-sm text-gray-500">
+                  {settings.relative_mode === 'percentile' ? (
+                    <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-600 px-2 py-0.5 rounded">
+                      백분위 방식
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                      구간 점수 방식
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
             
             <div className="flex-1">
@@ -934,77 +947,136 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
           </div>
         </div>
 
-        <div>
-          <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">구간별 점수 상세</div>
-          <div className="flex flex-col gap-3">
-            {METRIC_DEFINITIONS
-              .filter(m => enabledMetrics.includes(m.key))
-              .map(({ key, configField, label, icon, unit }) => {
-                const config = settings[configField];
-                const isRelative = settings.evaluation_type === 'relative';
-                const boundaryCount = config?.boundaries?.length || 0;
-                const unitStr = isRelative ? unit.relative : unit.absolute;
+        {/* 백분위 방식일 때와 구간 점수 방식일 때 다르게 표시 */}
+        {settings.evaluation_type === 'relative' && settings.relative_mode === 'percentile' ? (
+          /* 백분위 방식 - 점수 계산 방식 안내 */
+          <div>
+            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">점수 계산 방식</div>
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border border-blue-200 p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="bg-blue-100 p-1.5 rounded-md">
+                  <BarChart2 size={16} className="text-blue-600" />
+                </div>
+                <span className="font-bold text-gray-800">백분위 점수</span>
+                <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">자동 계산</span>
+              </div>
               
-                // 동적 구간 텍스트 생성 헬퍼
-                const getRangeText = (index) => {
-                  if (!config || !config.boundaries) return '';
-                  if (index >= boundaryCount) {
-                    // 그 외 나머지
-                    if (isRelative) {
-                      return `상위 ${parseInt(config.boundaries[boundaryCount - 1]) + 1} ~ 100%`;
-                    } else {
-                      return `${config.boundaries[boundaryCount - 1]}${unitStr} 미만`;
-                    }
-                  }
-                  
-                  if (isRelative) {
-                    // 상대평가 (오름차순)
-                    if (index === 0) return `상위 1 ~ ${config.boundaries[0]}%`;
-                    return `상위 ${parseInt(config.boundaries[index - 1]) + 1} ~ ${config.boundaries[index]}%`;
-                  } else {
-                    // 절대평가 (내림차순)
-                    if (index === 0) return `${config.boundaries[0]}${unitStr} 이상`;
-                    return `${config.boundaries[index]} ~ ${config.boundaries[index - 1]} 미만`;
-                  }
-                };
-
-                if (!config) return null;
-
-                return (
-                  <div key={configField} className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm flex flex-col">
-                    <div className="bg-gray-50 px-4 py-2 border-b border-gray-100 font-bold text-gray-700 text-sm flex justify-between items-center">
-                      <span className="flex items-center gap-1.5">
-                        <span className={metricIconColors[key]}>{icon}</span>
-                        {label}
-                        <span className="text-xs font-normal text-gray-400">({boundaryCount}개 구간)</span>
-                      </span>
-                    </div>
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="bg-gray-50/50 text-gray-500 text-xs border-b border-gray-100">
-                          <th className="px-4 py-2 text-left font-medium w-2/3 whitespace-nowrap">실제 구간</th>
-                          <th className="px-4 py-2 text-center font-medium w-1/3 border-l border-gray-100 whitespace-nowrap">점수</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50">
-                        {/* 동적 구간 + 그 외 나머지 */}
-                        {[...Array(boundaryCount + 1)].map((_, idx) => (
-                          <tr key={idx} className={`hover:bg-gray-50/50 transition-colors ${idx === boundaryCount ? 'bg-gray-50' : ''}`}>
-                            <td className="px-4 py-2 text-gray-600 text-xs whitespace-nowrap">
-                              {idx === boundaryCount ? <span className="font-medium">그 외 나머지</span> : getRangeText(idx)}
-                            </td>
-                            <td className="px-4 py-2 text-center font-bold text-gray-800 border-l border-gray-50 whitespace-nowrap">
-                              {config.scores[idx]}점
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                );
-              })}
+              <div className="bg-white rounded-lg p-4 border border-blue-100 mb-4">
+                <div className="text-sm text-gray-600 mb-3">
+                  순위에 따라 <span className="font-semibold text-blue-600">자동으로 점수가 계산</span>됩니다.
+                </div>
+                <div className="bg-gray-50 rounded p-3 text-center">
+                  <code className="text-sm text-gray-700">백분위 점수 = (1 - 순위/전체 광고 수) × 100</code>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-3 gap-2 text-sm">
+                <div className="flex justify-between items-center p-2 bg-blue-50 rounded">
+                  <span className="text-gray-600">상위 1%</span>
+                  <span className="font-bold text-blue-700">99점</span>
+                </div>
+                <div className="flex justify-between items-center p-2 bg-blue-50 rounded">
+                  <span className="text-gray-600">상위 10%</span>
+                  <span className="font-bold text-blue-700">90점</span>
+                </div>
+                <div className="flex justify-between items-center p-2 bg-blue-50 rounded">
+                  <span className="text-gray-600">상위 25%</span>
+                  <span className="font-bold text-blue-700">75점</span>
+                </div>
+                <div className="flex justify-between items-center p-2 bg-gray-50 rounded">
+                  <span className="text-gray-600">상위 50%</span>
+                  <span className="font-bold text-gray-600">50점</span>
+                </div>
+                <div className="flex justify-between items-center p-2 bg-gray-50 rounded">
+                  <span className="text-gray-600">상위 75%</span>
+                  <span className="font-bold text-gray-600">25점</span>
+                </div>
+                <div className="flex justify-between items-center p-2 bg-gray-50 rounded">
+                  <span className="text-gray-600">하위 1%</span>
+                  <span className="font-bold text-gray-600">1점</span>
+                </div>
+              </div>
+              
+              <div className="mt-4 text-xs text-gray-500 flex items-start gap-1.5">
+                <Info size={12} className="mt-0.5 flex-shrink-0" />
+                <span>모든 지표에 동일한 백분위 공식이 적용됩니다. 각 지표별 가중치에 따라 최종 점수가 계산됩니다.</span>
+              </div>
+            </div>
           </div>
-        </div>
+        ) : (
+          /* 구간 점수 방식 또는 절대평가 - 기존 구간 상세 표시 */
+          <div>
+            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">구간별 점수 상세</div>
+            <div className="flex flex-col gap-3">
+              {METRIC_DEFINITIONS
+                .filter(m => enabledMetrics.includes(m.key))
+                .map(({ key, configField, label, icon, unit }) => {
+                  const config = settings[configField];
+                  const isRelative = settings.evaluation_type === 'relative';
+                  const boundaryCount = config?.boundaries?.length || 0;
+                  const unitStr = isRelative ? unit.relative : unit.absolute;
+                
+                  // 동적 구간 텍스트 생성 헬퍼
+                  const getRangeText = (index) => {
+                    if (!config || !config.boundaries) return '';
+                    if (index >= boundaryCount) {
+                      // 그 외 나머지
+                      if (isRelative) {
+                        return `상위 ${parseInt(config.boundaries[boundaryCount - 1]) + 1} ~ 100%`;
+                      } else {
+                        return `${config.boundaries[boundaryCount - 1]}${unitStr} 미만`;
+                      }
+                    }
+                    
+                    if (isRelative) {
+                      // 상대평가 (오름차순)
+                      if (index === 0) return `상위 1 ~ ${config.boundaries[0]}%`;
+                      return `상위 ${parseInt(config.boundaries[index - 1]) + 1} ~ ${config.boundaries[index]}%`;
+                    } else {
+                      // 절대평가 (내림차순)
+                      if (index === 0) return `${config.boundaries[0]}${unitStr} 이상`;
+                      return `${config.boundaries[index]} ~ ${config.boundaries[index - 1]} 미만`;
+                    }
+                  };
+
+                  if (!config) return null;
+
+                  return (
+                    <div key={configField} className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm flex flex-col">
+                      <div className="bg-gray-50 px-4 py-2 border-b border-gray-100 font-bold text-gray-700 text-sm flex justify-between items-center">
+                        <span className="flex items-center gap-1.5">
+                          <span className={metricIconColors[key]}>{icon}</span>
+                          {label}
+                          <span className="text-xs font-normal text-gray-400">({boundaryCount}개 구간)</span>
+                        </span>
+                      </div>
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-50/50 text-gray-500 text-xs border-b border-gray-100">
+                            <th className="px-4 py-2 text-left font-medium w-2/3 whitespace-nowrap">실제 구간</th>
+                            <th className="px-4 py-2 text-center font-medium w-1/3 border-l border-gray-100 whitespace-nowrap">점수</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                          {/* 동적 구간 + 그 외 나머지 */}
+                          {[...Array(boundaryCount + 1)].map((_, idx) => (
+                            <tr key={idx} className={`hover:bg-gray-50/50 transition-colors ${idx === boundaryCount ? 'bg-gray-50' : ''}`}>
+                              <td className="px-4 py-2 text-gray-600 text-xs whitespace-nowrap">
+                                {idx === boundaryCount ? <span className="font-medium">그 외 나머지</span> : getRangeText(idx)}
+                              </td>
+                              <td className="px-4 py-2 text-center font-bold text-gray-800 border-l border-gray-50 whitespace-nowrap">
+                                {config.scores[idx]}점
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        )}
       </div>
 
       {warnings.length > 0 && (
