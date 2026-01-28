@@ -1,7 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../utils/database');
-const { calculateCreativeAttribution } = require('../utils/creativeAttribution');
 const creativeService = require('../services/creative/creativeService');
 const detailService = require('../services/creative/detailService');
 const scoreSettingsService = require('../services/scoreSettings/scoreSettingsService');
@@ -198,21 +196,6 @@ router.post('/creative-performance/landing-pages', async (req, res) => {
   }
 });
 
-/**
- * POST /api/creative-performance/compare
- * 여러 광고 소재 비교 분석 API
- * 
- * Request Body:
- *  - creatives: 비교할 광고 소재 배열 (2~5개)
- *    각 항목: { creative_name, utm_source, utm_medium, utm_campaign }
- *  - start: 시작일 (YYYY-MM-DD) - 필수
- *  - end: 종료일 (YYYY-MM-DD) - 필수
- * 
- * Response:
- *  - creatives_data: 각 소재별 핵심 지표
- *  - daily_trends: 각 소재별 일별 추이
- *  - role_comparison: 각 소재별 광고 역할 분포
- */
 /**
  * POST /api/creative-performance/compare
  * 여러 광고 소재 비교 분석 API

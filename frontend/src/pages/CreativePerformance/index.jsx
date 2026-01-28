@@ -89,10 +89,10 @@ function CreativePerformance() {
 
   // 로딩 완료 시 갱신 시간 업데이트
   useEffect(() => {
-    if (!loading && data.length >= 0) {
+    if (!loading) {
       setLastUpdated(dayjs());
     }
-  }, [loading, data.length]);
+  }, [loading]);
 
   // 새로고침 핸들러 (갱신 시간 업데이트 포함)
   const handleRefresh = () => {
@@ -185,7 +185,7 @@ function CreativePerformance() {
       />
 
       {/* 인사이트 카드 (Top 5 랭킹) */}
-      <InsightCards data={data} />
+      <InsightCards data={data} scoreSettings={scoreSettings} />
 
       {/* 검색 및 필터 */}
       <PerformanceFilters

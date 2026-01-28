@@ -4,7 +4,7 @@
 
 import React, { useMemo } from 'react';
 import { Card, Row, Col, Empty } from 'antd';
-import { Trophy, TrendingUp } from 'lucide-react';
+import { Trophy, TrendingUp, Settings } from 'lucide-react';
 import { calculateTrafficScores, formatCurrency } from '../utils/formatters';
 
 
@@ -133,28 +133,34 @@ const RankingItem = ({ rank, title, subText, score, value, type, maxValue }) => 
 /**
  * 인사이트 카드 컴포넌트
  * @param {Array} data - 전체 광고 데이터
+ * @param {Object|null} scoreSettings - 모수 평가 점수 설정
  */
-function InsightCards({ data }) {
+function InsightCards({ data, scoreSettings }) {
   // Top 5 데이터 계산
   const { trafficTop5, valueTop5, maxValue } = useMemo(() => {
     if (!data || data.length === 0) {
       return { trafficTop5: [], valueTop5: [], maxValue: 0 };
     }
 
-    // 1. 모수 품질 Top 5 계산
-    const trafficScores = calculateTrafficScores(data);
-    const trafficData = data.map(item => {
-      const key = `${item.utm_source || ''}_${item.utm_campaign || ''}_${item.utm_medium || ''}_${item.creative_name || ''}`;
-      const scoreInfo = trafficScores.get(key);
-      return {
-        ...item,
-        trafficScore: scoreInfo ? scoreInfo.score : 0
-      };
-    });
+    // 1. 모수 품질 Top 5 계산 (설정이 있을 때만)
+    let trafficTop5 = [];
+    if (scoreSettings) {
+      const trafficScores = calculateTrafficScores(data, scoreSettings);
+      const trafficData = data.map(item => {
+        const key = `${item.utm_source || ''}_${item.utm_campaign || ''}_${item.utm_medium || ''}_${item.creative_name || ''}`;
+        const scoreInfo = trafficScores.get(key);
+        return {
+          ...item,
+          trafficScore: scoreInfo ? scoreInfo.score : 0
+        };
+      });
 
-    // 점수 내림차순 정렬 후 상위 5개
-    const trafficSorted = [...trafficData].sort((a, b) => b.trafficScore - a.trafficScore);
-    const trafficTop5 = trafficSorted.slice(0, 5);
+      // 점수가 null이 아닌 것만 필터링 후 내림차순 정렬
+      const trafficSorted = [...trafficData]
+        .filter(item => item.trafficScore !== null && item.trafficScore > 0)
+        .sort((a, b) => b.trafficScore - a.trafficScore);
+      trafficTop5 = trafficSorted.slice(0, 5);
+    }
 
     // 2. 유입당 가치 Top 5 계산
     // 유입당 가치 = (직접 매출 + 기여 매출) / 방문자 수
@@ -181,7 +187,7 @@ function InsightCards({ data }) {
     const maxValue = valueTop5.length > 0 ? valueTop5[0].valuePerVisitor : 0;
 
     return { trafficTop5, valueTop5, maxValue };
-  }, [data]);
+  }, [data, scoreSettings]);
 
   if (!data || data.length === 0) return null;
 
@@ -210,7 +216,24 @@ function InsightCards({ data }) {
           bordered={false}
           style={{ height: '100%', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}
         >
-          {trafficTop5.length > 0 ? (
+          {!scoreSettings ? (
+            <div style={{ 
+              display: 'flex', 
+              flexDirection: 'column', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              padding: '32px 16px',
+              color: '#8c8c8c'
+            }}>
+              <Settings size={32} style={{ marginBottom: '12px', color: '#d9d9d9' }} />
+              <div style={{ fontSize: '14px', fontWeight: 500, marginBottom: '4px' }}>
+                모수 평가 기준을 설정해주세요
+              </div>
+              <div style={{ fontSize: '12px', color: '#bfbfbf' }}>
+                상단 필터 영역의 "점수 설정" 버튼을 클릭하세요
+              </div>
+            </div>
+          ) : trafficTop5.length > 0 ? (
             trafficTop5.map((item, index) => (
               <RankingItem
                 key={index}

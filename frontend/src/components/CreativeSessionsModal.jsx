@@ -141,6 +141,7 @@ function CreativeSessionsModal({ visible, onClose, creative, dateRange }) {
       key: 'duration_formatted',
       width: 100,
       align: 'center',
+      sorter: (a, b) => (a.duration_seconds || 0) - (b.duration_seconds || 0),
       render: (duration, record) => {
         const seconds = record.duration_seconds;
         let color = '#000000';
@@ -168,6 +169,7 @@ function CreativeSessionsModal({ visible, onClose, creative, dateRange }) {
       key: 'pageview_count',
       width: 60,
       align: 'center',
+      sorter: (a, b) => (a.pageview_count || 0) - (b.pageview_count || 0),
       render: (count) => (
         <Text style={{ 
           fontSize: 13, 
@@ -196,6 +198,7 @@ function CreativeSessionsModal({ visible, onClose, creative, dateRange }) {
       key: 'total_scroll_px',
       width: 80,
       align: 'center',
+      sorter: (a, b) => (a.total_scroll_px || 0) - (b.total_scroll_px || 0),
       render: (px) => (
         <Text style={{ 
           fontSize: 13, 

@@ -2,14 +2,14 @@
 // 모수 평가 기준 설정 API
 // ============================================================================
 
-const API_BASE = '/api/creative-performance';
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 /**
  * 현재 설정 조회
  * @returns {Promise<Object>} { success: boolean, data: Object|null }
  */
 export const fetchScoreSettings = async () => {
-  const response = await fetch(`${API_BASE}/score-settings`);
+  const response = await fetch(`${API_URL}/api/creative-performance/score-settings`);
   return response.json();
 };
 
@@ -19,7 +19,7 @@ export const fetchScoreSettings = async () => {
  * @returns {Promise<Object>} { success: boolean, data: Object, warnings: string[], errors: string[] }
  */
 export const saveScoreSettings = async (settings) => {
-  const response = await fetch(`${API_BASE}/score-settings`, {
+  const response = await fetch(`${API_URL}/api/creative-performance/score-settings`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -34,7 +34,7 @@ export const saveScoreSettings = async (settings) => {
  * @returns {Promise<Object>} { success: boolean }
  */
 export const deleteScoreSettings = async () => {
-  const response = await fetch(`${API_BASE}/score-settings`, {
+  const response = await fetch(`${API_URL}/api/creative-performance/score-settings`, {
     method: 'DELETE'
   });
   return response.json();
