@@ -116,7 +116,9 @@ const calculateAbsoluteScore = (value, config) => {
 };
 
 /**
- * 모수 평가 점수 계산 (사용자 설정 기반)
+ * 모수 평가 점수 계산 (사용자 설정 기반 - 동적 지표 지원)
+ * - 선택된 지표(enabled_metrics)만 점수 계산에 포함
+ * - 데이터가 없는 지표는 0점 처리 (가중치 재분배 없이 해당 비율만큼 점수 차감)
  * @param {Array} data - 전체 광고 데이터 배열
  * @param {Object|null} settings - 사용자 설정 (null이면 점수 계산 안 함)
  * @returns {Map} 각 광고의 고유키 → 점수 매핑
@@ -129,119 +131,132 @@ export const calculateTrafficScores = (data, settings = null) => {
 
   const {
     evaluation_type,
-    weight_scroll,
-    weight_pv,
-    weight_duration,
+    weight_scroll = 0,
+    weight_pv = 0,
+    weight_duration = 0,
+    weight_view = 0,
+    weight_uv = 0,
     scroll_config,
     pv_config,
-    duration_config
+    duration_config,
+    view_config,
+    uv_config,
+    enabled_metrics = ['scroll', 'pv', 'duration']
   } = settings;
 
   const totalCount = data.length;
   const scoreMap = new Map();
 
-  // 상대평가인 경우 순위 계산을 위한 정렬 및 순위 맵 생성
-  let scrollRankMap, pvRankMap, durationRankMap;
+  // 지표 정의 (동적 처리용)
+  const metricDefinitions = {
+    scroll: { 
+      weight: weight_scroll, 
+      config: scroll_config, 
+      getValue: (item) => item.avg_scroll_px || 0,
+      label: '스크롤'
+    },
+    pv: { 
+      weight: weight_pv, 
+      config: pv_config, 
+      getValue: (item) => item.avg_pageviews || 0,
+      label: 'PV'
+    },
+    duration: { 
+      weight: weight_duration, 
+      config: duration_config, 
+      getValue: (item) => item.avg_duration_seconds || 0,
+      label: '체류시간'
+    },
+    view: { 
+      weight: weight_view, 
+      config: view_config, 
+      getValue: (item) => item.total_views || 0,
+      label: 'View'
+    },
+    uv: { 
+      weight: weight_uv, 
+      config: uv_config, 
+      getValue: (item) => item.unique_visitors || 0,
+      label: 'UV'
+    }
+  };
+
+  // 상대평가인 경우 순위 계산을 위한 순위 맵 생성
+  const rankMaps = {};
   if (evaluation_type === 'relative') {
     const getKey = (item) => `${item.utm_source || ''}_${item.utm_campaign || ''}_${item.utm_medium || ''}_${item.creative_name || ''}`;
     
-    const sortedByScroll = [...data].sort((a, b) => (b.avg_scroll_px || 0) - (a.avg_scroll_px || 0));
-    const sortedByPV = [...data].sort((a, b) => (b.avg_pageviews || 0) - (a.avg_pageviews || 0));
-    const sortedByDuration = [...data].sort((a, b) => (b.avg_duration_seconds || 0) - (a.avg_duration_seconds || 0));
-    
-    // 동점자를 고려한 순위 맵 생성
-    scrollRankMap = createRankMap(sortedByScroll, (item) => item.avg_scroll_px || 0, getKey);
-    pvRankMap = createRankMap(sortedByPV, (item) => item.avg_pageviews || 0, getKey);
-    durationRankMap = createRankMap(sortedByDuration, (item) => item.avg_duration_seconds || 0, getKey);
+    enabled_metrics.forEach(metric => {
+      const def = metricDefinitions[metric];
+      if (def && def.config) {
+        const sorted = [...data].sort((a, b) => (def.getValue(b)) - (def.getValue(a)));
+        rankMaps[metric] = createRankMap(sorted, def.getValue, getKey);
+      }
+    });
   }
 
   // 각 광고에 대해 점수 계산
   data.forEach((item) => {
     const key = `${item.utm_source || ''}_${item.utm_campaign || ''}_${item.utm_medium || ''}_${item.creative_name || ''}`;
 
-    const scrollValue = item.avg_scroll_px || 0;
-    const pvValue = item.avg_pageviews || 0;
-    const durationValue = item.avg_duration_seconds || 0;
+    // 각 지표별 점수 계산
+    const metricScores = {};
+    const metricValues = {};
+    const deductedMetrics = [];
+    let totalDeducted = 0;
+    let weightedSum = 0;
 
-    // 0인 지표 확인
-    const isScrollZero = scrollValue === 0;
-    const isPvZero = pvValue === 0;
-    const isDurationZero = durationValue === 0;
+    enabled_metrics.forEach(metric => {
+      const def = metricDefinitions[metric];
+      if (!def || !def.config) return;
 
-    // 모든 지표가 0이면 데이터 부족
-    if (isScrollZero && isPvZero && isDurationZero) {
-      scoreMap.set(key, {
-        score: null,
-        hasWarning: true,
-        warningMessage: '데이터 부족',
-        scrollScore: null,
-        pvScore: null,
-        durationScore: null
-      });
-      return;
-    }
+      const value = def.getValue(item);
+      const isZero = value === 0;
+      metricValues[metric] = value;
 
-    // 유효한 지표만으로 가중치 재분배
-    let effectiveWeightScroll = isScrollZero ? 0 : weight_scroll;
-    let effectiveWeightPv = isPvZero ? 0 : weight_pv;
-    let effectiveWeightDuration = isDurationZero ? 0 : weight_duration;
-    const totalEffectiveWeight = effectiveWeightScroll + effectiveWeightPv + effectiveWeightDuration;
-
-    // 100%로 재분배
-    if (totalEffectiveWeight > 0 && totalEffectiveWeight !== 100) {
-      const ratio = 100 / totalEffectiveWeight;
-      effectiveWeightScroll = Math.round(effectiveWeightScroll * ratio);
-      effectiveWeightPv = Math.round(effectiveWeightPv * ratio);
-      effectiveWeightDuration = Math.round(effectiveWeightDuration * ratio);
-    }
-
-    let scrollScore = 0, pvScore = 0, durationScore = 0;
-
-    if (evaluation_type === 'relative') {
-      // 상대평가: 순위 기반 (동점자 고려된 순위 맵 사용)
-      if (!isScrollZero) {
-        const scrollRank = scrollRankMap.get(key) || 0;
-        scrollScore = calculateRelativeScore(scrollRank, totalCount, scroll_config);
+      let score = 0;
+      if (!isZero) {
+        if (evaluation_type === 'relative') {
+          const rank = rankMaps[metric]?.get(key) || 0;
+          score = calculateRelativeScore(rank, totalCount, def.config);
+        } else {
+          score = calculateAbsoluteScore(value, def.config);
+        }
       }
-      if (!isPvZero) {
-        const pvRank = pvRankMap.get(key) || 0;
-        pvScore = calculateRelativeScore(pvRank, totalCount, pv_config);
-      }
-      if (!isDurationZero) {
-        const durationRank = durationRankMap.get(key) || 0;
-        durationScore = calculateRelativeScore(durationRank, totalCount, duration_config);
-      }
-    } else {
-      // 절대평가: 수치 기반
-      if (!isScrollZero) {
-        scrollScore = calculateAbsoluteScore(scrollValue, scroll_config);
-      }
-      if (!isPvZero) {
-        pvScore = calculateAbsoluteScore(pvValue, pv_config);
-      }
-      if (!isDurationZero) {
-        durationScore = calculateAbsoluteScore(durationValue, duration_config);
-      }
-    }
 
-    // 가중치 적용하여 최종 점수 계산
-    const finalScore = Math.round(
-      (scrollScore * effectiveWeightScroll + pvScore * effectiveWeightPv + durationScore * effectiveWeightDuration) / 100
-    );
+      metricScores[metric] = score;
 
-    // 경고 메시지 생성
-    const zeroMetrics = [];
-    if (isScrollZero) zeroMetrics.push('스크롤');
-    if (isPvZero) zeroMetrics.push('PV');
-    if (isDurationZero) zeroMetrics.push('체류시간');
+      // 가중치 적용
+      weightedSum += score * def.weight;
+
+      // 0인 지표 차감 기록
+      if (isZero && def.weight > 0) {
+        deductedMetrics.push(`${def.label} ${def.weight}%`);
+        totalDeducted += def.weight;
+      }
+    });
+
+    // 최종 점수 계산
+    const finalScore = Math.round(weightedSum / 100);
 
     scoreMap.set(key, {
       score: finalScore,
-      hasWarning: zeroMetrics.length > 0,
-      warningMessage: zeroMetrics.length > 0 ? `${zeroMetrics.join(', ')} 데이터가 없어 나머지 지표로 계산됨` : null,
-      scrollScore: isScrollZero ? null : scrollScore,
-      pvScore: isPvZero ? null : pvScore,
-      durationScore: isDurationZero ? null : durationScore
+      hasWarning: deductedMetrics.length > 0,
+      warningMessage: deductedMetrics.length > 0 
+        ? `${deductedMetrics.join(', ')} 데이터 없음 (총 ${totalDeducted}% 차감)` 
+        : null,
+      // 각 지표별 점수 상세 (툴팁용)
+      metricScores,
+      metricValues,
+      enabledMetrics: enabled_metrics,
+      weights: {
+        scroll: weight_scroll,
+        pv: weight_pv,
+        duration: weight_duration,
+        view: weight_view,
+        uv: weight_uv
+      },
+      deductedPercent: totalDeducted
     });
   });
 

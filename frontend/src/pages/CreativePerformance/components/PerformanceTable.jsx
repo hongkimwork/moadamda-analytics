@@ -4,7 +4,7 @@
 
 import React, { useMemo } from 'react';
 import { Card, Table, Tooltip, Dropdown, Button, message } from 'antd';
-import { ShoppingCart, Link } from 'lucide-react';
+import { ShoppingCart, Link, AlertTriangle } from 'lucide-react';
 import { formatDuration, formatCurrency, formatNumber, calculateTrafficScores } from '../utils/formatters';
 import { getRowKey } from '../utils/helpers';
 
@@ -315,6 +315,58 @@ function PerformanceTable({
 
         const score = scoreData.score;
         const color = getScoreColor(score);
+        
+        // 툴팁용 점수 상세 정보 생성
+        const metricLabels = {
+          scroll: '평균 스크롤',
+          pv: '평균 PV',
+          duration: '평균 체류시간',
+          view: 'View',
+          uv: 'UV'
+        };
+        const metricUnits = {
+          scroll: 'px',
+          pv: '',
+          duration: '초',
+          view: '회',
+          uv: '명'
+        };
+        
+        const enabledMetrics = scoreData.enabledMetrics || ['scroll', 'pv', 'duration'];
+        const tooltipContent = (
+          <div style={{ fontSize: '12px', lineHeight: '1.6' }}>
+            <div style={{ fontWeight: 600, marginBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.2)', paddingBottom: '6px' }}>
+              점수 계산 상세
+            </div>
+            {enabledMetrics.map(metric => {
+              const metricScore = scoreData.metricScores?.[metric] ?? 0;
+              const weight = scoreData.weights?.[metric] ?? 0;
+              const value = scoreData.metricValues?.[metric] ?? 0;
+              const contribution = Math.round(metricScore * weight / 100);
+              const unit = metricUnits[metric];
+              
+              return (
+                <div key={metric} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.8)' }}>
+                    {metricLabels[metric]} ({value.toLocaleString()}{unit})
+                  </span>
+                  <span style={{ fontWeight: 600, marginLeft: '12px' }}>
+                    {metricScore}점 × {weight}% = <span style={{ color: '#69c0ff' }}>{contribution}</span>
+                  </span>
+                </div>
+              );
+            })}
+            <div style={{ marginTop: '8px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.2)', display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ fontWeight: 600 }}>최종 점수</span>
+              <span style={{ fontWeight: 700, color: '#52c41a', fontSize: '14px' }}>{score}점</span>
+            </div>
+            {scoreData.hasWarning && (
+              <div style={{ marginTop: '6px', color: '#faad14', fontSize: '11px' }}>
+                ⚠️ {scoreData.warningMessage}
+              </div>
+            )}
+          </div>
+        );
 
         return (
           <div style={{
@@ -323,26 +375,31 @@ function PerformanceTable({
             justifyContent: 'center',
             gap: '4px'
           }}>
-            <div style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '4px 10px',
-              borderRadius: '12px',
-              backgroundColor: `${color}15`,
-              border: `1px solid ${color}40`
-            }}>
-              <span style={{
-                fontSize: '13px',
-                fontWeight: 700,
-                color: color
+            <Tooltip title={tooltipContent} overlayStyle={{ maxWidth: '320px' }}>
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '4px 10px',
+                borderRadius: '12px',
+                backgroundColor: `${color}15`,
+                border: `1px solid ${color}40`,
+                cursor: 'help'
               }}>
-                {score}
-              </span>
-            </div>
+                <span style={{
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  color: color
+                }}>
+                  {score}
+                </span>
+              </div>
+            </Tooltip>
             {scoreData.hasWarning && (
               <Tooltip title={scoreData.warningMessage}>
-                <span style={{ color: '#faad14', fontSize: '14px', cursor: 'help' }}>⚠️</span>
+                <span style={{ display: 'flex', alignItems: 'center', cursor: 'help' }}>
+                  <AlertTriangle size={14} color="#faad14" />
+                </span>
               </Tooltip>
             )}
           </div>
