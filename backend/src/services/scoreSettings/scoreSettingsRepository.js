@@ -5,7 +5,7 @@
 const db = require('../../utils/database');
 
 /**
- * 현재 설정 조회
+ * 현재 설정 조회 (절대평가 전용)
  * @returns {Object|null} 설정 데이터 또는 null
  */
 const getSettings = async () => {
@@ -13,7 +13,6 @@ const getSettings = async () => {
     SELECT 
       id,
       evaluation_type,
-      relative_mode,
       weight_scroll,
       weight_pv,
       weight_duration,
@@ -37,14 +36,13 @@ const getSettings = async () => {
 };
 
 /**
- * 설정 저장 (기존 설정이 있으면 업데이트, 없으면 생성)
+ * 설정 저장 (절대평가 전용 - 기존 설정이 있으면 업데이트, 없으면 생성)
  * @param {Object} settings - 설정 데이터
  * @returns {Object} 저장된 설정 데이터
  */
 const saveSettings = async (settings) => {
   const {
     evaluation_type,
-    relative_mode,
     weight_scroll,
     weight_pv,
     weight_duration,
@@ -67,26 +65,24 @@ const saveSettings = async (settings) => {
       UPDATE score_settings
       SET 
         evaluation_type = $1,
-        relative_mode = $2,
-        weight_scroll = $3,
-        weight_pv = $4,
-        weight_duration = $5,
-        weight_view = $6,
-        weight_uv = $7,
-        scroll_config = $8,
-        pv_config = $9,
-        duration_config = $10,
-        view_config = $11,
-        uv_config = $12,
-        enabled_metrics = $13,
+        weight_scroll = $2,
+        weight_pv = $3,
+        weight_duration = $4,
+        weight_view = $5,
+        weight_uv = $6,
+        scroll_config = $7,
+        pv_config = $8,
+        duration_config = $9,
+        view_config = $10,
+        uv_config = $11,
+        enabled_metrics = $12,
         updated_at = NOW()
-      WHERE id = $14
+      WHERE id = $13
       RETURNING *
     `;
     
     const result = await db.query(query, [
       evaluation_type,
-      relative_mode || 'range',
       weight_scroll,
       weight_pv,
       weight_duration,
@@ -107,7 +103,6 @@ const saveSettings = async (settings) => {
     const query = `
       INSERT INTO score_settings (
         evaluation_type,
-        relative_mode,
         weight_scroll,
         weight_pv,
         weight_duration,
@@ -119,13 +114,12 @@ const saveSettings = async (settings) => {
         view_config,
         uv_config,
         enabled_metrics
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING *
     `;
     
     const result = await db.query(query, [
       evaluation_type,
-      relative_mode || 'range',
       weight_scroll,
       weight_pv,
       weight_duration,

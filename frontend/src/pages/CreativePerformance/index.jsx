@@ -16,6 +16,7 @@ import CreativeSessionsModal from '../../components/CreativeSessionsModal';
 import CreativeEntriesModal from '../../components/CreativeEntriesModal';
 import TestResultModal from '../../components/TestResultModal';
 import ScoreSettingsModal from './components/ScoreSettingsModal';
+import CreativeMediaPreviewModal from './components/CreativeMediaPreviewModal';
 
 /**
  * 광고 소재 퍼포먼스 페이지
@@ -43,6 +44,10 @@ function CreativePerformance() {
   const [originalUrlData, setOriginalUrlData] = useState(null);
   const [originalUrlLoading, setOriginalUrlLoading] = useState(false);
 
+  // 미디어 프리뷰 모달 state
+  const [mediaPreviewModalVisible, setMediaPreviewModalVisible] = useState(false);
+  const [mediaPreviewCreativeName, setMediaPreviewCreativeName] = useState(null);
+
   const {
     // 데이터
     data,
@@ -54,6 +59,7 @@ function CreativePerformance() {
     // 필터 상태
     filters,
     activeUtmFilters,
+    quickFilterSources,
     currentPage,
     pageSize,
     maxDuration,
@@ -174,6 +180,17 @@ function CreativePerformance() {
     message.success('URL이 복사되었습니다');
   };
 
+  // 미디어 프리뷰 핸들러 (광고 소재 이름 클릭)
+  const handleCreativeClick = (creativeName) => {
+    setMediaPreviewCreativeName(creativeName);
+    setMediaPreviewModalVisible(true);
+  };
+
+  // 메타 필터 적용 여부 계산 (meta, instagram, ig 소스 필터링 중인지)
+  const isMetaFiltered = quickFilterSources.some(source => 
+    ['meta', 'instagram', 'ig', 'facebook', 'fb'].includes(source.toLowerCase())
+  );
+
   return (
     <div style={{ padding: '24px', background: '#f5f7fa', minHeight: '100vh' }}>
       {/* 헤더 */}
@@ -234,6 +251,8 @@ function CreativePerformance() {
         onViewEntries={handleViewEntries}
         onViewOriginalUrl={handleViewOriginalUrl}
         scoreSettings={scoreSettings}
+        isMetaFiltered={isMetaFiltered}
+        onCreativeClick={handleCreativeClick}
       />
 
       {/* 주문 보기 모달 */}
@@ -351,6 +370,16 @@ function CreativePerformance() {
         onClose={() => setScoreSettingsModalVisible(false)}
         currentSettings={scoreSettings}
         onSaveSuccess={(newSettings) => setScoreSettings(newSettings)}
+      />
+
+      {/* 미디어 프리뷰 모달 */}
+      <CreativeMediaPreviewModal
+        visible={mediaPreviewModalVisible}
+        onClose={() => {
+          setMediaPreviewModalVisible(false);
+          setMediaPreviewCreativeName(null);
+        }}
+        creativeName={mediaPreviewCreativeName}
       />
     </div>
   );

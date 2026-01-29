@@ -22,7 +22,7 @@ const METRIC_DEFINITIONS = {
 };
 
 /**
- * 설정 유효성 검사
+ * 설정 유효성 검사 (절대평가 전용)
  * @param {Object} settings - 설정 데이터
  * @returns {Object} { valid: boolean, errors: string[] }
  */
@@ -30,20 +30,10 @@ const validateSettings = (settings) => {
   const errors = [];
   const enabledMetrics = settings.enabled_metrics || ['scroll', 'pv', 'duration'];
 
-  // 평가 방식 검사
-  if (!settings.evaluation_type || !['relative', 'absolute'].includes(settings.evaluation_type)) {
-    errors.push('평가 방식은 relative 또는 absolute여야 합니다.');
+  // 평가 방식 검사 (절대평가만 허용)
+  if (!settings.evaluation_type || settings.evaluation_type !== 'absolute') {
+    errors.push('평가 방식은 absolute여야 합니다.');
   }
-
-  // 상대평가 세부 방식 검사 (상대평가일 때만)
-  if (settings.evaluation_type === 'relative') {
-    if (settings.relative_mode && !['range', 'percentile'].includes(settings.relative_mode)) {
-      errors.push('상대평가 세부 방식은 range 또는 percentile이어야 합니다.');
-    }
-  }
-
-  // 백분위 방식 여부 확인 (구간 설정 검증 스킵용)
-  const isPercentileMode = settings.evaluation_type === 'relative' && settings.relative_mode === 'percentile';
 
   // 활성화된 지표 수 검사
   if (enabledMetrics.length < MIN_METRICS) {
@@ -76,19 +66,18 @@ const validateSettings = (settings) => {
     }
   });
 
-  // 활성화된 지표의 구간 설정 검사 (백분위 방식이면 스킵)
-  if (!isPercentileMode) {
-    enabledMetrics.forEach(metric => {
-      const def = METRIC_DEFINITIONS[metric];
-      if (!def) return;
+  // 활성화된 지표의 구간 설정 검사
+  enabledMetrics.forEach(metric => {
+    const def = METRIC_DEFINITIONS[metric];
+    if (!def) return;
 
-      const config = settings[def.configField];
-      const name = def.name;
+    const config = settings[def.configField];
+    const name = def.name;
 
-      if (!config || !config.boundaries || !config.scores) {
-        errors.push(`${name} 구간 설정이 올바르지 않습니다.`);
-        return;
-      }
+    if (!config || !config.boundaries || !config.scores) {
+      errors.push(`${name} 구간 설정이 올바르지 않습니다.`);
+      return;
+    }
 
     // 경계값 개수 검사 (동적: 최소 1개 ~ 최대 10개)
     if (config.boundaries.length < MIN_BOUNDARIES) {
@@ -107,24 +96,11 @@ const validateSettings = (settings) => {
       return;
     }
 
-    // 경계값 순서 검사
-    // 상대평가: 퍼센트 기준 (오름차순)
-    // 절대평가: 수치 기준 (내림차순 - 120초 > 60초 > 30초)
-    if (settings.evaluation_type === 'relative') {
-      // 상대평가: 경계값이 오름차순이어야 함 (10 < 30 < 60)
-      for (let i = 0; i < config.boundaries.length - 1; i++) {
-        if (config.boundaries[i] >= config.boundaries[i + 1]) {
-          errors.push(`${name} 경계값은 순서대로 커야 합니다. (상위 %)`);
-          break;
-        }
-      }
-    } else {
-      // 절대평가: 경계값이 내림차순이어야 함 (120 > 60 > 30)
-      for (let i = 0; i < config.boundaries.length - 1; i++) {
-        if (config.boundaries[i] <= config.boundaries[i + 1]) {
-          errors.push(`${name} 경계값은 순서대로 작아져야 합니다. (수치 기준)`);
-          break;
-        }
+    // 경계값 순서 검사 (절대평가: 내림차순)
+    for (let i = 0; i < config.boundaries.length - 1; i++) {
+      if (config.boundaries[i] <= config.boundaries[i + 1]) {
+        errors.push(`${name} 경계값은 순서대로 작아져야 합니다. (수치 기준)`);
+        break;
       }
     }
 
@@ -135,8 +111,7 @@ const validateSettings = (settings) => {
         break;
       }
     }
-    });
-  } // end of !isPercentileMode
+  });
 
   return {
     valid: errors.length === 0,

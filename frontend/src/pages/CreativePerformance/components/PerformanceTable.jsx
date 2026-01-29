@@ -25,7 +25,9 @@ function PerformanceTable({
   onViewSessions,
   onViewEntries,
   onViewOriginalUrl,
-  scoreSettings
+  scoreSettings,
+  isMetaFiltered,
+  onCreativeClick
 }) {
   // 모수 평가 점수 계산 (사용자 설정 기반)
   const trafficScores = useMemo(() => calculateTrafficScores(data, scoreSettings), [data, scoreSettings]);
@@ -99,30 +101,45 @@ function PerformanceTable({
       width: 200,
       align: 'center',
       fixed: 'left',
-      render: (text) => (
-        <span
-          style={{
-            fontSize: '13px',
-            fontWeight: 600,
-            cursor: 'pointer',
-            display: 'block',
-            wordBreak: 'break-all',
-            lineHeight: '1.5',
-            textAlign: 'center',
-            color: '#1a1a1a',
-            transition: 'color 0.2s ease'
-          }}
-          onDoubleClick={() => {
-            navigator.clipboard.writeText(text);
-            message.success('광고 소재 이름이 복사되었습니다');
-          }}
-          onMouseEnter={(e) => e.target.style.color = '#595959'}
-          onMouseLeave={(e) => e.target.style.color = '#1a1a1a'}
-          title="더블클릭하면 복사됩니다"
-        >
-          {text || '-'}
-        </span>
-      ),
+      render: (text) => {
+        // 메타 필터 적용 시에만 클릭 가능
+        const isClickable = isMetaFiltered && onCreativeClick;
+        
+        return (
+          <span
+            style={{
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'block',
+              wordBreak: 'break-all',
+              lineHeight: '1.5',
+              textAlign: 'center',
+              color: isClickable ? '#1890ff' : '#1a1a1a',
+              transition: 'color 0.2s ease',
+              textDecoration: isClickable ? 'underline' : 'none'
+            }}
+            onClick={() => {
+              if (isClickable) {
+                onCreativeClick(text);
+              }
+            }}
+            onDoubleClick={() => {
+              navigator.clipboard.writeText(text);
+              message.success('광고 소재 이름이 복사되었습니다');
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.color = isClickable ? '#40a9ff' : '#595959';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.color = isClickable ? '#1890ff' : '#1a1a1a';
+            }}
+            title={isClickable ? '클릭: 미디어 보기 / 더블클릭: 복사' : '더블클릭하면 복사됩니다'}
+          >
+            {text || '-'}
+          </span>
+        );
+      },
       sorter: true,
       showSorterTooltip: false
     },
@@ -254,7 +271,7 @@ function PerformanceTable({
                 
                 <div style={{ marginBottom: '16px' }}>
                   <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: '12px', marginBottom: '6px' }}>
-                    평가 방식: {scoreSettings.evaluation_type === 'relative' ? '상대평가' : '절대평가'}
+                    평가 방식: 절대평가
                   </div>
                   <table style={{ width: '100%', fontSize: '13px', borderCollapse: 'collapse' }}>
                     <tbody>

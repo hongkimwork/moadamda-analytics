@@ -106,7 +106,53 @@ async function getMetaAdNames() {
 }
 
 /**
+ * 광고명 정규화 (비교용)
+ * - 플러스(+)와 공백을 동일하게 취급
+ * @param {string} name - 광고명
+ * @returns {string} - 정규화된 광고명
+ */
+function normalizeAdName(name) {
+  if (!name) return '';
+  // 플러스를 공백으로 통일
+  return name.replace(/\+/g, ' ');
+}
+
+/**
+ * URL 디코딩 시도
+ * @param {string} name - 광고명
+ * @returns {string} - 디코딩된 광고명 (실패 시 원본 반환)
+ */
+function tryDecodeURIComponent(name) {
+  if (!name) return '';
+  // URL 인코딩 패턴이 있는지 확인 (%XX 형태)
+  if (!/%[0-9A-Fa-f]{2}/.test(name)) return name;
+  
+  try {
+    // 플러스를 먼저 공백으로 변환 (application/x-www-form-urlencoded 형식)
+    let processed = name.replace(/\+/g, ' ');
+    
+    // 잘못된 인코딩 수정: %% → %25% (예: 77%%20 → 77%25%20)
+    // %가 인코딩되지 않은 채로 저장된 경우
+    processed = processed.replace(/%%/g, '%25%');
+    
+    // 끝에 잘린 인코딩 제거 (예: ...%EB%8B%A4%EC%9D%B4%EC%96%B4% → 끝의 % 제거)
+    processed = processed.replace(/%[0-9A-Fa-f]?$/, '');
+    
+    return decodeURIComponent(processed);
+  } catch (e) {
+    // 디코딩 실패 시 원본 반환
+    return name;
+  }
+}
+
+/**
  * 잘린/변형된 광고명을 정상 메타 광고명으로 매핑
+ * 
+ * FIX (2026-01-29): 매칭 로직 개선
+ * - (중지) 접두사 제거 후 비교
+ * - 플러스(+) ↔ 공백 변환 후 비교
+ * - URL 인코딩된 값 디코딩 후 비교
+ * 
  * @param {string} truncatedName - 잘린/변형된 광고명
  * @param {string[]} metaAdNames - 메타 광고명 목록 (옵션, 없으면 자동 조회)
  * @returns {Promise<string|null>} - 매핑된 정상 광고명 또는 null
@@ -127,23 +173,124 @@ async function mapToMetaAdName(truncatedName, metaAdNames = null) {
     return null;
   }
   
-  // 3. 접두사 매칭 (잘린 광고명이 정상 광고명의 시작 부분과 일치)
+  // 3. URL 디코딩 후 일치 확인
+  const decodedName = tryDecodeURIComponent(truncatedName);
+  if (decodedName !== truncatedName) {
+    // 디코딩 성공 시 디코딩된 이름으로 재귀 호출
+    const decodedMatch = await mapToMetaAdName(decodedName, adNames);
+    if (decodedMatch) return decodedMatch;
+  }
+  
+  // 4. 플러스(+) ↔ 공백 변환 후 비교
+  const normalizedInput = normalizeAdName(truncatedName);
+  for (const metaName of adNames) {
+    const normalizedMeta = normalizeAdName(metaName);
+    if (normalizedInput === normalizedMeta) {
+      return metaName;
+    }
+  }
+  
+  // 5. (중지) 접두사 제거 후 비교
+  for (const metaName of adNames) {
+    // Meta 광고명에서 (중지) 제거
+    if (metaName.startsWith('(중지)')) {
+      const withoutPrefix = metaName.substring(4); // '(중지)' 는 4글자
+      // 정확 일치
+      if (truncatedName === withoutPrefix) {
+        return metaName;
+      }
+      // 정규화 후 일치
+      if (normalizeAdName(truncatedName) === normalizeAdName(withoutPrefix)) {
+        return metaName;
+      }
+    }
+  }
+  
+  // 6. 접두사 매칭 (잘린 광고명이 정상 광고명의 시작 부분과 일치)
   // 최소 13자 이상이어야 의미있는 매칭
   if (truncatedName.length >= 13) {
     for (const metaName of adNames) {
       if (metaName.startsWith(truncatedName)) {
         return metaName;
       }
+      // 정규화 후 접두사 매칭
+      if (normalizeAdName(metaName).startsWith(normalizedInput)) {
+        return metaName;
+      }
+      // (중지) 제거 후 접두사 매칭
+      if (metaName.startsWith('(중지)')) {
+        const withoutPrefix = metaName.substring(4);
+        if (withoutPrefix.startsWith(truncatedName)) {
+          return metaName;
+        }
+        if (normalizeAdName(withoutPrefix).startsWith(normalizedInput)) {
+          return metaName;
+        }
+      }
     }
   }
   
-  // 4. 공백 제거 후 비교 (최소 30자 이상)
+  // 7. 공백 제거 후 비교 (최소 30자 이상)
   if (truncatedName.length >= 30) {
     const noSpaceTruncated = truncatedName.replace(/\s+/g, '');
     for (const metaName of adNames) {
       const noSpaceMeta = metaName.replace(/\s+/g, '');
       if (noSpaceMeta.startsWith(noSpaceTruncated)) {
         return metaName;
+      }
+    }
+  }
+  
+  // 8. (패키지 수정) 접미사 제거 후 비교
+  // FIX (2026-01-29): UTM creative_name에 붙은 "(패키지 수정)" 접미사 처리
+  if (truncatedName.includes('(패키지 수정)')) {
+    const withoutPkgSuffix = truncatedName.replace(/\s*\(패키지 수정\)\s*$/, '').trim();
+    if (withoutPkgSuffix !== truncatedName) {
+      const pkgMatch = await mapToMetaAdName(withoutPkgSuffix, adNames);
+      if (pkgMatch) {
+        return pkgMatch;
+      }
+    }
+  }
+  
+  // 9. "- 사본" 접미사 제거 후 비교
+  // FIX (2026-01-29): UTM creative_name에 붙은 "- 사본" 접미사 처리
+  if (truncatedName.includes('- 사본')) {
+    const withoutCopySuffix = truncatedName.replace(/\s*-\s*사본\s*$/, '').trim();
+    if (withoutCopySuffix !== truncatedName) {
+      const copyMatch = await mapToMetaAdName(withoutCopySuffix, adNames);
+      if (copyMatch) {
+        return copyMatch;
+      }
+      
+      // "- 사본" 제거 후에도 매칭 안 되면, 숫자 변형도 시도 (예: 글램미홍지윤1 → 글램미홍지윤)
+      // 패턴: 이름 끝에 붙은 숫자 제거 (예: _글램미홍지윤1_250925 → _글램미홍지윤_250925)
+      const withoutTrailingNum = withoutCopySuffix.replace(/(\d+)_(\d{6})$/, (match, num, date) => {
+        // 숫자가 날짜 앞에 있고, 앞에 글자가 있는 경우에만 제거
+        return '_' + date;
+      });
+      if (withoutTrailingNum !== withoutCopySuffix) {
+        const numMatch = await mapToMetaAdName(withoutTrailingNum, adNames);
+        if (numMatch) {
+          return numMatch;
+        }
+      }
+    }
+  }
+  
+  // 10. 날짜 코드의 마이너 버전 변형 매칭 (예: 241216-02 → 241216-01)
+  // FIX (2026-01-29): 날짜 코드에서 -XX 부분을 변형하여 매칭 시도
+  const dateCodeMatch = truncatedName.match(/\((\d{6})-(\d{2})\)/);
+  if (dateCodeMatch) {
+    const [fullMatch, dateCode, versionNum] = dateCodeMatch;
+    // 버전 번호를 01~05까지 시도
+    for (let v = 1; v <= 5; v++) {
+      if (v === parseInt(versionNum, 10)) continue; // 현재 버전은 스킵
+      const altVersion = String(v).padStart(2, '0');
+      const altName = truncatedName.replace(`(${dateCode}-${versionNum})`, `(${dateCode}-${altVersion})`);
+      const versionMatch = await mapToMetaAdName(altName, adNames);
+      if (versionMatch) {
+        return versionMatch;
       }
     }
   }

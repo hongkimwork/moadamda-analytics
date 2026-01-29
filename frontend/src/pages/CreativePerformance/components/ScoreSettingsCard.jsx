@@ -3,7 +3,7 @@
 // ============================================================================
 
 import React from 'react';
-import { Settings, BarChart2, TrendingUp, ChevronRight } from 'lucide-react';
+import { Settings, TrendingUp, ChevronRight } from 'lucide-react';
 
 /**
  * 모수 평가 기준 설정 버튼/카드
@@ -26,10 +26,7 @@ function ScoreSettingsCard({ settings, onClick }) {
     );
   }
 
-  // 설정됨 상태: 요약 카드
-  const isRelative = settings.evaluation_type === 'relative';
-  const isPercentile = isRelative && settings.relative_mode === 'percentile';
-  
+  // 설정됨 상태: 요약 카드 (절대평가 전용)
   // 지표 정의 (enabled_metrics 기반 동적 표시)
   const metricLabels = {
     scroll: { label: '스크롤', field: 'weight_scroll' },
@@ -49,16 +46,11 @@ function ScoreSettingsCard({ settings, onClick }) {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <div className={`p-1.5 rounded-md ${isRelative ? 'bg-blue-100' : 'bg-green-100'}`}>
-              {isRelative ? (
-                <BarChart2 size={16} className="text-blue-600" />
-              ) : (
-                <TrendingUp size={16} className="text-green-600" />
-              )}
+            <div className="p-1.5 rounded-md bg-green-100">
+              <TrendingUp size={16} className="text-green-600" />
             </div>
             <span className="text-sm font-bold text-gray-800 whitespace-nowrap">
-              {isRelative ? '상대평가' : '절대평가'}
-              {isPercentile && <span className="ml-1 text-[10px] text-blue-500 font-normal">(백분위)</span>}
+              절대평가
             </span>
           </div>
           

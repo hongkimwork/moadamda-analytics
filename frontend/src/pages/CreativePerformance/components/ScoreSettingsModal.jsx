@@ -36,37 +36,27 @@ const MAX_METRICS = 5;
 
 // 지표 정의
 const METRIC_DEFINITIONS = [
-  { key: 'scroll', field: 'weight_scroll', configField: 'scroll_config', label: '평균 스크롤', icon: <MousePointerClick size={16} />, unit: { relative: '%', absolute: 'px' } },
-  { key: 'pv', field: 'weight_pv', configField: 'pv_config', label: '평균 PV', icon: <Eye size={16} />, unit: { relative: '%', absolute: '개' } },
-  { key: 'duration', field: 'weight_duration', configField: 'duration_config', label: '평균 체류시간', icon: <Clock size={16} />, unit: { relative: '%', absolute: '초' } },
-  { key: 'view', field: 'weight_view', configField: 'view_config', label: 'View', icon: <BarChart2 size={16} />, unit: { relative: '%', absolute: '회' } },
-  { key: 'uv', field: 'weight_uv', configField: 'uv_config', label: 'UV', icon: <TrendingUp size={16} />, unit: { relative: '%', absolute: '명' } }
+  { key: 'scroll', field: 'weight_scroll', configField: 'scroll_config', label: '평균 스크롤', icon: <MousePointerClick size={16} />, unit: 'px' },
+  { key: 'pv', field: 'weight_pv', configField: 'pv_config', label: '평균 PV', icon: <Eye size={16} />, unit: '개' },
+  { key: 'duration', field: 'weight_duration', configField: 'duration_config', label: '평균 체류시간', icon: <Clock size={16} />, unit: '초' },
+  { key: 'view', field: 'weight_view', configField: 'view_config', label: 'View', icon: <BarChart2 size={16} />, unit: '회' },
+  { key: 'uv', field: 'weight_uv', configField: 'uv_config', label: 'UV', icon: <TrendingUp size={16} />, unit: '명' }
 ];
 
-// 기본 설정값
+// 기본 설정값 (절대평가 전용)
 const DEFAULT_SETTINGS = {
-  evaluation_type: null,
-  relative_mode: 'range', // 'range' (구간 점수) 또는 'percentile' (백분위)
+  evaluation_type: 'absolute',
   weight_scroll: 30,
   weight_pv: 35,
   weight_duration: 35,
   weight_view: 0,
   weight_uv: 0,
-  scroll_config: { boundaries: [10, 30, 60], scores: [100, 80, 50, 20] },
-  pv_config: { boundaries: [10, 30, 60], scores: [100, 80, 50, 20] },
-  duration_config: { boundaries: [10, 30, 60], scores: [100, 80, 50, 20] },
-  view_config: { boundaries: [10, 30, 60], scores: [100, 80, 50, 20] },
-  uv_config: { boundaries: [10, 30, 60], scores: [100, 80, 50, 20] },
-  enabled_metrics: ['scroll', 'pv', 'duration']
-};
-
-// 절대평가 기본 경계값
-const ABSOLUTE_DEFAULTS = {
   scroll_config: { boundaries: [3000, 1500, 500], scores: [100, 80, 50, 20] },
   pv_config: { boundaries: [5, 3, 2], scores: [100, 80, 50, 20] },
   duration_config: { boundaries: [120, 60, 30], scores: [100, 80, 50, 20] },
   view_config: { boundaries: [1000, 500, 100], scores: [100, 80, 50, 20] },
-  uv_config: { boundaries: [500, 200, 50], scores: [100, 80, 50, 20] }
+  uv_config: { boundaries: [500, 200, 50], scores: [100, 80, 50, 20] },
+  enabled_metrics: ['scroll', 'pv', 'duration']
 };
 
 /**
@@ -85,11 +75,7 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
     if (visible) {
       if (currentSettings) {
         // 기존 설정이 있으면 확인 모드로 시작
-        // relative_mode가 없는 기존 데이터를 위해 기본값 'range' 설정
-        setSettings({
-          ...currentSettings,
-          relative_mode: currentSettings.relative_mode || 'range'
-        });
+        setSettings(currentSettings);
         setCurrentStep(2);
         setIsViewMode(true);
       } else {
@@ -103,25 +89,12 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
     }
   }, [visible, currentSettings]);
 
-  // 평가 방식 선택
-  const handleSelectEvaluationType = (type) => {
-    if (type === 'absolute') {
-      setSettings({
-        ...settings,
-        evaluation_type: type,
-        ...ABSOLUTE_DEFAULTS
-      });
-    } else {
-      setSettings({
-        ...settings,
-        evaluation_type: type,
-        scroll_config: { boundaries: [10, 30, 60], scores: [100, 80, 50, 20] },
-        pv_config: { boundaries: [10, 30, 60], scores: [100, 80, 50, 20] },
-        duration_config: { boundaries: [10, 30, 60], scores: [100, 80, 50, 20] },
-        view_config: { boundaries: [10, 30, 60], scores: [100, 80, 50, 20] },
-        uv_config: { boundaries: [10, 30, 60], scores: [100, 80, 50, 20] }
-      });
-    }
+  // 평가 방식 선택 (절대평가 전용)
+  const handleSelectEvaluationType = () => {
+    setSettings({
+      ...settings,
+      evaluation_type: 'absolute'
+    });
   };
 
   // 지표 활성화/비활성화 토글
@@ -199,18 +172,9 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
         return prev;
       }
 
-      // 새 경계값 계산 (마지막 경계값의 절반 또는 적절한 기본값)
-      const isRelative = prev.evaluation_type === 'relative';
+      // 새 경계값 계산 (마지막 경계값의 절반)
       const lastBoundary = config.boundaries[currentCount - 1];
-      let newBoundary;
-      
-      if (isRelative) {
-        // 상대평가: 마지막 값 + 10 (최대 99)
-        newBoundary = Math.min(lastBoundary + 10, 99);
-      } else {
-        // 절대평가: 마지막 값의 절반
-        newBoundary = Math.max(Math.floor(lastBoundary / 2), 1);
-      }
+      const newBoundary = Math.max(Math.floor(lastBoundary / 2), 1);
 
       // 새 점수 계산 (마지막 점수 - 10)
       const lastScore = config.scores[currentCount - 1];
@@ -284,69 +248,53 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
       newErrors.push(`선택된 지표의 가중치 합계가 ${weightSum}%입니다. 100%가 되어야 합니다.`);
     }
 
-    // 백분위 방식 여부 확인 (백분위 방식이면 구간 설정 검사 스킵)
-    const isPercentileMode = settings.evaluation_type === 'relative' && settings.relative_mode === 'percentile';
+    // 활성화된 지표의 구간 설정 검사
+    enabledMetrics.forEach(metricKey => {
+      const metricDef = METRIC_DEFINITIONS.find(m => m.key === metricKey);
+      if (!metricDef) return;
 
-    // 활성화된 지표의 구간 설정 검사 (백분위 방식이면 스킵)
-    if (!isPercentileMode) {
-      enabledMetrics.forEach(metricKey => {
-        const metricDef = METRIC_DEFINITIONS.find(m => m.key === metricKey);
-        if (!metricDef) return;
+      const config = settings[metricDef.configField];
+      const name = metricDef.label;
+      
+      // 최소 구간 개수 검사
+      if (!config || !config.boundaries || config.boundaries.length < MIN_BOUNDARIES) {
+        newErrors.push(`${name}에 최소 ${MIN_BOUNDARIES}개의 구간이 필요합니다.`);
+        return;
+      }
 
-        const config = settings[metricDef.configField];
-        const name = metricDef.label;
-        
-        // 최소 구간 개수 검사
-        if (!config || !config.boundaries || config.boundaries.length < MIN_BOUNDARIES) {
-          newErrors.push(`${name}에 최소 ${MIN_BOUNDARIES}개의 구간이 필요합니다.`);
-          return;
-        }
+      // 최대 구간 개수 검사
+      if (config.boundaries.length > MAX_BOUNDARIES) {
+        newErrors.push(`${name}은 최대 ${MAX_BOUNDARIES}개 구간까지만 가능합니다.`);
+        return;
+      }
 
-        // 최대 구간 개수 검사
-        if (config.boundaries.length > MAX_BOUNDARIES) {
-          newErrors.push(`${name}은 최대 ${MAX_BOUNDARIES}개 구간까지만 가능합니다.`);
-          return;
+      // 점수 개수 검사 (경계값 + 1 = 점수 개수)
+      if (config.scores.length !== config.boundaries.length + 1) {
+        newErrors.push(`${name}의 점수 개수가 올바르지 않습니다.`);
+        return;
+      }
+      
+      // 경계값 순서 검사 (절대평가: 내림차순)
+      for (let i = 0; i < config.boundaries.length - 1; i++) {
+        if (config.boundaries[i] <= config.boundaries[i + 1]) {
+          newErrors.push(`${name} 경계값은 순서대로 작아져야 합니다.`);
+          break;
         }
+      }
 
-        // 점수 개수 검사 (경계값 + 1 = 점수 개수)
-        if (config.scores.length !== config.boundaries.length + 1) {
-          newErrors.push(`${name}의 점수 개수가 올바르지 않습니다.`);
-          return;
+      // 점수 순서 검사 (내림차순)
+      for (let i = 0; i < config.scores.length - 1; i++) {
+        if (config.scores[i] <= config.scores[i + 1]) {
+          newErrors.push(`${name} 점수는 순서대로 작아져야 합니다.`);
+          break;
         }
-        
-        // 경계값 순서 검사
-        if (settings.evaluation_type === 'relative') {
-          // 상대평가: 오름차순 (10 < 30 < 60)
-          for (let i = 0; i < config.boundaries.length - 1; i++) {
-            if (config.boundaries[i] >= config.boundaries[i + 1]) {
-              newErrors.push(`${name} 경계값은 순서대로 커야 합니다.`);
-              break;
-            }
-          }
-        } else {
-          // 절대평가: 내림차순 (120 > 60 > 30)
-          for (let i = 0; i < config.boundaries.length - 1; i++) {
-            if (config.boundaries[i] <= config.boundaries[i + 1]) {
-              newErrors.push(`${name} 경계값은 순서대로 작아져야 합니다.`);
-              break;
-            }
-          }
-        }
+      }
 
-        // 점수 순서 검사 (내림차순)
-        for (let i = 0; i < config.scores.length - 1; i++) {
-          if (config.scores[i] <= config.scores[i + 1]) {
-            newErrors.push(`${name} 점수는 순서대로 작아져야 합니다.`);
-            break;
-          }
-        }
-
-        // 최고 점수 경고
-        if (config.scores[0] !== 100) {
-          newWarnings.push(`${name}의 최고 점수가 ${config.scores[0]}점입니다.`);
-        }
-      });
-    }
+      // 최고 점수 경고
+      if (config.scores[0] !== 100) {
+        newWarnings.push(`${name}의 최고 점수가 ${config.scores[0]}점입니다.`);
+      }
+    });
 
     setErrors(newErrors);
     setWarnings(newWarnings);
@@ -424,135 +372,37 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
     setIsViewMode(false);
   };
 
-  // 1단계: 평가 방식 선택
+  // 1단계: 평가 방식 안내
   const renderStep1 = () => (
     <div className="py-8">
       <div className="text-center mb-8">
         <h3 className="text-lg font-semibold text-gray-800 m-0">
-          어떤 방식으로 점수를 평가할까요?
+          절대평가 방식으로 점수를 평가합니다
         </h3>
         <p className="text-gray-500 mt-2 text-sm">
-          광고 성과를 판단할 기준을 선택해주세요.
+          내가 정한 목표 수치를 기준으로 광고 성과를 판단합니다.
         </p>
       </div>
       
-      <div className="flex gap-6 justify-center">
-        {/* 상대평가 카드 */}
-        <div
-          onClick={() => handleSelectEvaluationType('relative')}
-          className={`
-            w-[270px] p-6 rounded-xl cursor-pointer text-center transition-all duration-200 border-2 flex flex-col items-center justify-center
-            ${settings.evaluation_type === 'relative' 
-              ? 'border-blue-500 bg-blue-50 shadow-md transform -translate-y-1' 
-              : 'border-gray-200 bg-white hover:border-blue-300 hover:shadow-sm'}
-          `}
-        >
-          <div className={`
-            w-16 h-16 mb-4 rounded-full flex items-center justify-center
-            ${settings.evaluation_type === 'relative' ? 'bg-blue-100' : 'bg-gray-100'}
-          `}>
-            <BarChart2 
-              size={32} 
-              className={settings.evaluation_type === 'relative' ? 'text-blue-600' : 'text-gray-400'} 
-            />
-          </div>
-          <div className="text-lg font-bold text-gray-800 mb-2">상대평가</div>
-          <div className="text-sm text-gray-500 leading-relaxed break-keep">
-            다른 광고들과 비교해<br />
-            <span className="font-medium text-blue-600">순위(백분위)</span>로 점수를 매깁니다.
-          </div>
-        </div>
-
+      <div className="flex justify-center">
         {/* 절대평가 카드 */}
         <div
-          onClick={() => handleSelectEvaluationType('absolute')}
-          className={`
-            w-[270px] p-6 rounded-xl cursor-pointer text-center transition-all duration-200 border-2 flex flex-col items-center justify-center
-            ${settings.evaluation_type === 'absolute' 
-              ? 'border-green-500 bg-green-50 shadow-md transform -translate-y-1' 
-              : 'border-gray-200 bg-white hover:border-green-300 hover:shadow-sm'}
-          `}
+          onClick={handleSelectEvaluationType}
+          className="w-[320px] p-6 rounded-xl cursor-pointer text-center transition-all duration-200 border-2 flex flex-col items-center justify-center border-green-500 bg-green-50 shadow-md"
         >
-          <div className={`
-            w-16 h-16 mb-4 rounded-full flex items-center justify-center
-            ${settings.evaluation_type === 'absolute' ? 'bg-green-100' : 'bg-gray-100'}
-          `}>
-            <TrendingUp 
-              size={32} 
-              className={settings.evaluation_type === 'absolute' ? 'text-green-600' : 'text-gray-400'} 
-            />
+          <div className="w-16 h-16 mb-4 rounded-full flex items-center justify-center bg-green-100">
+            <TrendingUp size={32} className="text-green-600" />
           </div>
           <div className="text-lg font-bold text-gray-800 mb-2">절대평가</div>
           <div className="text-sm text-gray-500 leading-relaxed break-keep">
             내가 정한 <span className="font-medium text-green-600">목표 수치</span>를 기준으로<br />
             점수를 매깁니다.
           </div>
-        </div>
-      </div>
-
-      {/* 상대평가 세부 방식 선택 */}
-      {settings.evaluation_type === 'relative' && (
-        <div className="mt-8 max-w-[560px] mx-auto">
-          <div className="bg-blue-50 rounded-xl p-5 border border-blue-200">
-            <div className="text-sm font-semibold text-blue-800 mb-4 flex items-center gap-2">
-              <Settings size={16} />
-              상대평가 세부 방식 선택
-            </div>
-            <div className="flex flex-col gap-3">
-              {/* 구간 점수 방식 */}
-              <label 
-                className={`flex items-start gap-3 p-4 rounded-lg cursor-pointer transition-all border-2 ${
-                  settings.relative_mode === 'range' 
-                    ? 'bg-white border-blue-500 shadow-sm' 
-                    : 'bg-white/50 border-transparent hover:bg-white'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="relative_mode"
-                  value="range"
-                  checked={settings.relative_mode === 'range'}
-                  onChange={() => setSettings(prev => ({ ...prev, relative_mode: 'range' }))}
-                  className="mt-1 w-4 h-4 text-blue-600"
-                />
-                <div>
-                  <div className="font-medium text-gray-800">구간 점수 방식</div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    상위 10% → 100점, 상위 30% → 80점... (직접 구간과 점수 설정)
-                  </div>
-                </div>
-              </label>
-
-              {/* 백분위 방식 */}
-              <label 
-                className={`flex items-start gap-3 p-4 rounded-lg cursor-pointer transition-all border-2 ${
-                  settings.relative_mode === 'percentile' 
-                    ? 'bg-white border-blue-500 shadow-sm' 
-                    : 'bg-white/50 border-transparent hover:bg-white'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="relative_mode"
-                  value="percentile"
-                  checked={settings.relative_mode === 'percentile'}
-                  onChange={() => setSettings(prev => ({ ...prev, relative_mode: 'percentile' }))}
-                  className="mt-1 w-4 h-4 text-blue-600"
-                />
-                <div>
-                  <div className="font-medium text-gray-800">
-                    백분위 방식
-                    <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">추천</span>
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    상위 1% → 99점, 상위 50% → 50점 (순위에 따라 자동 계산)
-                  </div>
-                </div>
-              </label>
-            </div>
+          <div className="mt-4 text-xs text-green-600 bg-green-100 px-3 py-1.5 rounded-full">
+            클릭하여 다음 단계로 진행
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 
@@ -645,91 +495,39 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
         </div>
       </div>
 
-      {/* 구간 설정 또는 백분위 안내 */}
-      {settings.evaluation_type === 'relative' && settings.relative_mode === 'percentile' ? (
-        /* 백분위 방식 안내 */
-        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border border-blue-200 shadow-sm p-6">
-          <div className="flex items-center mb-4">
-            <div className="bg-blue-100 p-1.5 rounded-md mr-2">
-              <BarChart2 size={18} className="text-blue-600" />
+      {/* 구간 설정 */}
+      <div className="bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden">
+        <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50">
+          <div className="flex items-center">
+            <div className="bg-purple-100 p-1.5 rounded-md mr-2">
+              <BarChart2 size={18} className="text-purple-600" />
             </div>
-            <span className="text-base font-bold text-gray-800">백분위 점수 안내</span>
+            <span className="text-base font-bold text-gray-800">지표별 구간 상세 설정</span>
+            <span className="ml-2 text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">선택된 지표만</span>
           </div>
-          
-          <div className="bg-white rounded-lg p-4 border border-blue-100">
-            <div className="text-sm text-gray-600 mb-4">
-              백분위 방식은 순위에 따라 <span className="font-semibold text-blue-600">자동으로 점수가 계산</span>됩니다.
-              <br />별도의 구간 설정이 필요하지 않습니다.
+          <Tooltip title="수치가 얼마 이상이면 몇 점을 줄지 설정합니다.">
+            <div className="flex items-center gap-1 text-xs text-gray-500 cursor-help bg-white px-2 py-1 rounded border border-gray-200">
+              <Info size={14} />
+              <span>도움말</span>
             </div>
-            
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div className="flex justify-between items-center p-2 bg-blue-50 rounded">
-                <span className="text-gray-600">상위 1%</span>
-                <span className="font-bold text-blue-700">99점</span>
-              </div>
-              <div className="flex justify-between items-center p-2 bg-blue-50 rounded">
-                <span className="text-gray-600">상위 10%</span>
-                <span className="font-bold text-blue-700">90점</span>
-              </div>
-              <div className="flex justify-between items-center p-2 bg-blue-50 rounded">
-                <span className="text-gray-600">상위 25%</span>
-                <span className="font-bold text-blue-700">75점</span>
-              </div>
-              <div className="flex justify-between items-center p-2 bg-blue-50 rounded">
-                <span className="text-gray-600">상위 50%</span>
-                <span className="font-bold text-blue-700">50점</span>
-              </div>
-              <div className="flex justify-between items-center p-2 bg-gray-50 rounded">
-                <span className="text-gray-600">상위 75%</span>
-                <span className="font-bold text-gray-600">25점</span>
-              </div>
-              <div className="flex justify-between items-center p-2 bg-gray-50 rounded">
-                <span className="text-gray-600">하위 1%</span>
-                <span className="font-bold text-gray-600">1점</span>
-              </div>
-            </div>
-            
-            <div className="mt-4 text-xs text-gray-500 flex items-start gap-1.5">
-              <Info size={12} className="mt-0.5 flex-shrink-0" />
-              <span>공식: 백분위 점수 = (1 - 순위/전체 광고 수) × 100</span>
-            </div>
-          </div>
+          </Tooltip>
         </div>
-      ) : (
-        /* 구간 점수 방식 또는 절대평가 */
-        <div className="bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden">
-          <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50">
-            <div className="flex items-center">
-              <div className="bg-purple-100 p-1.5 rounded-md mr-2">
-                <BarChart2 size={18} className="text-purple-600" />
-              </div>
-              <span className="text-base font-bold text-gray-800">지표별 구간 상세 설정</span>
-              <span className="ml-2 text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">선택된 지표만</span>
-            </div>
-            <Tooltip title={settings.evaluation_type === 'relative' ? '상위 몇 %에 해당하면 몇 점을 줄지 설정합니다.' : '수치가 얼마 이상이면 몇 점을 줄지 설정합니다.'}>
-              <div className="flex items-center gap-1 text-xs text-gray-500 cursor-help bg-white px-2 py-1 rounded border border-gray-200">
-                <Info size={14} />
-                <span>도움말</span>
-              </div>
-            </Tooltip>
-          </div>
 
-          <Collapse 
-            defaultActiveKey={enabledMetrics.length > 0 ? [METRIC_DEFINITIONS.find(m => m.key === enabledMetrics[0])?.configField] : []} 
-            ghost 
-            expandIcon={({ isActive }) => <ChevronRight size={16} className={`text-gray-400 transition-transform ${isActive ? 'rotate-90' : ''}`} />}
-            className="bg-white"
-          >
-            {METRIC_DEFINITIONS
-              .filter(m => enabledMetrics.includes(m.key))
-              .map(({ key, configField, label, unit }) => (
-                <Panel header={<span className="font-medium text-gray-700">{label}</span>} key={configField} className="border-b border-gray-50 last:border-0">
-                  {renderConfigPanel(configField, settings.evaluation_type === 'relative' ? unit.relative : unit.absolute)}
-                </Panel>
-              ))}
-          </Collapse>
-        </div>
-      )}
+        <Collapse 
+          defaultActiveKey={enabledMetrics.length > 0 ? [METRIC_DEFINITIONS.find(m => m.key === enabledMetrics[0])?.configField] : []} 
+          ghost 
+          expandIcon={({ isActive }) => <ChevronRight size={16} className={`text-gray-400 transition-transform ${isActive ? 'rotate-90' : ''}`} />}
+          className="bg-white"
+        >
+          {METRIC_DEFINITIONS
+            .filter(m => enabledMetrics.includes(m.key))
+            .map(({ key, configField, label, unit }) => (
+              <Panel header={<span className="font-medium text-gray-700">{label}</span>} key={configField} className="border-b border-gray-50 last:border-0">
+                {renderConfigPanel(configField, unit)}
+              </Panel>
+            ))}
+        </Collapse>
+      </div>
 
       {/* 에러/경고 표시 */}
       {errors.length > 0 && (
@@ -764,10 +562,9 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
   );
   };
 
-  // 구간 설정 패널
+  // 구간 설정 패널 (절대평가 전용)
   const renderConfigPanel = (configField, unit) => {
     const config = settings[configField];
-    const isRelative = settings.evaluation_type === 'relative';
     const boundaryCount = config.boundaries.length;
     const canAdd = boundaryCount < MAX_BOUNDARIES;
     const canRemove = boundaryCount > MIN_BOUNDARIES;
@@ -784,7 +581,7 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
     return (
       <div className="py-2 px-2">
         <div className="grid grid-cols-12 gap-4 mb-2 text-xs font-medium text-gray-500 border-b border-gray-100 pb-2">
-          <div className="col-span-7 pl-2">{isRelative ? '순위 구간 (상위 %)' : `수치 구간 (${unit})`}</div>
+          <div className="col-span-7 pl-2">수치 구간 ({unit})</div>
           <div className="col-span-3 text-center">부여 점수</div>
           <div className="col-span-2 text-center">삭제</div>
         </div>
@@ -797,31 +594,16 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white ${getBadgeColor(idx)}`}>
                   {idx + 1}
                 </div>
-                {isRelative ? (
-                  <div className="flex items-center gap-2 text-sm text-gray-700">
-                    <span>상위</span>
-                    <InputNumber 
-                      size="small" 
-                      className="w-16" 
-                      min={1} 
-                      max={99} 
-                      value={boundary} 
-                      onChange={(v) => handleConfigChange(configField, 'boundaries', idx, v)} 
-                    />
-                    <span>% 이내</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 text-sm text-gray-700">
-                    <InputNumber 
-                      size="small" 
-                      className="w-20" 
-                      min={1} 
-                      value={boundary} 
-                      onChange={(v) => handleConfigChange(configField, 'boundaries', idx, v)} 
-                    />
-                    <span>{unit} 이상</span>
-                  </div>
-                )}
+                <div className="flex items-center gap-2 text-sm text-gray-700">
+                  <InputNumber 
+                    size="small" 
+                    className="w-20" 
+                    min={1} 
+                    value={boundary} 
+                    onChange={(v) => handleConfigChange(configField, 'boundaries', idx, v)} 
+                  />
+                  <span>{unit} 이상</span>
+                </div>
               </div>
               <div className="col-span-3 flex items-center justify-center gap-1">
                 <InputNumber 
@@ -920,25 +702,8 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
             <div>
               <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">평가 방식</div>
               <div className="flex items-center gap-2 text-lg font-bold text-gray-800">
-                {settings.evaluation_type === 'relative' ? (
-                  <><BarChart2 className="text-blue-500" /> 상대평가</>
-                ) : (
-                  <><TrendingUp className="text-green-500" /> 절대평가</>
-                )}
+                <TrendingUp className="text-green-500" /> 절대평가
               </div>
-              {settings.evaluation_type === 'relative' && (
-                <div className="mt-1 text-sm text-gray-500">
-                  {settings.relative_mode === 'percentile' ? (
-                    <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-600 px-2 py-0.5 rounded">
-                      백분위 방식
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
-                      구간 점수 방식
-                    </span>
-                  )}
-                </div>
-              )}
             </div>
             
             <div className="flex-1">
@@ -956,136 +721,66 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
           </div>
         </div>
 
-        {/* 백분위 방식일 때와 구간 점수 방식일 때 다르게 표시 */}
-        {settings.evaluation_type === 'relative' && settings.relative_mode === 'percentile' ? (
-          /* 백분위 방식 - 점수 계산 방식 안내 */
-          <div>
-            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">점수 계산 방식</div>
-            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border border-blue-200 p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="bg-blue-100 p-1.5 rounded-md">
-                  <BarChart2 size={16} className="text-blue-600" />
-                </div>
-                <span className="font-bold text-gray-800">백분위 점수</span>
-                <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">자동 계산</span>
-              </div>
+        {/* 구간별 점수 상세 */}
+        <div>
+          <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">구간별 점수 상세</div>
+          <div className="flex flex-col gap-3">
+            {METRIC_DEFINITIONS
+              .filter(m => enabledMetrics.includes(m.key))
+              .map(({ key, configField, label, icon, unit }) => {
+                const config = settings[configField];
+                const boundaryCount = config?.boundaries?.length || 0;
               
-              <div className="bg-white rounded-lg p-4 border border-blue-100 mb-4">
-                <div className="text-sm text-gray-600 mb-3">
-                  순위에 따라 <span className="font-semibold text-blue-600">자동으로 점수가 계산</span>됩니다.
-                </div>
-                <div className="bg-gray-50 rounded p-3 text-center">
-                  <code className="text-sm text-gray-700">백분위 점수 = (1 - 순위/전체 광고 수) × 100</code>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-3 gap-2 text-sm">
-                <div className="flex justify-between items-center p-2 bg-blue-50 rounded">
-                  <span className="text-gray-600">상위 1%</span>
-                  <span className="font-bold text-blue-700">99점</span>
-                </div>
-                <div className="flex justify-between items-center p-2 bg-blue-50 rounded">
-                  <span className="text-gray-600">상위 10%</span>
-                  <span className="font-bold text-blue-700">90점</span>
-                </div>
-                <div className="flex justify-between items-center p-2 bg-blue-50 rounded">
-                  <span className="text-gray-600">상위 25%</span>
-                  <span className="font-bold text-blue-700">75점</span>
-                </div>
-                <div className="flex justify-between items-center p-2 bg-gray-50 rounded">
-                  <span className="text-gray-600">상위 50%</span>
-                  <span className="font-bold text-gray-600">50점</span>
-                </div>
-                <div className="flex justify-between items-center p-2 bg-gray-50 rounded">
-                  <span className="text-gray-600">상위 75%</span>
-                  <span className="font-bold text-gray-600">25점</span>
-                </div>
-                <div className="flex justify-between items-center p-2 bg-gray-50 rounded">
-                  <span className="text-gray-600">하위 1%</span>
-                  <span className="font-bold text-gray-600">1점</span>
-                </div>
-              </div>
-              
-              <div className="mt-4 text-xs text-gray-500 flex items-start gap-1.5">
-                <Info size={12} className="mt-0.5 flex-shrink-0" />
-                <span>모든 지표에 동일한 백분위 공식이 적용됩니다. 각 지표별 가중치에 따라 최종 점수가 계산됩니다.</span>
-              </div>
-            </div>
-          </div>
-        ) : (
-          /* 구간 점수 방식 또는 절대평가 - 기존 구간 상세 표시 */
-          <div>
-            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">구간별 점수 상세</div>
-            <div className="flex flex-col gap-3">
-              {METRIC_DEFINITIONS
-                .filter(m => enabledMetrics.includes(m.key))
-                .map(({ key, configField, label, icon, unit }) => {
-                  const config = settings[configField];
-                  const isRelative = settings.evaluation_type === 'relative';
-                  const boundaryCount = config?.boundaries?.length || 0;
-                  const unitStr = isRelative ? unit.relative : unit.absolute;
-                
-                  // 동적 구간 텍스트 생성 헬퍼
-                  const getRangeText = (index) => {
-                    if (!config || !config.boundaries) return '';
-                    if (index >= boundaryCount) {
-                      // 그 외 나머지
-                      if (isRelative) {
-                        return `상위 ${parseInt(config.boundaries[boundaryCount - 1]) + 1} ~ 100%`;
-                      } else {
-                        return `${config.boundaries[boundaryCount - 1]}${unitStr} 미만`;
-                      }
-                    }
-                    
-                    if (isRelative) {
-                      // 상대평가 (오름차순)
-                      if (index === 0) return `상위 1 ~ ${config.boundaries[0]}%`;
-                      return `상위 ${parseInt(config.boundaries[index - 1]) + 1} ~ ${config.boundaries[index]}%`;
-                    } else {
-                      // 절대평가 (내림차순)
-                      if (index === 0) return `${config.boundaries[0]}${unitStr} 이상`;
-                      return `${config.boundaries[index]} ~ ${config.boundaries[index - 1]} 미만`;
-                    }
-                  };
+                // 동적 구간 텍스트 생성 헬퍼 (절대평가 전용)
+                const getRangeText = (index) => {
+                  if (!config || !config.boundaries) return '';
+                  if (index >= boundaryCount) {
+                    // 그 외 나머지
+                    return `${config.boundaries[boundaryCount - 1]}${unit} 미만`;
+                  }
+                  
+                  // 절대평가 (내림차순)
+                  if (index === 0) return `${config.boundaries[0]}${unit} 이상`;
+                  return `${config.boundaries[index]} ~ ${config.boundaries[index - 1]} 미만`;
+                };
 
-                  if (!config) return null;
+                if (!config) return null;
 
-                  return (
-                    <div key={configField} className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm flex flex-col">
-                      <div className="bg-gray-50 px-4 py-2 border-b border-gray-100 font-bold text-gray-700 text-sm flex justify-between items-center">
-                        <span className="flex items-center gap-1.5">
-                          <span className={metricIconColors[key]}>{icon}</span>
-                          {label}
-                          <span className="text-xs font-normal text-gray-400">({boundaryCount}개 구간)</span>
-                        </span>
-                      </div>
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="bg-gray-50/50 text-gray-500 text-xs border-b border-gray-100">
-                            <th className="px-4 py-2 text-left font-medium w-2/3 whitespace-nowrap">실제 구간</th>
-                            <th className="px-4 py-2 text-center font-medium w-1/3 border-l border-gray-100 whitespace-nowrap">점수</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-50">
-                          {/* 동적 구간 + 그 외 나머지 */}
-                          {[...Array(boundaryCount + 1)].map((_, idx) => (
-                            <tr key={idx} className={`hover:bg-gray-50/50 transition-colors ${idx === boundaryCount ? 'bg-gray-50' : ''}`}>
-                              <td className="px-4 py-2 text-gray-600 text-xs whitespace-nowrap">
-                                {idx === boundaryCount ? <span className="font-medium">그 외 나머지</span> : getRangeText(idx)}
-                              </td>
-                              <td className="px-4 py-2 text-center font-bold text-gray-800 border-l border-gray-50 whitespace-nowrap">
-                                {config.scores[idx]}점
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                return (
+                  <div key={configField} className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm flex flex-col">
+                    <div className="bg-gray-50 px-4 py-2 border-b border-gray-100 font-bold text-gray-700 text-sm flex justify-between items-center">
+                      <span className="flex items-center gap-1.5">
+                        <span className={metricIconColors[key]}>{icon}</span>
+                        {label}
+                        <span className="text-xs font-normal text-gray-400">({boundaryCount}개 구간)</span>
+                      </span>
                     </div>
-                  );
-                })}
-            </div>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-gray-50/50 text-gray-500 text-xs border-b border-gray-100">
+                          <th className="px-4 py-2 text-left font-medium w-2/3 whitespace-nowrap">실제 구간</th>
+                          <th className="px-4 py-2 text-center font-medium w-1/3 border-l border-gray-100 whitespace-nowrap">점수</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {/* 동적 구간 + 그 외 나머지 */}
+                        {[...Array(boundaryCount + 1)].map((_, idx) => (
+                          <tr key={idx} className={`hover:bg-gray-50/50 transition-colors ${idx === boundaryCount ? 'bg-gray-50' : ''}`}>
+                            <td className="px-4 py-2 text-gray-600 text-xs whitespace-nowrap">
+                              {idx === boundaryCount ? <span className="font-medium">그 외 나머지</span> : getRangeText(idx)}
+                            </td>
+                            <td className="px-4 py-2 text-center font-bold text-gray-800 border-l border-gray-50 whitespace-nowrap">
+                              {config.scores[idx]}점
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })}
           </div>
-        )}
+        </div>
       </div>
 
       {warnings.length > 0 && (

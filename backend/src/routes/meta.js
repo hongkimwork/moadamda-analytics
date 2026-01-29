@@ -195,6 +195,86 @@ router.get('/meta/ad/:adId/media', async (req, res) => {
 });
 
 /**
+ * GET /api/meta/ad-by-name
+ * 광고 이름으로 광고 ID 및 미디어 정보 조회
+ * - creative_name을 Meta 광고명으로 매핑 후 미디어 정보 반환
+ */
+router.get('/meta/ad-by-name', async (req, res) => {
+  try {
+    const { name } = req.query;
+    
+    if (!name) {
+      return res.status(400).json({
+        success: false,
+        error: 'Ad name is required'
+      });
+    }
+    
+    // 매핑 서비스 사용
+    const { mapToMetaAdName } = require('../services/creative/metaAdNameMapping');
+    
+    // 1. creative_name을 Meta 광고명으로 매핑
+    const metaAdName = await mapToMetaAdName(name);
+    
+    if (!metaAdName) {
+      return res.json({
+        success: false,
+        matched: false,
+        error: 'No matching Meta ad found',
+        originalName: name
+      });
+    }
+    
+    // 2. DB에서 직접 광고 ID 검색 (Meta API 호출 대신 - API 제한 회피)
+    const db = require('../utils/database');
+    const dbResult = await db.query(
+      'SELECT ad_id, name FROM meta_ads WHERE name = $1 LIMIT 1',
+      [metaAdName]
+    );
+    
+    if (dbResult.rows.length === 0) {
+      return res.json({
+        success: false,
+        matched: true,
+        metaAdName,
+        error: 'Ad found in mapping but not in DB',
+        originalName: name
+      });
+    }
+    
+    // DB에서 찾은 경우
+    const dbAd = dbResult.rows[0];
+    
+    let mediaDetails = null;
+    try {
+      mediaDetails = await metaService.getAdMediaDetails(dbAd.ad_id);
+    } catch (mediaError) {
+      // 미디어 조회 실패해도 기본 정보는 반환
+      console.log(`[Meta API] getAdMediaDetails failed for ${dbAd.ad_id}:`, mediaError.message);
+    }
+    
+    res.json({
+      success: true,
+      matched: true,
+      data: {
+        adId: dbAd.ad_id,
+        name: dbAd.name,
+        originalName: name,
+        thumbnailUrl: mediaDetails?.videoThumbnail || mediaDetails?.imageUrl || null,
+        isVideo: mediaDetails?.isVideo || false,
+        media: mediaDetails || null
+      }
+    });
+  } catch (error) {
+    console.error('[Meta API] getAdByName error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to find ad by name'
+    });
+  }
+});
+
+/**
  * GET /api/meta/ad/:adId/preview
  * 광고 미리보기 iframe URL 조회
  */
