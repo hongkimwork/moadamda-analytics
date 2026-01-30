@@ -1,3 +1,4 @@
+| 2026-01-30 | 사용자관리 기능 추가 | auth.js |
 | 2026-01-30 | 모수평가 프리셋 3분할 | ScoreSettingsModal.jsx |
 | 2026-01-30 | 이상치 필터 직접입력 | PerformanceFilters.jsx |
 | 2026-01-30 | 임의 매핑 로직 제거 | metaAdNameMapping.js |
@@ -12,4 +13,3 @@
 | 2026-01-22 | 성과 테이블 컬럼 수정 | PerformanceTable.jsx |
 | 2026-01-22 | 광고 소재 분석 개선 | index.jsx |
 | 2026-01-21 | 트래커 버전 업데이트 | VERSION.txt |
-| 2026-01-21 | 트래커 로직 개선 | tracker.js |
