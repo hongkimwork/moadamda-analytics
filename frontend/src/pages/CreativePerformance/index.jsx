@@ -221,6 +221,7 @@ function CreativePerformance() {
         onMaxScrollChange={setMaxScroll}
         scoreSettings={scoreSettings}
         onScoreSettingsClick={() => setScoreSettingsModalVisible(true)}
+        quickFilterSources={quickFilterSources}
       />
 
       {/* 에러 표시 */}

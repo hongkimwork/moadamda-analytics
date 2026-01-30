@@ -1,6 +1,6 @@
 import React, { useState, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { Layout, Menu, Spin, ConfigProvider } from 'antd';
+import { Layout, Menu, Spin, ConfigProvider, Dropdown, Avatar, Space, message, Form, Input, Button } from 'antd';
 import koKR from 'antd/locale/ko_KR';
 import { 
   ShoppingOutlined, 
@@ -15,12 +15,17 @@ import {
   ExperimentOutlined,
   BarChartOutlined,
   SettingOutlined,
-  AppstoreOutlined
+  AppstoreOutlined,
+  TeamOutlined,
+  LogoutOutlined,
+  KeyOutlined,
+  DownOutlined
 } from '@ant-design/icons';
 import { BarChart3 } from 'lucide-react';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ko';
 import './index.css';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 // dayjs 전역 로케일 설정
 dayjs.locale('ko');
@@ -40,8 +45,10 @@ const MyDashboard = lazy(() => import('./pages/MyDashboard/index'));
 const MetaInsights = lazy(() => import('./pages/MetaInsights/index'));
 const VisitorAnalysis = lazy(() => import('./pages/VisitorAnalysis/index'));
 const OurDataCompare = lazy(() => import('./pages/OurDataCompare/index'));
+const LoginPage = lazy(() => import('./pages/Login/index'));
+const UserManagement = lazy(() => import('./pages/UserManagement/index'));
 
-const { Sider, Content } = Layout;
+const { Sider, Content, Header } = Layout;
 
 // ============================================================================
 // 메인 레이아웃 컴포넌트
@@ -51,6 +58,7 @@ function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
+  const { user, logout, isAdmin } = useAuth();
 
   // 현재 경로에서 선택된 메뉴 키 계산
   const getSelectedKeys = () => {
@@ -61,11 +69,54 @@ function AppLayout() {
     if (path === '/my-dashboard') return ['my-dashboard'];
     if (path === '/meta-insights') return ['meta-insights'];
     if (path === '/page-mapping') return ['page-mapping'];
+    if (path === '/user-management') return ['user-management'];
     if (path.startsWith('/order/')) return ['orders'];
     if (path === '/' || path.startsWith('/order')) return ['orders'];
     if (path.startsWith('/data/')) return [path];
     return ['orders'];
   };
+
+  // 로그아웃 처리
+  const handleLogout = async () => {
+    try {
+      await logout();
+      message.success('로그아웃되었습니다.');
+    } catch (error) {
+      message.error('로그아웃 중 오류가 발생했습니다.');
+    }
+  };
+
+  // 권한 표시 텍스트
+  const getRoleText = (role) => {
+    switch (role) {
+      case 'master': return '마스터';
+      case 'admin': return '관리자';
+      default: return '일반 사용자';
+    }
+  };
+
+  // 프로필 드롭다운 메뉴
+  const profileMenuItems = [
+    {
+      key: 'info',
+      icon: <UserOutlined />,
+      label: '내 정보',
+      onClick: () => navigate('/my-profile')
+    },
+    {
+      key: 'password',
+      icon: <KeyOutlined />,
+      label: '비밀번호 변경',
+      onClick: () => navigate('/change-password')
+    },
+    { type: 'divider' },
+    {
+      key: 'logout',
+      icon: <LogoutOutlined />,
+      label: '로그아웃',
+      onClick: handleLogout
+    }
+  ];
 
   // 메뉴 아이템 정의
   const menuItems = [
@@ -174,7 +225,21 @@ function AppLayout() {
         //   onClick: () => navigate('/data/realtime-visitors')
         // }
       ]
-    }
+    },
+    // 사용자 관리 메뉴 (마스터/관리자만 표시)
+    ...(isAdmin() ? [{
+      key: 'admin',
+      icon: <TeamOutlined />,
+      label: '관리',
+      children: [
+        {
+          key: 'user-management',
+          icon: <TeamOutlined />,
+          label: '사용자 관리',
+          onClick: () => navigate('/user-management')
+        }
+      ]
+    }] : [])
   ];
 
   return (
@@ -229,7 +294,32 @@ function AppLayout() {
 
       {/* 컨텐츠 영역 */}
       <Layout style={{ marginLeft: collapsed ? 80 : 250, transition: 'margin-left 0.2s' }}>
-        <Content style={{ minHeight: '100vh' }}>
+        {/* 상단 헤더 - 프로필 영역 */}
+        <Header style={{ 
+          background: '#fff', 
+          padding: '0 24px', 
+          display: 'flex', 
+          justifyContent: 'flex-end', 
+          alignItems: 'center',
+          boxShadow: '0 1px 4px rgba(0, 0, 0, 0.08)',
+          position: 'sticky',
+          top: 0,
+          zIndex: 10
+        }}>
+          <Dropdown menu={{ items: profileMenuItems }} placement="bottomRight">
+            <Space style={{ cursor: 'pointer' }}>
+              <Avatar 
+                style={{ backgroundColor: user?.role === 'master' ? '#f5222d' : user?.role === 'admin' ? '#1890ff' : '#52c41a' }}
+                icon={<UserOutlined />} 
+              />
+              <span style={{ fontWeight: 500 }}>{user?.name}</span>
+              <span style={{ color: '#999', fontSize: 12 }}>({getRoleText(user?.role)})</span>
+              <DownOutlined style={{ fontSize: 10, color: '#999' }} />
+            </Space>
+          </Dropdown>
+        </Header>
+
+        <Content style={{ minHeight: 'calc(100vh - 64px)' }}>
           <Suspense fallback={
             <div style={{ padding: '50px', textAlign: 'center' }}>
               <Spin size="large" tip="로딩 중..." />
@@ -260,6 +350,13 @@ function AppLayout() {
               
               {/* 데이터 테이블 */}
               <Route path="/data/:tableName" element={<DataTables />} />
+
+              {/* 사용자 관리 (마스터/관리자만) */}
+              <Route path="/user-management" element={<UserManagement />} />
+
+              {/* 내 프로필 */}
+              <Route path="/my-profile" element={<MyProfilePage />} />
+              <Route path="/change-password" element={<ChangePasswordPage />} />
             </Routes>
           </Suspense>
         </Content>
@@ -269,13 +366,164 @@ function AppLayout() {
 }
 
 // ============================================================================
+// 내 프로필 페이지
+// ============================================================================
+function MyProfilePage() {
+  const { user } = useAuth();
+  
+  const getRoleText = (role) => {
+    switch (role) {
+      case 'master': return '마스터';
+      case 'admin': return '관리자';
+      default: return '일반 사용자';
+    }
+  };
+
+  return (
+    <div style={{ padding: 24 }}>
+      <div style={{ maxWidth: 600, margin: '0 auto' }}>
+        <h2 style={{ marginBottom: 24 }}>내 정보</h2>
+        <div style={{ background: '#fff', padding: 24, borderRadius: 8 }}>
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ fontWeight: 500, color: '#666' }}>이름</label>
+            <div style={{ fontSize: 16, marginTop: 4 }}>{user?.name}</div>
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ fontWeight: 500, color: '#666' }}>이메일</label>
+            <div style={{ fontSize: 16, marginTop: 4 }}>{user?.email}</div>
+          </div>
+          <div>
+            <label style={{ fontWeight: 500, color: '#666' }}>권한</label>
+            <div style={{ fontSize: 16, marginTop: 4 }}>{getRoleText(user?.role)}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// 비밀번호 변경 페이지
+// ============================================================================
+function ChangePasswordPage() {
+  const { changePassword } = useAuth();
+  const navigate = useNavigate();
+  const [loading, setLoading] = React.useState(false);
+
+  const onFinish = async (values) => {
+    if (values.newPassword !== values.confirmPassword) {
+      message.error('새 비밀번호가 일치하지 않습니다.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await changePassword(values.currentPassword, values.newPassword);
+      message.success('비밀번호가 변경되었습니다.');
+      navigate('/');
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || '비밀번호 변경에 실패했습니다.';
+      message.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ padding: 24 }}>
+      <div style={{ maxWidth: 400, margin: '0 auto' }}>
+        <h2 style={{ marginBottom: 24 }}>비밀번호 변경</h2>
+        <div style={{ background: '#fff', padding: 24, borderRadius: 8 }}>
+          <Form layout="vertical" onFinish={onFinish}>
+            <Form.Item
+              name="currentPassword"
+              label="현재 비밀번호"
+              rules={[{ required: true, message: '현재 비밀번호를 입력해주세요.' }]}
+            >
+              <Input.Password />
+            </Form.Item>
+            <Form.Item
+              name="newPassword"
+              label="새 비밀번호"
+              rules={[
+                { required: true, message: '새 비밀번호를 입력해주세요.' },
+                { min: 6, message: '최소 6자 이상 입력해주세요.' }
+              ]}
+            >
+              <Input.Password />
+            </Form.Item>
+            <Form.Item
+              name="confirmPassword"
+              label="새 비밀번호 확인"
+              rules={[{ required: true, message: '새 비밀번호를 다시 입력해주세요.' }]}
+            >
+              <Input.Password />
+            </Form.Item>
+            <Form.Item>
+              <Button type="primary" htmlType="submit" loading={loading} block>
+                비밀번호 변경
+              </Button>
+            </Form.Item>
+          </Form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// 인증 체크 래퍼
+// ============================================================================
+function AuthenticatedApp() {
+  const { isAuthenticated, loading } = useAuth();
+
+  // 로딩 중
+  if (loading) {
+    return (
+      <div style={{ 
+        minHeight: '100vh', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        background: '#f0f2f5'
+      }}>
+        <Spin size="large" tip="로딩 중..." />
+      </div>
+    );
+  }
+
+  // 로그인하지 않음
+  if (!isAuthenticated) {
+    return (
+      <Suspense fallback={
+        <div style={{ 
+          minHeight: '100vh', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center' 
+        }}>
+          <Spin size="large" />
+        </div>
+      }>
+        <LoginPage />
+      </Suspense>
+    );
+  }
+
+  // 로그인됨
+  return <AppLayout />;
+}
+
+// ============================================================================
 // 메인 App 컴포넌트
 // ============================================================================
 function App() {
   return (
     <ConfigProvider locale={koKR}>
       <Router>
-        <AppLayout />
+        <AuthProvider>
+          <AuthenticatedApp />
+        </AuthProvider>
       </Router>
     </ConfigProvider>
   );

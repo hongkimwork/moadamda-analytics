@@ -11,6 +11,8 @@ const mappingsRoutes = require('./routes/mappings');
 const creativePerformanceRoutes = require('./routes/creative-performance');
 const cafe24Routes = require('./routes/cafe24');
 const metaRoutes = require('./routes/meta');
+const authRoutes = require('./routes/auth');
+const usersRoutes = require('./routes/users');
 const cafe24Client = require('./utils/cafe24');
 
 const app = express();
@@ -33,6 +35,8 @@ app.get('/health', (req, res) => {
 });
 
 // Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/users', usersRoutes);
 app.use('/api', trackRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/tables', tablesRoutes);

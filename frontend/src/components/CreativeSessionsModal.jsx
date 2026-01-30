@@ -1,5 +1,5 @@
 import { Modal, Table, Typography, Spin, Empty, Tag, Tooltip } from 'antd';
-import { EyeOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import { TeamOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import dayjs from 'dayjs';
@@ -8,7 +8,10 @@ const { Text } = Typography;
 const API_URL = import.meta.env.VITE_API_URL || '';
 
 /**
- * CreativeSessionsModal - 광고 소재별 세션 상세 목록 모달
+ * CreativeSessionsModal - 광고 소재별 방문자별 세션 상세 모달
+ * UV(고유 방문자) 컬럼 클릭 시 열리는 모달
+ * - 같은 방문자의 여러 세션을 같은 색상으로 그룹화하여 표시
+ * - View 컬럼 클릭 시 열리는 CreativeEntriesModal(유입 기록 모달)과는 다른 모달임
  */
 function CreativeSessionsModal({ visible, onClose, creative, dateRange }) {
   const [loading, setLoading] = useState(false);
@@ -60,51 +63,8 @@ function CreativeSessionsModal({ visible, onClose, creative, dateRange }) {
     return deviceMap[device] || device;
   };
 
-  // 브라우저 이름 간소화
-  const getBrowserShort = (browser) => {
-    if (!browser || browser === 'unknown') return '-';
-    if (browser.toLowerCase().includes('chrome')) return 'Chrome';
-    if (browser.toLowerCase().includes('safari')) return 'Safari';
-    if (browser.toLowerCase().includes('firefox')) return 'Firefox';
-    if (browser.toLowerCase().includes('edge')) return 'Edge';
-    return browser;
-  };
-
-  // OS 이름 간소화
-  const getOsShort = (os) => {
-    if (!os || os === 'unknown') return '-';
-    if (os.toLowerCase().includes('windows')) return 'Windows';
-    if (os.toLowerCase().includes('mac')) return 'macOS';
-    if (os.toLowerCase().includes('ios')) return 'iOS';
-    if (os.toLowerCase().includes('android')) return 'Android';
-    return os;
-  };
-
-  // URL 짧게 표시
-  const shortenUrl = (url) => {
-    if (!url || url === '-') return '-';
-    try {
-      const urlObj = new URL(url);
-      const path = urlObj.pathname + urlObj.search;
-      return path.length > 50 ? path.substring(0, 47) + '...' : path;
-    } catch {
-      return url.length > 50 ? url.substring(0, 47) + '...' : url;
-    }
-  };
 
   const columns = [
-    {
-      title: 'Visitor ID',
-      dataIndex: 'visitor_id',
-      key: 'visitor_id',
-      width: 280,
-      align: 'center',
-      render: (id) => (
-        <Text style={{ fontSize: 11, fontFamily: 'monospace' }} copyable={{ text: id }}>
-          {id}
-        </Text>
-      )
-    },
     {
       title: '세션 시작',
       dataIndex: 'start_time',
@@ -210,30 +170,6 @@ function CreativeSessionsModal({ visible, onClose, creative, dateRange }) {
       )
     },
     {
-      title: '브라우저',
-      dataIndex: 'browser',
-      key: 'browser',
-      width: 70,
-      align: 'center',
-      render: (browser) => (
-        <Text style={{ fontSize: 11 }}>
-          {getBrowserShort(browser)}
-        </Text>
-      )
-    },
-    {
-      title: 'OS',
-      dataIndex: 'os',
-      key: 'os',
-      width: 70,
-      align: 'center',
-      render: (os) => (
-        <Text style={{ fontSize: 11 }}>
-          {getOsShort(os)}
-        </Text>
-      )
-    },
-    {
       title: '전환',
       dataIndex: 'is_converted',
       key: 'is_converted',
@@ -251,14 +187,14 @@ function CreativeSessionsModal({ visible, onClose, creative, dateRange }) {
     <Modal
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <EyeOutlined style={{ fontSize: 20, color: '#1890ff' }} />
-          <span>세션 상세 목록</span>
+          <TeamOutlined style={{ fontSize: 20, color: '#389e0d' }} />
+          <span>방문자별 세션 상세</span>
         </div>
       }
       open={visible}
       onCancel={onClose}
       footer={null}
-      width={1600}
+      width={1000}
       style={{ top: '2.5vh' }}
       styles={{ body: { padding: '16px 24px', height: 'calc(95vh - 60px)', overflowY: 'auto' } }}
     >
@@ -273,13 +209,18 @@ function CreativeSessionsModal({ visible, onClose, creative, dateRange }) {
               <Tag color="purple">{creative.utm_campaign}</Tag>
             </div>
             <Text style={{ fontSize: 13, color: '#595959' }}>
-              순 방문자(UV) <Text strong style={{ color: '#1890ff' }}>{summary.uvCount.toLocaleString()}명</Text>
+              순 방문자(UV) <Text strong style={{ color: '#389e0d' }}>{summary.uvCount.toLocaleString()}명</Text>
               {' / '}
-              총 <Text strong style={{ color: '#389e0d' }}>{summary.totalSessions.toLocaleString()}개</Text> 세션
+              총 <Text strong style={{ color: '#1890ff' }}>{summary.totalSessions.toLocaleString()}개</Text> 세션
             </Text>
           </div>
         </div>
       )}
+
+      {/* 안내 메시지 */}
+      <div style={{ marginBottom: 12, padding: '8px 12px', background: '#f6ffed', borderRadius: 6, border: '1px solid #b7eb8f', fontSize: 12, color: '#389e0d' }}>
+        같은 배경색은 같은 방문자의 세션입니다. 1명의 방문자가 여러 번 방문하면 여러 행으로 표시됩니다.
+      </div>
 
       {/* 세션 목록 테이블 */}
       <Spin spinning={loading}>

@@ -2,20 +2,70 @@
 // 광고 소재 퍼포먼스 커스텀 훅
 // ============================================================================
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { fetchCreativePerformance } from '../services/creativePerformanceApi';
-import { fetchScoreSettings } from '../services/scoreSettingsApi';
+import { fetchActivePreset } from '../services/scoreSettingsApi';
+import { useAuth } from '../../../contexts/AuthContext';
+
+// ============================================================================
+// 로컬스토리지 유틸리티
+// ============================================================================
+const STORAGE_KEY_PREFIX = 'moadamda_creative_filters_';
+
+/**
+ * 사용자별 필터 설정 저장
+ */
+const saveFiltersToStorage = (userId, filters) => {
+  if (!userId) return;
+  try {
+    const key = `${STORAGE_KEY_PREFIX}${userId}`;
+    localStorage.setItem(key, JSON.stringify(filters));
+  } catch (error) {
+    console.warn('필터 설정 저장 실패:', error);
+  }
+};
+
+/**
+ * 사용자별 필터 설정 불러오기
+ */
+const loadFiltersFromStorage = (userId) => {
+  if (!userId) return null;
+  try {
+    const key = `${STORAGE_KEY_PREFIX}${userId}`;
+    const saved = localStorage.getItem(key);
+    return saved ? JSON.parse(saved) : null;
+  } catch (error) {
+    console.warn('필터 설정 불러오기 실패:', error);
+    return null;
+  }
+};
 
 /**
  * 광고 소재 퍼포먼스 데이터 관리 훅
  * @returns {Object} 상태 및 핸들러
  */
 export const useCreativePerformance = () => {
+  // 인증 정보
+  const { user } = useAuth();
+  
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/546a3f56-d046-4164-8da1-9726e1a92f02',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useCreativePerformance.js:INIT',message:'Hook 초기화 - user 상태',data:{userId:user?.id,userName:user?.name,userExists:!!user},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+  // #endregion
+  
   // URL 쿼리 파라미터 읽기 (광고 클릭 카드에서 이동 시 search 파라미터 사용)
   const [searchParams] = useSearchParams();
   const initialSearchTerm = searchParams.get('search') || '';
+
+  // 저장된 필터 설정 불러오기
+  const savedFilters = useMemo(() => {
+    const result = loadFiltersFromStorage(user?.id);
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/546a3f56-d046-4164-8da1-9726e1a92f02',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useCreativePerformance.js:savedFilters',message:'로컬스토리지에서 필터 불러오기',data:{userId:user?.id,savedFilters:result},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
+    return result;
+  }, [user?.id]);
 
   // 데이터 state
   const [data, setData] = useState([]);
@@ -27,13 +77,17 @@ export const useCreativePerformance = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(500);
 
-  // 검색 및 필터 state
+  // 검색 및 필터 state (저장된 값 우선 사용)
   const [searchTerm, setSearchTerm] = useState(initialSearchTerm);
-  const [filters, setFilters] = useState({
-    dateRange: [
-      dayjs().subtract(29, 'day').format('YYYY-MM-DD'),
-      dayjs().format('YYYY-MM-DD')
-    ]
+  const [filters, setFilters] = useState(() => {
+    // 저장된 날짜 범위가 있으면 사용, 없으면 기본값
+    const initialFilters = savedFilters?.dateRange 
+      ? { dateRange: savedFilters.dateRange }
+      : { dateRange: [dayjs().subtract(29, 'day').format('YYYY-MM-DD'), dayjs().format('YYYY-MM-DD')] };
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/546a3f56-d046-4164-8da1-9726e1a92f02',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useCreativePerformance.js:filters-init',message:'filters 초기값 설정',data:{savedDateRange:savedFilters?.dateRange,initialFilters},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
+    return initialFilters;
   });
 
   // 정렬 state
@@ -43,13 +97,18 @@ export const useCreativePerformance = () => {
   // 동적 UTM 필터 state
   const [activeUtmFilters, setActiveUtmFilters] = useState([]);
   
-  // UTM Source 퀵 필터 state (기본값: 메타 그룹 소스)
-  const [quickFilterSources, setQuickFilterSources] = useState(['meta', 'instagram', 'ig']);
+  // UTM Source 퀵 필터 state (저장된 값 우선 사용)
+  const [quickFilterSources, setQuickFilterSources] = useState(() => {
+    if (savedFilters?.quickFilterSources) {
+      return savedFilters.quickFilterSources;
+    }
+    return ['meta', 'instagram', 'ig'];
+  });
 
-  // 이상치 기준 state
-  const [maxDuration, setMaxDuration] = useState(60);    // 체류시간 (초 단위, 기본값 1분=60초)
-  const [maxPv, setMaxPv] = useState(15);                // PV (기본값 15)
-  const [maxScroll, setMaxScroll] = useState(10000);     // 스크롤 (px 단위, 기본값 10,000px)
+  // 이상치 기준 state (저장된 값 우선 사용)
+  const [maxDuration, setMaxDuration] = useState(() => savedFilters?.maxDuration ?? 60);
+  const [maxPv, setMaxPv] = useState(() => savedFilters?.maxPv ?? 15);
+  const [maxScroll, setMaxScroll] = useState(() => savedFilters?.maxScroll ?? 10000);
 
   // 모달 state
   const [ordersModalVisible, setOrdersModalVisible] = useState(false);
@@ -59,11 +118,11 @@ export const useCreativePerformance = () => {
   const [scoreSettings, setScoreSettings] = useState(null);
   const [scoreSettingsLoading, setScoreSettingsLoading] = useState(true);
 
-  // 점수 설정 조회
+  // 점수 설정 조회 (적용 중인 프리셋)
   useEffect(() => {
     const loadScoreSettings = async () => {
       try {
-        const result = await fetchScoreSettings();
+        const result = await fetchActivePreset();
         if (result.success) {
           setScoreSettings(result.data);
         }
@@ -75,6 +134,21 @@ export const useCreativePerformance = () => {
     };
     loadScoreSettings();
   }, []);
+
+  // 필터 설정 로컬스토리지 저장 (변경 시 자동 저장)
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    const filtersToSave = {
+      dateRange: filters.dateRange,
+      quickFilterSources,
+      maxDuration,
+      maxPv,
+      maxScroll
+    };
+    
+    saveFiltersToStorage(user.id, filtersToSave);
+  }, [user?.id, filters.dateRange, quickFilterSources, maxDuration, maxPv, maxScroll]);
 
   // 요약 통계 계산
   const summaryStats = useMemo(() => {
@@ -181,6 +255,10 @@ export const useCreativePerformance = () => {
 
   // 필터 변경 핸들러
   const handleFilterChange = (newFilters) => {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/546a3f56-d046-4164-8da1-9726e1a92f02',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useCreativePerformance.js:handleFilterChange',message:'필터 변경 호출됨',data:{newFilters,stack:new Error().stack?.split('\n').slice(0,5)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
+    
     const formattedFilters = { ...newFilters };
     
     if (newFilters.dateRange && newFilters.dateRange[0] && newFilters.dateRange[1]) {

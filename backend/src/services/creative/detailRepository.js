@@ -1322,7 +1322,7 @@ async function getCreativeEntries({ creative_name, utm_source, utm_medium, utm_c
   const creativeNames = Array.isArray(creative_name) ? creative_name : [creative_name];
   const offset = (page - 1) * limit;
   
-  // 진입 시간순 정렬, 이전 진입과의 간격 계산
+  // 유입 시간순 정렬, 이전 유입과의 간격 계산, 체류시간 포함
   const query = `
     WITH entries AS (
       SELECT 
@@ -1331,6 +1331,7 @@ async function getCreativeEntries({ creative_name, utm_source, utm_medium, utm_c
         us.visitor_id,
         us.session_id,
         us.sequence_order,
+        us.duration_seconds,
         LAG(us.entry_timestamp) OVER (
           PARTITION BY us.visitor_id
           ORDER BY us.entry_timestamp
@@ -1351,6 +1352,7 @@ async function getCreativeEntries({ creative_name, utm_source, utm_medium, utm_c
       visitor_id,
       session_id,
       sequence_order,
+      duration_seconds,
       CASE 
         WHEN prev_entry IS NOT NULL THEN
           EXTRACT(EPOCH FROM (entry_timestamp - prev_entry))::INTEGER

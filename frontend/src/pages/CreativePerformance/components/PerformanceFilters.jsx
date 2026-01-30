@@ -4,10 +4,10 @@
 // ============================================================================
 
 import { useState, useEffect } from 'react';
-import { Card, Divider, DatePicker, Select } from 'antd';
+import { Card, Divider, DatePicker, InputNumber, Button } from 'antd';
 import { 
   Search, X, RotateCcw, Calendar, Layers, AlertTriangle, Settings,
-  Clock, Eye, MousePointerClick
+  Clock, Eye, MousePointerClick, Filter
 } from 'lucide-react';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ko';
@@ -16,33 +16,6 @@ import UtmSourceQuickFilter from '../../../components/UtmSourceQuickFilter';
 import ScoreSettingsCard from './ScoreSettingsCard';
 
 const { RangePicker } = DatePicker;
-
-// 이상치 기준 옵션 생성 (30초~10분, 30초 단위)
-const durationOptions = [];
-for (let seconds = 30; seconds <= 600; seconds += 30) {
-  const minutes = Math.floor(seconds / 60);
-  const remainSeconds = seconds % 60;
-  
-  let label;
-  if (seconds < 60) {
-    label = `${seconds}초`;
-  } else if (remainSeconds === 0) {
-    label = `${minutes}분`;
-  } else {
-    label = `${minutes}분 ${remainSeconds}초`;
-  }
-  
-  durationOptions.push({ value: seconds, label });
-}
-
-// PV 옵션 (5, 10, 15, 20, 25, 30, 35)
-const pvOptions = [5, 10, 15, 20, 25, 30, 35].map(v => ({ value: v, label: `${v}` }));
-
-// 스크롤 옵션 (5,000px ~ 30,000px, 5,000px 단위)
-const scrollOptions = [];
-for (let px = 5000; px <= 30000; px += 5000) {
-  scrollOptions.push({ value: px, label: `${px.toLocaleString()}px` });
-}
 
 /**
  * Segmented Button - 높이 36px 통일
@@ -165,12 +138,67 @@ function PerformanceFilters({
   onMaxPvChange,
   onMaxScrollChange,
   scoreSettings,
-  onScoreSettingsClick
+  onScoreSettingsClick,
+  quickFilterSources
 }) {
   const defaultQuickDate = '30days';
   const [searchTerm, setSearchTerm] = useState('');
   const [activeQuickDate, setActiveQuickDate] = useState(defaultQuickDate);
   const [customDateRange, setCustomDateRange] = useState(null);
+  const [isDateInitialized, setIsDateInitialized] = useState(false);
+  
+  // 저장된 dateRange에서 activeQuickDate 계산 (최초 1회만)
+  useEffect(() => {
+    if (isDateInitialized || !filters?.dateRange) return;
+    
+    const [start, end] = filters.dateRange;
+    const startDate = dayjs(start);
+    const endDate = dayjs(end);
+    const now = dayjs();
+    const diffDays = endDate.diff(startDate, 'day');
+    
+    // 날짜 범위로 퀵 필터 타입 계산
+    let calculatedType = 'custom';
+    if (diffDays === 0 && startDate.isSame(now, 'day')) {
+      calculatedType = 'today';
+    } else if (diffDays === 0 && startDate.isSame(now.subtract(1, 'day'), 'day')) {
+      calculatedType = 'yesterday';
+    } else if (diffDays === 6 && endDate.isSame(now, 'day')) {
+      calculatedType = '7days';
+    } else if (diffDays === 29 && endDate.isSame(now, 'day')) {
+      calculatedType = '30days';
+    }
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/546a3f56-d046-4164-8da1-9726e1a92f02',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PerformanceFilters.jsx:dateInit',message:'저장된 dateRange에서 activeQuickDate 계산',data:{dateRange:filters.dateRange,diffDays,calculatedType},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'F'})}).catch(()=>{});
+    // #endregion
+    
+    if (calculatedType !== 'custom') {
+      setActiveQuickDate(calculatedType);
+    } else {
+      setActiveQuickDate('custom');
+      setCustomDateRange([startDate, endDate]);
+    }
+    setIsDateInitialized(true);
+  }, [filters?.dateRange, isDateInitialized]);
+  
+  // 이상치 필터 로컬 state (적용 버튼 클릭 전까지 로컬에서만 관리)
+  const [localDuration, setLocalDuration] = useState(maxDuration ? maxDuration / 60 : 1);
+  const [localPv, setLocalPv] = useState(maxPv || 35);
+  const [localScroll, setLocalScroll] = useState(maxScroll || 30000);
+  
+  // 상위 컴포넌트 값이 변경되면 로컬 state도 동기화
+  useEffect(() => {
+    if (maxDuration) setLocalDuration(maxDuration / 60);
+  }, [maxDuration]);
+  
+  useEffect(() => {
+    if (maxPv) setLocalPv(maxPv);
+  }, [maxPv]);
+  
+  useEffect(() => {
+    if (maxScroll) setLocalScroll(maxScroll);
+  }, [maxScroll]);
 
   const getDateRange = (type) => {
     const now = dayjs();
@@ -183,11 +211,8 @@ function PerformanceFilters({
     }
   };
 
-  useEffect(() => {
-    if (defaultQuickDate && onFilterChange) {
-      onFilterChange({ dateRange: getDateRange(defaultQuickDate) });
-    }
-  }, []);
+  // 마운트 시 기본값 설정 제거 - 부모 훅에서 저장된 값 또는 기본값을 이미 사용함
+  // useEffect에서 기본값으로 덮어쓰면 저장된 필터가 무시됨
 
   const handleSearchSubmit = () => onSearch?.(searchTerm.trim());
 
@@ -213,8 +238,33 @@ function PerformanceFilters({
     setSearchTerm('');
     setActiveQuickDate(defaultQuickDate);
     setCustomDateRange(null);
+    // 이상치 필터도 초기화
+    setLocalDuration(maxDuration ? maxDuration / 60 : 1);
+    setLocalPv(maxPv || 35);
+    setLocalScroll(maxScroll || 30000);
     onFilterChange?.({ dateRange: getDateRange(defaultQuickDate) });
     onReset?.();
+  };
+
+  // 이상치 필터 적용 버튼 핸들러
+  const handleApplyOutlierFilters = () => {
+    if (localDuration && localDuration > 0) {
+      onMaxDurationChange?.(localDuration * 60);
+    }
+    if (localPv && localPv > 0) {
+      onMaxPvChange?.(localPv);
+    }
+    if (localScroll && localScroll > 0) {
+      onMaxScrollChange?.(localScroll);
+    }
+  };
+
+  // 이상치 필터 값이 변경되었는지 확인
+  const isOutlierFilterChanged = () => {
+    const currentDurationMin = maxDuration ? maxDuration / 60 : 1;
+    const currentPv = maxPv || 35;
+    const currentScroll = maxScroll || 30000;
+    return localDuration !== currentDurationMin || localPv !== currentPv || localScroll !== currentScroll;
   };
 
   const isDefaultState = () => !searchTerm && activeQuickDate === defaultQuickDate;
@@ -341,6 +391,7 @@ function PerformanceFilters({
             <UtmSourceQuickFilter
               onFilterChange={onQuickFilterChange}
               loading={loading}
+              initialSources={quickFilterSources}
             />
           </div>
 
@@ -381,23 +432,23 @@ function PerformanceFilters({
               이상치 값 제외 필터
             </div>
             <div className="flex gap-3 flex-wrap items-center">
-              {/* 체류시간 초과 제외 */}
+              {/* 체류시간 초과 제외 (분 단위 입력, 내부는 초 단위) */}
               <div className="flex items-center gap-2 bg-gray-50 px-3 h-[42px] rounded-lg border border-gray-100">
                 <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
                   <Clock size={14} className="text-green-500" />
                   <span>체류시간</span>
                 </div>
-                <Select
+                <InputNumber
                   size="small"
-                  value={maxDuration}
-                  onChange={onMaxDurationChange}
-                  options={durationOptions}
-                  style={{ width: 100 }}
+                  value={localDuration}
+                  onChange={(val) => setLocalDuration(val)}
+                  min={0.5}
+                  step={0.5}
+                  style={{ width: 70 }}
                   disabled={loading}
-                  bordered={false}
                   className="bg-white rounded border border-gray-200"
                 />
-                <span className="text-xs text-gray-600">초과 제외</span>
+                <span className="text-xs text-gray-600">분 초과 제외</span>
               </div>
               
               {/* PV 초과 제외 */}
@@ -406,14 +457,14 @@ function PerformanceFilters({
                   <Eye size={14} className="text-purple-500" />
                   <span>PV</span>
                 </div>
-                <Select
+                <InputNumber
                   size="small"
-                  value={maxPv}
-                  onChange={onMaxPvChange}
-                  options={pvOptions}
+                  value={localPv}
+                  onChange={(val) => setLocalPv(val)}
+                  min={1}
+                  step={1}
                   style={{ width: 70 }}
                   disabled={loading}
-                  bordered={false}
                   className="bg-white rounded border border-gray-200"
                 />
                 <span className="text-xs text-gray-600">초과 제외</span>
@@ -425,18 +476,37 @@ function PerformanceFilters({
                   <MousePointerClick size={14} className="text-blue-500" />
                   <span>스크롤</span>
                 </div>
-                <Select
+                <InputNumber
                   size="small"
-                  value={maxScroll}
-                  onChange={onMaxScrollChange}
-                  options={scrollOptions}
-                  style={{ width: 110 }}
+                  value={localScroll}
+                  onChange={(val) => setLocalScroll(val)}
+                  min={100}
+                  step={1000}
+                  style={{ width: 100 }}
                   disabled={loading}
-                  bordered={false}
                   className="bg-white rounded border border-gray-200"
+                  formatter={(value) => value ? `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''}
+                  parser={(value) => value.replace(/,/g, '')}
                 />
-                <span className="text-xs text-gray-600">초과 제외</span>
+                <span className="text-xs text-gray-600">px 초과 제외</span>
               </div>
+              
+              {/* 적용 버튼 */}
+              <Button
+                type="primary"
+                size="small"
+                icon={<Filter size={14} />}
+                onClick={handleApplyOutlierFilters}
+                disabled={loading || !isOutlierFilterChanged()}
+                style={{
+                  height: '42px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                적용
+              </Button>
             </div>
           </div>
 

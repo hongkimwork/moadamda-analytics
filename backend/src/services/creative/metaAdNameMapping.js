@@ -56,8 +56,11 @@ async function getMetaAdNames() {
     return metaAdNamesCache;
   }
 
+  let apiNames = [];
+  let dbNames = [];
+
+  // 1. 메타 API에서 ACTIVE/PAUSED 광고명 가져오기
   try {
-    // 1. 메타 API에서 ACTIVE/PAUSED 광고명 가져오기
     const [activeResult, pausedResult] = await Promise.all([
       callMetaApiSimple(`${META_AD_ACCOUNT_ID}/ads`, {
         fields: 'name',
@@ -72,30 +75,26 @@ async function getMetaAdNames() {
     ]);
     
     const apiAds = [...(activeResult.data || []), ...(pausedResult.data || [])];
-    const apiNames = apiAds.map(ad => ad.name).filter(Boolean);
-    
-    // 2. DB의 meta_ads 테이블에서 광고명 가져오기 (ARCHIVED 포함)
-    let dbNames = [];
-    try {
-      const db = require('../../utils/database');
-      const dbResult = await db.query('SELECT DISTINCT name FROM meta_ads WHERE name IS NOT NULL');
-      dbNames = dbResult.rows.map(row => row.name);
-    } catch (dbError) {
-      console.warn('[MetaAdNameMapping] Failed to fetch ad names from DB:', dbError.message);
-    }
-    
-    // 3. API + DB 광고명 합치기 (중복 제거)
-    const uniqueNames = [...new Set([...apiNames, ...dbNames])];
-    
-    // 캐시 저장
-    metaAdNamesCache = uniqueNames;
-    metaAdNamesCacheTime = Date.now();
-    
-    console.log(`[MetaAdNameMapping] Loaded ${uniqueNames.length} ad names (API: ${apiNames.length}, DB: ${dbNames.length})`);
-    
-    return uniqueNames;
-  } catch (error) {
-    console.error('[MetaAdNameMapping] Failed to fetch meta ad names:', error.message);
+    apiNames = apiAds.map(ad => ad.name).filter(Boolean);
+  } catch (apiError) {
+    console.warn('[MetaAdNameMapping] Meta API failed:', apiError.message);
+  }
+  
+  // 2. DB의 meta_ads 테이블에서 광고명 가져오기 (ARCHIVED 포함)
+  // FIX (2026-01-30): API 실패해도 DB에서 가져오도록 분리
+  try {
+    const db = require('../../utils/database');
+    const dbResult = await db.query('SELECT DISTINCT name FROM meta_ads WHERE name IS NOT NULL');
+    dbNames = dbResult.rows.map(row => row.name);
+  } catch (dbError) {
+    console.warn('[MetaAdNameMapping] Failed to fetch ad names from DB:', dbError.message);
+  }
+  
+  // 3. API + DB 광고명 합치기 (중복 제거)
+  const uniqueNames = [...new Set([...apiNames, ...dbNames])];
+  
+  // 아무것도 가져오지 못한 경우
+  if (uniqueNames.length === 0) {
     // 캐시가 있으면 만료되었더라도 반환 (폴백)
     if (metaAdNamesCache) {
       console.log('[MetaAdNameMapping] Using cached ad names as fallback');
@@ -103,6 +102,14 @@ async function getMetaAdNames() {
     }
     return [];
   }
+  
+  // 캐시 저장
+  metaAdNamesCache = uniqueNames;
+  metaAdNamesCacheTime = Date.now();
+  
+  console.log(`[MetaAdNameMapping] Loaded ${uniqueNames.length} ad names (API: ${apiNames.length}, DB: ${dbNames.length})`);
+  
+  return uniqueNames;
 }
 
 /**
@@ -119,30 +126,70 @@ function normalizeAdName(name) {
 
 /**
  * URL 디코딩 시도
+ * FIX (2026-01-30): 77% 같은 패턴 처리 및 끝부분 잘림 개선
+ * - % 뒤에 유효한 16진수 두 자리가 아니면 %25로 치환
+ * - 끝에 불완전한 UTF-8 시퀀스 제거 (반복적으로 시도)
+ * - 부분 디코딩된 상태에서 끝에 %X, %XX 남은 경우도 처리
+ * 
  * @param {string} name - 광고명
  * @returns {string} - 디코딩된 광고명 (실패 시 원본 반환)
  */
 function tryDecodeURIComponent(name) {
   if (!name) return '';
-  // URL 인코딩 패턴이 있는지 확인 (%XX 형태)
-  if (!/%[0-9A-Fa-f]{2}/.test(name)) return name;
   
-  try {
-    // 플러스를 먼저 공백으로 변환 (application/x-www-form-urlencoded 형식)
-    let processed = name.replace(/\+/g, ' ');
-    
-    // 잘못된 인코딩 수정: %% → %25% (예: 77%%20 → 77%25%20)
-    // %가 인코딩되지 않은 채로 저장된 경우
-    processed = processed.replace(/%%/g, '%25%');
-    
-    // 끝에 잘린 인코딩 제거 (예: ...%EB%8B%A4%EC%9D%B4%EC%96%B4% → 끝의 % 제거)
-    processed = processed.replace(/%[0-9A-Fa-f]?$/, '');
-    
-    return decodeURIComponent(processed);
-  } catch (e) {
-    // 디코딩 실패 시 원본 반환
-    return name;
+  // FIX (2026-01-30): % 문자가 있으면 디코딩 시도 (부분 디코딩 상태도 처리)
+  if (!name.includes('%')) return name;
+  
+  // 플러스를 먼저 공백으로 변환 (application/x-www-form-urlencoded 형식)
+  let processed = name.replace(/\+/g, ' ');
+  
+  // 잘못된 인코딩 수정: %% → %25% (예: 77%%20 → 77%25%20)
+  processed = processed.replace(/%%/g, '%25%');
+  
+  // FIX (2026-01-30): 끝에 불완전한 % 시퀀스 먼저 제거
+  // 예: "건강_영상_%E" → "건강_영상_", "건강_영상_%2" → "건강_영상_"
+  // 이것은 부분 디코딩된 상태에서 끝이 잘린 경우
+  processed = processed.replace(/%[0-9A-Fa-f]?$/, '');
+  
+  // FIX (2026-01-30): % 뒤에 유효한 16진수 두 자리가 아닌 경우 %25로 치환
+  // 예: "77% 그립" → "77%25 그립", "77%그" → "77%25그"
+  processed = processed.replace(/%(?![0-9A-Fa-f]{2})/g, '%25');
+  
+  // FIX (2026-01-30): 끝에 불완전한 UTF-8 시퀀스 제거
+  // UTF-8 한글은 3바이트 (%XX%XX%XX), 끝이 잘리면 디코딩 실패
+  // 반복적으로 끝에서 불완전한 인코딩 제거 후 디코딩 시도
+  let maxTries = 10;
+  while (maxTries > 0) {
+    try {
+      return decodeURIComponent(processed);
+    } catch (e) {
+      // 끝에서 %XX 또는 % 제거 후 재시도
+      const beforeLength = processed.length;
+      // 끝이 %로 끝나면 제거
+      if (processed.endsWith('%')) {
+        processed = processed.slice(0, -1);
+      }
+      // 끝이 %X로 끝나면 제거 (불완전한 %XX)
+      else if (/%[0-9A-Fa-f]$/.test(processed)) {
+        processed = processed.slice(0, -2);
+      }
+      // 끝이 %XX로 끝나고 그것이 불완전한 UTF-8 시퀀스면 제거
+      else if (/%[0-9A-Fa-f]{2}$/.test(processed)) {
+        processed = processed.slice(0, -3);
+      }
+      else {
+        // 더 이상 제거할 것이 없으면 종료
+        break;
+      }
+      
+      // 무한루프 방지
+      if (processed.length === beforeLength) break;
+      maxTries--;
+    }
   }
+  
+  // 모든 시도 실패 시 원본 반환
+  return name;
 }
 
 /**
@@ -206,9 +253,10 @@ async function mapToMetaAdName(truncatedName, metaAdNames = null) {
     }
   }
   
-  // 6. 접두사 매칭 (잘린 광고명이 정상 광고명의 시작 부분과 일치)
-  // 최소 13자 이상이어야 의미있는 매칭
-  if (truncatedName.length >= 13) {
+  // 6. 접두사 매칭 (잘린 광고명 → 원본 광고에 병합)
+  // FIX (2026-01-30): 복구 - 잘린 광고명 세션이 전체의 0.19%로 미미하여 병합해도 무방
+  // 최소 17자 이상이어야 의미있는 매칭
+  if (truncatedName.length >= 17) {
     for (const metaName of adNames) {
       if (metaName.startsWith(truncatedName)) {
         return metaName;
@@ -230,70 +278,16 @@ async function mapToMetaAdName(truncatedName, metaAdNames = null) {
     }
   }
   
-  // 7. 공백 제거 후 비교 (최소 30자 이상)
-  if (truncatedName.length >= 30) {
-    const noSpaceTruncated = truncatedName.replace(/\s+/g, '');
-    for (const metaName of adNames) {
-      const noSpaceMeta = metaName.replace(/\s+/g, '');
-      if (noSpaceMeta.startsWith(noSpaceTruncated)) {
-        return metaName;
-      }
-    }
-  }
+  // 8. (패키지 수정) 병합 로직 - 제거됨 (2026-01-30)
+  // Meta에 "(패키지 수정)" 광고가 별도로 등록되어 있음
+  // 원본과 다른 광고이므로 별도 취급 필요
   
-  // 8. (패키지 수정) 접미사 제거 후 비교
-  // FIX (2026-01-29): UTM creative_name에 붙은 "(패키지 수정)" 접미사 처리
-  if (truncatedName.includes('(패키지 수정)')) {
-    const withoutPkgSuffix = truncatedName.replace(/\s*\(패키지 수정\)\s*$/, '').trim();
-    if (withoutPkgSuffix !== truncatedName) {
-      const pkgMatch = await mapToMetaAdName(withoutPkgSuffix, adNames);
-      if (pkgMatch) {
-        return pkgMatch;
-      }
-    }
-  }
+  // 9. "- 사본" 병합 로직 - 제거됨 (2026-01-30)
+  // "- 사본" 광고는 원본과 별개의 광고로 취급
+  // 타겟팅/예산이 다를 수 있으므로 별도 추적 필요
   
-  // 9. "- 사본" 접미사 제거 후 비교
-  // FIX (2026-01-29): UTM creative_name에 붙은 "- 사본" 접미사 처리
-  if (truncatedName.includes('- 사본')) {
-    const withoutCopySuffix = truncatedName.replace(/\s*-\s*사본\s*$/, '').trim();
-    if (withoutCopySuffix !== truncatedName) {
-      const copyMatch = await mapToMetaAdName(withoutCopySuffix, adNames);
-      if (copyMatch) {
-        return copyMatch;
-      }
-      
-      // "- 사본" 제거 후에도 매칭 안 되면, 숫자 변형도 시도 (예: 글램미홍지윤1 → 글램미홍지윤)
-      // 패턴: 이름 끝에 붙은 숫자 제거 (예: _글램미홍지윤1_250925 → _글램미홍지윤_250925)
-      const withoutTrailingNum = withoutCopySuffix.replace(/(\d+)_(\d{6})$/, (match, num, date) => {
-        // 숫자가 날짜 앞에 있고, 앞에 글자가 있는 경우에만 제거
-        return '_' + date;
-      });
-      if (withoutTrailingNum !== withoutCopySuffix) {
-        const numMatch = await mapToMetaAdName(withoutTrailingNum, adNames);
-        if (numMatch) {
-          return numMatch;
-        }
-      }
-    }
-  }
-  
-  // 10. 날짜 코드의 마이너 버전 변형 매칭 (예: 241216-02 → 241216-01)
-  // FIX (2026-01-29): 날짜 코드에서 -XX 부분을 변형하여 매칭 시도
-  const dateCodeMatch = truncatedName.match(/\((\d{6})-(\d{2})\)/);
-  if (dateCodeMatch) {
-    const [fullMatch, dateCode, versionNum] = dateCodeMatch;
-    // 버전 번호를 01~05까지 시도
-    for (let v = 1; v <= 5; v++) {
-      if (v === parseInt(versionNum, 10)) continue; // 현재 버전은 스킵
-      const altVersion = String(v).padStart(2, '0');
-      const altName = truncatedName.replace(`(${dateCode}-${versionNum})`, `(${dateCode}-${altVersion})`);
-      const versionMatch = await mapToMetaAdName(altName, adNames);
-      if (versionMatch) {
-        return versionMatch;
-      }
-    }
-  }
+  // 10. 날짜 버전 변형 매칭 - 제거됨 (2026-01-30)
+  // 241216-02 → 241216-01 같은 임의 매칭은 데이터 왜곡 발생
   
   return null;
 }
@@ -330,6 +324,10 @@ function getAllVariantNames(metaAdName, dbCreativeNames, metaAdNames = []) {
   
   const variants = new Set([metaAdName]);
   
+  // FIX (2026-01-30): 잘린 광고명을 변형으로 취급하지 않음
+  // 잘린 광고명은 별도 행으로 표시되어야 함 (어떤 광고인지 확정할 수 없음)
+  // 변형으로 인정하는 경우: URL 디코딩, +/공백 변환으로 정확히 일치하는 경우만
+  
   for (const dbName of dbCreativeNames) {
     // 정확히 일치
     if (dbName === metaAdName) continue;
@@ -340,20 +338,11 @@ function getAllVariantNames(metaAdName, dbCreativeNames, metaAdNames = []) {
     // 메타에 별도로 등록된 광고면 변형이 아님 (별도 광고)
     if (metaAdNames.includes(dbName)) continue;
     
-    // 잘린 광고명 매칭: DB 이름이 메타 이름보다 짧고, 메타 이름이 DB 이름으로 시작하는 경우
-    // (URL 인코딩 등으로 광고명이 잘린 경우만 변형으로 인정)
-    if (dbName.length >= 13 && dbName.length < metaAdName.length && metaAdName.startsWith(dbName)) {
+    // +/공백 변환으로 일치하는 경우만 변형으로 인정
+    const normalizedDb = dbName.replace(/\+/g, ' ');
+    const normalizedMeta = metaAdName.replace(/\+/g, ' ');
+    if (normalizedDb === normalizedMeta) {
       variants.add(dbName);
-      continue;
-    }
-    
-    // 공백 제거 후 비교 (잘린 경우만)
-    if (dbName.length >= 30 && dbName.length < metaAdName.length) {
-      const noSpaceDb = dbName.replace(/\s+/g, '');
-      const noSpaceMeta = metaAdName.replace(/\s+/g, '');
-      if (noSpaceMeta.startsWith(noSpaceDb) && noSpaceDb.length < noSpaceMeta.length) {
-        variants.add(dbName);
-      }
     }
   }
   

@@ -8,8 +8,8 @@ const { Text } = Typography;
 const API_URL = import.meta.env.VITE_API_URL || '';
 
 /**
- * CreativeEntriesModal - 광고 소재별 진입 목록 모달 (View 상세)
- * 광고 클릭 → 자사몰 진입 시점을 시간순으로 표시
+ * CreativeEntriesModal - 광고 소재별 유입 기록 모달
+ * 광고 클릭 → 자사몰 유입 시점을 시간순으로 표시
  */
 function CreativeEntriesModal({ visible, onClose, creative, dateRange }) {
   const [loading, setLoading] = useState(false);
@@ -41,7 +41,7 @@ function CreativeEntriesModal({ visible, onClose, creative, dateRange }) {
         setPagination(response.data.pagination || { page: 1, limit: 50, total: 0 });
       }
     } catch (error) {
-      console.error('진입 목록 조회 실패:', error);
+      console.error('유입 기록 조회 실패:', error);
       setEntries([]);
     } finally {
       setLoading(false);
@@ -50,7 +50,7 @@ function CreativeEntriesModal({ visible, onClose, creative, dateRange }) {
 
   const columns = [
     {
-      title: '진입 시간',
+      title: '유입 시간',
       dataIndex: 'entry_timestamp',
       key: 'entry_timestamp',
       width: 160,
@@ -63,30 +63,18 @@ function CreativeEntriesModal({ visible, onClose, creative, dateRange }) {
       )
     },
     {
-      title: 'Visitor ID',
-      dataIndex: 'visitor_id',
-      key: 'visitor_id',
-      width: 280,
-      align: 'center',
-      render: (id) => (
-        <Text style={{ fontSize: 11, fontFamily: 'monospace' }} copyable={{ text: id }}>
-          {id}
-        </Text>
-      )
-    },
-    {
       title: (
-        <Tooltip title="같은 방문자의 이전 진입과의 시간 간격">
-          <span>간격 <QuestionCircleOutlined style={{ fontSize: 12 }} /></span>
+        <Tooltip title="같은 방문자가 이 광고를 다시 클릭한 간격">
+          <span>재클릭 간격 <QuestionCircleOutlined style={{ fontSize: 12 }} /></span>
         </Tooltip>
       ),
       dataIndex: 'gap_formatted',
       key: 'gap_formatted',
-      width: 100,
+      width: 110,
       align: 'center',
       render: (gap, record) => {
         if (gap === '-' || record.gap_seconds === null) {
-          return <Tag color="blue">첫 진입</Tag>;
+          return <Tag color="blue">첫 유입</Tag>;
         }
         
         // 간격에 따른 색상
@@ -113,18 +101,6 @@ function CreativeEntriesModal({ visible, onClose, creative, dateRange }) {
           </Text>
         );
       }
-    },
-    {
-      title: 'Session ID',
-      dataIndex: 'session_id',
-      key: 'session_id',
-      width: 140,
-      align: 'center',
-      render: (id) => (
-        <Text style={{ fontSize: 10, fontFamily: 'monospace', color: '#8c8c8c' }}>
-          {id ? id.substring(0, 12) + '...' : '-'}
-        </Text>
-      )
     }
   ];
 
@@ -140,13 +116,13 @@ function CreativeEntriesModal({ visible, onClose, creative, dateRange }) {
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <EyeOutlined style={{ fontSize: 20, color: '#1890ff' }} />
-          <span>진입 목록 (View 상세)</span>
+          <span>이 광고로 들어온 기록</span>
         </div>
       }
       open={visible}
       onCancel={onClose}
       footer={null}
-      width={900}
+      width={800}
       style={{ top: '5vh' }}
       styles={{ body: { padding: '16px 24px', maxHeight: 'calc(90vh - 60px)', overflowY: 'auto' } }}
     >
@@ -164,7 +140,7 @@ function CreativeEntriesModal({ visible, onClose, creative, dateRange }) {
 
       {/* 안내 메시지 */}
       <div style={{ marginBottom: 12, padding: '8px 12px', background: '#fffbe6', borderRadius: 6, border: '1px solid #ffe58f', fontSize: 12, color: '#ad8b00' }}>
-        광고를 클릭해서 자사몰에 진입한 모든 기록입니다. 같은 방문자는 같은 배경색으로 표시됩니다.
+        광고를 클릭해서 자사몰에 들어온 기록입니다. 같은 배경색은 같은 방문자입니다.
       </div>
 
       {/* 진입 목록 테이블 */}
@@ -179,7 +155,7 @@ function CreativeEntriesModal({ visible, onClose, creative, dateRange }) {
               current: pagination.page,
               pageSize: pagination.limit,
               total: pagination.total,
-              showTotal: (total) => `총 ${total.toLocaleString()}회 진입`,
+              showTotal: (total) => `총 ${total.toLocaleString()}회 유입`,
               showSizeChanger: false,
               onChange: (page) => fetchEntries(page)
             }}
@@ -189,7 +165,7 @@ function CreativeEntriesModal({ visible, onClose, creative, dateRange }) {
             }}
           />
         ) : !loading && (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="해당 광고 소재로 유입된 진입 기록이 없습니다" />
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="해당 광고로 유입된 기록이 없습니다" />
         )}
       </Spin>
 

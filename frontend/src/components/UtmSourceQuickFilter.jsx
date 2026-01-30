@@ -31,9 +31,45 @@ const EXCLUDED_SOURCES = ['viral'];
  * @param {function} onFilterChange - 필터 변경 콜백 (선택된 소스 배열 전달)
  * @param {boolean} loading - 로딩 상태
  */
-function UtmSourceQuickFilter({ onFilterChange, loading = false }) {
+function UtmSourceQuickFilter({ onFilterChange, loading = false, initialSources = null }) {
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/546a3f56-d046-4164-8da1-9726e1a92f02',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UtmSourceQuickFilter.jsx:render',message:'컴포넌트 렌더링 - props 확인',data:{hasOnFilterChange:!!onFilterChange,loading,initialSources},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C'})}).catch(()=>{});
+  // #endregion
+  
+  // initialSources에서 선택된 그룹 계산
+  const getGroupsFromSources = (sources) => {
+    if (!sources || sources.length === 0) {
+      return ['all']; // 빈 배열이면 전체 선택
+    }
+    // 각 그룹별로 소스가 포함되어 있는지 확인
+    const groups = [];
+    SOURCE_GROUPS.forEach(group => {
+      if (group.key === 'all') return;
+      const hasAllSources = group.sources.every(s => sources.includes(s));
+      if (hasAllSources && group.sources.length > 0) {
+        groups.push(group.key);
+      }
+    });
+    return groups.length > 0 ? groups : ['meta']; // 매칭되는 그룹이 없으면 메타 기본값
+  };
+  
   // 선택된 그룹 키 목록 (기본값: 메타)
   const [selectedGroups, setSelectedGroups] = useState(['meta']);
+  
+  // 초기화 여부 추적 (최초 마운트 시에만 initialSources 적용)
+  const [isInitialized, setIsInitialized] = useState(false);
+  
+  // initialSources가 전달되면 selectedGroups 업데이트 (최초 1회만)
+  useEffect(() => {
+    if (!isInitialized && initialSources !== null) {
+      const groups = getGroupsFromSources(initialSources);
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/546a3f56-d046-4164-8da1-9726e1a92f02',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UtmSourceQuickFilter.jsx:useEffect-init',message:'initialSources로 그룹 초기화',data:{initialSources,calculatedGroups:groups},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
+      // #endregion
+      setSelectedGroups(groups);
+      setIsInitialized(true);
+    }
+  }, [initialSources, isInitialized]);
   
   // 사용자가 추가한 개별 소스 버튼
   const [customSources, setCustomSources] = useState([]);
@@ -52,13 +88,16 @@ function UtmSourceQuickFilter({ onFilterChange, loading = false }) {
     fetchUngroupedSources();
   }, []);
 
-  // 선택 상태 변경 시 부모에게 알림
+  // 선택 상태 변경 시 부모에게 알림 (초기화 완료 후에만)
   useEffect(() => {
+    // 초기화 전에는 부모에게 알리지 않음 (저장된 값을 덮어쓰지 않도록)
+    if (!isInitialized) return;
+    
     if (onFilterChange) {
       const sources = getSelectedSources();
       onFilterChange(sources);
     }
-  }, [selectedGroups, selectedCustomSources]);
+  }, [selectedGroups, selectedCustomSources, isInitialized]);
 
   // 미등록 소스 조회 (그룹에 속하지 않은 소스만)
   const fetchUngroupedSources = async () => {
