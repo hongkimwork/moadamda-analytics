@@ -1,3 +1,4 @@
+| 2026-02-02 | 구간값 정수 반올림 추가 | ScoreSettingsModal.jsx |
 | 2026-02-02 | 구간 기본값 이상치 연동 | ScoreSettingsModal.jsx |
 | 2026-02-02 | 체류시간 단위 분 변경 | ScoreSettingsModal.jsx |
 | 2026-02-02 | 헤더 아바타 색상 변경 | App.jsx |
@@ -12,4 +13,3 @@
 | 2026-01-30 | 모수평가 프리셋 3분할 | ScoreSettingsModal.jsx |
 | 2026-01-30 | 이상치 필터 직접입력 | PerformanceFilters.jsx |
 | 2026-01-30 | 임의 매핑 로직 제거 | metaAdNameMapping.js |
-| 2026-01-30 | UV 모달 컬럼 정리 | CreativeSessionsModal.jsx |

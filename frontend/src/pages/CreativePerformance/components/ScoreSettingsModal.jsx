@@ -77,11 +77,14 @@ const convertDurationToSeconds = (settings) => {
 };
 
 // 이상치 필터 기반 구간 기본값 계산 (10%씩 감소)
-const calculateBoundaries = (maxValue, count = 3) => {
+const calculateBoundaries = (maxValue, count = 3, useInteger = false) => {
   const boundaries = [];
   let current = maxValue * 0.9; // 1등급: 이상치의 90%
   for (let i = 0; i < count; i++) {
-    boundaries.push(Math.round(current * 100) / 100); // 소수점 2자리까지
+    const value = useInteger 
+      ? Math.round(current) // 정수 반올림
+      : Math.round(current * 100) / 100; // 소수점 2자리까지
+    boundaries.push(value);
     current = current * 0.9; // 다음 등급은 10% 감소
   }
   return boundaries;
@@ -98,10 +101,11 @@ const createDefaultSettings = (outlierFilters = {}) => {
     weight_duration: 35,
     weight_view: 0,
     weight_uv: 0,
-    // 스크롤, PV, 체류시간: 이상치 필터 기반 계산
-    scroll_config: { boundaries: calculateBoundaries(maxScroll), scores: [100, 80, 50, 20] },
-    pv_config: { boundaries: calculateBoundaries(maxPv), scores: [100, 80, 50, 20] },
-    duration_config: { boundaries: calculateBoundaries(maxDuration / 60), scores: [100, 80, 50, 20] }, // 초→분 변환
+    // 스크롤, PV: 정수 단위 계산
+    scroll_config: { boundaries: calculateBoundaries(maxScroll, 3, true), scores: [100, 80, 50, 20] },
+    pv_config: { boundaries: calculateBoundaries(maxPv, 3, true), scores: [100, 80, 50, 20] },
+    // 체류시간: 분 단위 (소수점 허용)
+    duration_config: { boundaries: calculateBoundaries(maxDuration / 60), scores: [100, 80, 50, 20] },
     // View, UV: 하드코딩 유지
     view_config: { boundaries: [1000, 500, 100], scores: [100, 80, 50, 20] },
     uv_config: { boundaries: [500, 200, 50], scores: [100, 80, 50, 20] },
