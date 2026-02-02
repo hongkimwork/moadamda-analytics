@@ -122,7 +122,8 @@ function validateSortColumn(sortBy, sortOrder) {
     'unique_visitors',
     'total_views',
     'avg_pageviews',
-    'avg_duration_seconds'
+    'avg_duration_seconds',
+    'avg_scroll_px'
   ];
 
   const attributionSortColumns = [

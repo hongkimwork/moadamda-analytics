@@ -1,3 +1,4 @@
+| 2026-02-02 | 평균스크롤 정렬 버그 수정 | utils.js |
 | 2026-02-02 | 구간값 정수 반올림 추가 | ScoreSettingsModal.jsx |
 | 2026-02-02 | 구간 기본값 이상치 연동 | ScoreSettingsModal.jsx |
 | 2026-02-02 | 체류시간 단위 분 변경 | ScoreSettingsModal.jsx |
@@ -12,4 +13,3 @@
 | 2026-01-30 | 사용자관리 기능 추가 | auth.js |
 | 2026-01-30 | 모수평가 프리셋 3분할 | ScoreSettingsModal.jsx |
 | 2026-01-30 | 이상치 필터 직접입력 | PerformanceFilters.jsx |
-| 2026-01-30 | 임의 매핑 로직 제거 | metaAdNameMapping.js |
