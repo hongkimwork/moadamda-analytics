@@ -18,50 +18,83 @@ import ScoreSettingsCard from './ScoreSettingsCard';
 const { RangePicker } = DatePicker;
 
 /**
- * Segmented Button - 높이 36px 통일
+ * Date Navigator Group - 날짜 네비게이션 버튼 그룹
+ * 구조: [-1단위] [중앙 버튼] [+1단위]
  */
-const SegmentedButton = ({ options, value, onChange, disabled }) => (
-  <div style={{
-    display: 'inline-flex',
-    borderRadius: '8px',
-    border: '1px solid #dadce0',
-    overflow: 'hidden',
-    background: '#fff'
-  }}>
-    {options.map((option, index) => {
-      const isSelected = value === option.value;
-      const isFirst = index === 0;
-      const isLast = index === options.length - 1;
-      
-      return (
-        <button
-          key={option.value}
-          onClick={() => !disabled && onChange(option.value)}
-          disabled={disabled}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: '36px',
-            padding: '0 16px',
-            border: 'none',
-            borderLeft: !isFirst ? '1px solid #dadce0' : 'none',
-            background: isSelected ? '#e8f0fe' : 'transparent',
-            color: isSelected ? '#1a73e8' : '#5f6368',
-            fontSize: '13px',
-            fontWeight: isSelected ? 600 : 500,
-            cursor: disabled ? 'not-allowed' : 'pointer',
-            transition: 'all 150ms ease',
-            opacity: disabled ? 0.5 : 1,
-            borderRadius: isFirst ? '8px 0 0 8px' : isLast ? '0 8px 8px 0' : 0
-          }}
-        >
-          {option.label}
-        </button>
-      );
-    })}
-  </div>
-);
+const DateNavigatorGroup = ({ 
+  label, 
+  prevLabel, 
+  nextLabel, 
+  isActive, 
+  offset, 
+  onCenterClick, 
+  onPrevClick, 
+  onNextClick, 
+  disabled 
+}) => {
+  // 활성화된 그룹인지, 그리고 offset에 따라 버튼 스타일 결정
+  const getButtonStyle = (position) => {
+    // position: 'prev' | 'center' | 'next'
+    let isSelected = false;
+    
+    if (isActive) {
+      if (position === 'center' && offset === 0) isSelected = true;
+      if (position === 'prev' && offset < 0) isSelected = true;
+      if (position === 'next' && offset > 0) isSelected = true;
+    }
+    
+    return {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      height: '36px',
+      padding: position === 'center' ? '0 14px' : '0 10px',
+      border: 'none',
+      background: isSelected ? '#1a1a1a' : 'transparent',
+      color: isSelected ? '#fff' : '#5f6368',
+      fontSize: '13px',
+      fontWeight: isSelected ? 600 : 500,
+      cursor: disabled ? 'not-allowed' : 'pointer',
+      transition: 'all 150ms ease',
+      opacity: disabled ? 0.5 : 1,
+      whiteSpace: 'nowrap'
+    };
+  };
+
+  return (
+    <div style={{
+      display: 'inline-flex',
+      borderRadius: '8px',
+      border: '1px solid #dadce0',
+      overflow: 'hidden',
+      background: '#fff'
+    }}>
+      <button
+        onClick={onPrevClick}
+        disabled={disabled}
+        style={getButtonStyle('prev')}
+      >
+        {prevLabel}
+      </button>
+      <div style={{ width: '1px', background: '#dadce0' }} />
+      <button
+        onClick={onCenterClick}
+        disabled={disabled}
+        style={getButtonStyle('center')}
+      >
+        {label}
+      </button>
+      <div style={{ width: '1px', background: '#dadce0' }} />
+      <button
+        onClick={onNextClick}
+        disabled={disabled}
+        style={getButtonStyle('next')}
+      >
+        {nextLabel}
+      </button>
+    </div>
+  );
+};
 
 /**
  * Search Input - 높이 36px, Enter로 검색
@@ -141,13 +174,41 @@ function PerformanceFilters({
   onScoreSettingsClick,
   quickFilterSources
 }) {
-  const defaultQuickDate = '30days';
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeQuickDate, setActiveQuickDate] = useState(defaultQuickDate);
+  // 새로운 상태: 활성 그룹 (day, week, month, custom)
+  const [activeGroup, setActiveGroup] = useState('month');
+  // offset: 0이면 오늘/이번주/이번달, -1이면 이전, +1이면 다음
+  const [offset, setOffset] = useState(0);
   const [customDateRange, setCustomDateRange] = useState(null);
   const [isDateInitialized, setIsDateInitialized] = useState(false);
   
-  // 저장된 dateRange에서 activeQuickDate 계산 (최초 1회만)
+  /**
+   * 그룹과 offset에 따라 날짜 범위 계산
+   */
+  const getDateRangeByGroupAndOffset = (group, offsetValue) => {
+    const now = dayjs();
+    
+    switch (group) {
+      case 'day': {
+        const targetDay = now.add(offsetValue, 'day');
+        return [targetDay.startOf('day'), targetDay.endOf('day')];
+      }
+      case 'week': {
+        // 이번 주 기준으로 offset 적용 (월요일 ~ 일요일)
+        const targetWeekStart = now.startOf('week').add(1, 'day').add(offsetValue, 'week'); // 월요일
+        const targetWeekEnd = targetWeekStart.add(6, 'day'); // 일요일
+        return [targetWeekStart.startOf('day'), targetWeekEnd.endOf('day')];
+      }
+      case 'month': {
+        const targetMonth = now.add(offsetValue, 'month');
+        return [targetMonth.startOf('month'), targetMonth.endOf('month')];
+      }
+      default:
+        return [now.startOf('day'), now.endOf('day')];
+    }
+  };
+
+  // 저장된 dateRange에서 activeGroup/offset 계산 (최초 1회만)
   useEffect(() => {
     if (isDateInitialized || !filters?.dateRange) return;
     
@@ -157,26 +218,35 @@ function PerformanceFilters({
     const now = dayjs();
     const diffDays = endDate.diff(startDate, 'day');
     
-    // 날짜 범위로 퀵 필터 타입 계산
-    let calculatedType = 'custom';
-    if (diffDays === 0 && startDate.isSame(now, 'day')) {
-      calculatedType = 'today';
-    } else if (diffDays === 0 && startDate.isSame(now.subtract(1, 'day'), 'day')) {
-      calculatedType = 'yesterday';
-    } else if (diffDays === 6 && endDate.isSame(now, 'day')) {
-      calculatedType = '7days';
-    } else if (diffDays === 29 && endDate.isSame(now, 'day')) {
-      calculatedType = '30days';
+    // 날짜 범위로 그룹 타입 계산
+    let calculatedGroup = 'custom';
+    let calculatedOffset = 0;
+    
+    // 단일 일자인 경우 (day 그룹)
+    if (diffDays === 0) {
+      calculatedGroup = 'day';
+      calculatedOffset = startDate.diff(now.startOf('day'), 'day');
+    }
+    // 7일 범위인 경우 (week 그룹 가능성)
+    else if (diffDays === 6) {
+      // 월요일 시작인지 확인
+      if (startDate.day() === 1) {
+        calculatedGroup = 'week';
+        const thisWeekStart = now.startOf('week').add(1, 'day');
+        calculatedOffset = startDate.diff(thisWeekStart, 'week');
+      }
+    }
+    // 월 전체인 경우 (month 그룹)
+    else if (startDate.date() === 1 && endDate.date() === endDate.endOf('month').date()) {
+      calculatedGroup = 'month';
+      calculatedOffset = startDate.month() - now.month() + (startDate.year() - now.year()) * 12;
     }
     
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/546a3f56-d046-4164-8da1-9726e1a92f02',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PerformanceFilters.jsx:dateInit',message:'저장된 dateRange에서 activeQuickDate 계산',data:{dateRange:filters.dateRange,diffDays,calculatedType},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'F'})}).catch(()=>{});
-    // #endregion
-    
-    if (calculatedType !== 'custom') {
-      setActiveQuickDate(calculatedType);
+    if (calculatedGroup !== 'custom') {
+      setActiveGroup(calculatedGroup);
+      setOffset(calculatedOffset);
     } else {
-      setActiveQuickDate('custom');
+      setActiveGroup('custom');
       setCustomDateRange([startDate, endDate]);
     }
     setIsDateInitialized(true);
@@ -200,49 +270,71 @@ function PerformanceFilters({
     if (maxScroll) setLocalScroll(maxScroll);
   }, [maxScroll]);
 
-  const getDateRange = (type) => {
-    const now = dayjs();
-    switch (type) {
-      case 'today': return [now.startOf('day'), now.endOf('day')];
-      case 'yesterday': return [now.subtract(1, 'day').startOf('day'), now.subtract(1, 'day').endOf('day')];
-      case '7days': return [now.subtract(6, 'day').startOf('day'), now.endOf('day')];
-      case '30days': return [now.subtract(29, 'day').startOf('day'), now.endOf('day')];
-      default: return [now.subtract(29, 'day').startOf('day'), now.endOf('day')];
-    }
-  };
-
   // 마운트 시 기본값 설정 제거 - 부모 훅에서 저장된 값 또는 기본값을 이미 사용함
   // useEffect에서 기본값으로 덮어쓰면 저장된 필터가 무시됨
 
   const handleSearchSubmit = () => onSearch?.(searchTerm.trim());
 
-  const handleQuickDateChange = (value) => {
-    setActiveQuickDate(value);
+  /**
+   * 날짜 그룹 중앙 버튼 클릭 (오늘/이번주/이번달)
+   */
+  const handleGroupCenterClick = (group) => {
+    setActiveGroup(group);
+    setOffset(0);
     setCustomDateRange(null);
-    onFilterChange?.({ dateRange: getDateRange(value) });
+    const dateRange = getDateRangeByGroupAndOffset(group, 0);
+    onFilterChange?.({ dateRange });
+  };
+
+  /**
+   * 이전 버튼 클릭 (-1일/-1주/-1개월)
+   */
+  const handleGroupPrevClick = (group) => {
+    const newOffset = activeGroup === group ? offset - 1 : -1;
+    setActiveGroup(group);
+    setOffset(newOffset);
+    setCustomDateRange(null);
+    const dateRange = getDateRangeByGroupAndOffset(group, newOffset);
+    onFilterChange?.({ dateRange });
+  };
+
+  /**
+   * 다음 버튼 클릭 (+1일/+1주/+1개월)
+   */
+  const handleGroupNextClick = (group) => {
+    const newOffset = activeGroup === group ? offset + 1 : 1;
+    setActiveGroup(group);
+    setOffset(newOffset);
+    setCustomDateRange(null);
+    const dateRange = getDateRangeByGroupAndOffset(group, newOffset);
+    onFilterChange?.({ dateRange });
   };
 
   const handleCustomDateChange = (dates) => {
     if (!dates || dates.length === 0) {
-      setActiveQuickDate(defaultQuickDate);
+      // 날짜 선택 취소시 기본값으로 (이번 달)
+      setActiveGroup('month');
+      setOffset(0);
       setCustomDateRange(null);
-      onFilterChange?.({ dateRange: getDateRange(defaultQuickDate) });
+      onFilterChange?.({ dateRange: getDateRangeByGroupAndOffset('month', 0) });
       return;
     }
     setCustomDateRange(dates);
-    setActiveQuickDate('custom');
+    setActiveGroup('custom');
+    setOffset(0);
     onFilterChange?.({ dateRange: dates });
   };
 
   const handleReset = () => {
     setSearchTerm('');
-    setActiveQuickDate(defaultQuickDate);
+    setActiveGroup('month');
+    setOffset(0);
     setCustomDateRange(null);
     // 이상치 필터도 초기화
     setLocalDuration(maxDuration ? maxDuration / 60 : 1);
     setLocalPv(maxPv || 35);
     setLocalScroll(maxScroll || 30000);
-    onFilterChange?.({ dateRange: getDateRange(defaultQuickDate) });
+    onFilterChange?.({ dateRange: getDateRangeByGroupAndOffset('month', 0) });
     onReset?.();
   };
 
@@ -267,16 +359,10 @@ function PerformanceFilters({
     return localDuration !== currentDurationMin || localPv !== currentPv || localScroll !== currentScroll;
   };
 
-  const isDefaultState = () => !searchTerm && activeQuickDate === defaultQuickDate;
+  const isDefaultState = () => !searchTerm && activeGroup === 'month' && offset === 0;
 
-  const dateOptions = [
-    { label: '오늘', value: 'today' },
-    { label: '어제', value: 'yesterday' },
-    { label: '7일', value: '7days' },
-    { label: '30일', value: '30days' }
-  ];
-
-  const displayDateRange = customDateRange || (activeQuickDate !== 'custom' ? getDateRange(activeQuickDate) : null);
+  // 현재 표시할 날짜 범위
+  const displayDateRange = customDateRange || (activeGroup !== 'custom' ? getDateRangeByGroupAndOffset(activeGroup, offset) : null);
 
   return (
     <>
@@ -332,14 +418,46 @@ function PerformanceFilters({
                 height: '28px'
               }}
               bordered={false}
-              allowClear={activeQuickDate === 'custom'}
+              allowClear={activeGroup === 'custom'}
             />
           </div>
 
-          <SegmentedButton
-            options={dateOptions}
-            value={activeQuickDate === 'custom' ? null : activeQuickDate}
-            onChange={handleQuickDateChange}
+          {/* 월 네비게이터 */}
+          <DateNavigatorGroup
+            label="이번 달"
+            prevLabel="-1개월"
+            nextLabel="+1개월"
+            isActive={activeGroup === 'month'}
+            offset={activeGroup === 'month' ? offset : 0}
+            onCenterClick={() => handleGroupCenterClick('month')}
+            onPrevClick={() => handleGroupPrevClick('month')}
+            onNextClick={() => handleGroupNextClick('month')}
+            disabled={loading}
+          />
+
+          {/* 주 네비게이터 */}
+          <DateNavigatorGroup
+            label="이번 주"
+            prevLabel="-1주"
+            nextLabel="+1주"
+            isActive={activeGroup === 'week'}
+            offset={activeGroup === 'week' ? offset : 0}
+            onCenterClick={() => handleGroupCenterClick('week')}
+            onPrevClick={() => handleGroupPrevClick('week')}
+            onNextClick={() => handleGroupNextClick('week')}
+            disabled={loading}
+          />
+
+          {/* 일 네비게이터 */}
+          <DateNavigatorGroup
+            label="오늘"
+            prevLabel="-1일"
+            nextLabel="+1일"
+            isActive={activeGroup === 'day'}
+            offset={activeGroup === 'day' ? offset : 0}
+            onCenterClick={() => handleGroupCenterClick('day')}
+            onPrevClick={() => handleGroupPrevClick('day')}
+            onNextClick={() => handleGroupNextClick('day')}
             disabled={loading}
           />
 
