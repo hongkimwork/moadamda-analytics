@@ -1,4 +1,4 @@
-| 2026-02-02 | 미디어미리보기캐시개선 | metaAdNameMapping.js |
+| 2026-02-02 | 광고DB자동동기화+토큰갱신 | metaAdNameMapping.js |
 | 2026-02-02 | 모달URL인코딩변형수정 | detailService.js |
 | 2026-02-02 | 모달 잘린광고명 병합수정 | metaAdNameMapping.js |
 | 2026-02-02 | 평균스크롤 정렬 버그 수정 | utils.js |

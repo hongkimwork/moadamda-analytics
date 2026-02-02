@@ -62,16 +62,18 @@ async function getMetaAdNames() {
   let apiNames = [];
   let dbNames = [];
 
+  const db = require('../../utils/database');
+  
   // 1. 메타 API에서 ACTIVE/PAUSED 광고명 가져오기 (id도 함께)
   try {
     const [activeResult, pausedResult] = await Promise.all([
       callMetaApiSimple(`${META_AD_ACCOUNT_ID}/ads`, {
-        fields: 'id,name',
+        fields: 'id,name,status',
         filtering: JSON.stringify([{ field: 'effective_status', operator: 'IN', value: ['ACTIVE'] }]),
         limit: 500
       }),
       callMetaApiSimple(`${META_AD_ACCOUNT_ID}/ads`, {
-        fields: 'id,name',
+        fields: 'id,name,status',
         filtering: JSON.stringify([{ field: 'effective_status', operator: 'IN', value: ['PAUSED'] }]),
         limit: 500
       })
@@ -80,22 +82,40 @@ async function getMetaAdNames() {
     const apiAds = [...(activeResult.data || []), ...(pausedResult.data || [])];
     apiNames = apiAds.map(ad => ad.name).filter(Boolean);
     
-    // 광고명 → ad_id 매핑 캐시 업데이트
+    // 광고명 → ad_id 매핑 캐시 업데이트 + DB 저장
     for (const ad of apiAds) {
       if (ad.name && ad.id) {
         adNameToIdCache.set(ad.name, ad.id);
+        
+        // DB에 저장 (중복 시 업데이트)
+        try {
+          await db.query(
+            `INSERT INTO meta_ads (ad_id, account_id, name, status, created_time, updated_time)
+             VALUES ($1, $2, $3, $4, NOW(), NOW())
+             ON CONFLICT (ad_id) DO UPDATE SET name = EXCLUDED.name, status = EXCLUDED.status, updated_time = NOW()`,
+            [ad.id, META_AD_ACCOUNT_ID, ad.name, ad.status || 'ACTIVE']
+          );
+        } catch (dbSaveError) {
+          // 저장 실패해도 계속 진행
+        }
       }
     }
+    console.log(`[MetaAdNameMapping] Synced ${apiAds.length} ads to DB`);
   } catch (apiError) {
     console.warn('[MetaAdNameMapping] Meta API failed:', apiError.message);
   }
   
-  // 2. DB의 meta_ads 테이블에서 광고명 가져오기 (ARCHIVED 포함)
-  // FIX (2026-01-30): API 실패해도 DB에서 가져오도록 분리
+  // 2. DB의 meta_ads 테이블에서 광고명 + ad_id 가져오기 (ARCHIVED 포함)
+  // FIX (2026-02-02): ad_id도 함께 가져와서 캐시에 저장
   try {
-    const db = require('../../utils/database');
-    const dbResult = await db.query('SELECT DISTINCT name FROM meta_ads WHERE name IS NOT NULL');
-    dbNames = dbResult.rows.map(row => row.name);
+    const dbResult = await db.query('SELECT ad_id, name FROM meta_ads WHERE name IS NOT NULL');
+    for (const row of dbResult.rows) {
+      dbNames.push(row.name);
+      // 캐시에 없으면 추가 (API 데이터 우선)
+      if (row.ad_id && !adNameToIdCache.has(row.name)) {
+        adNameToIdCache.set(row.name, row.ad_id);
+      }
+    }
   } catch (dbError) {
     console.warn('[MetaAdNameMapping] Failed to fetch ad names from DB:', dbError.message);
   }
