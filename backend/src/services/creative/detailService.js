@@ -6,16 +6,22 @@
 const repository = require('./detailRepository');
 const { getMetaAdNames, getAllVariantNames } = require('./metaAdNameMapping');
 const db = require('../../utils/database');
+const { safeDecodeURIComponent } = require('./utils');
 
 // 기여 인정 기간 (일 단위) - 구매일 기준 이 기간 내에 본 광고만 기여 인정
 const ATTRIBUTION_WINDOW_DAYS = 30;
 
 /**
  * DB에서 해당 기간 내 존재하는 광고명 목록 조회 (변형 찾기용)
+ * FIX (2026-02-02): URL 인코딩된 광고명을 safeDecodeURIComponent로 디코딩
+ * - DB에 URL 인코딩된 광고명이 저장될 수 있음 (Tracker에서 인코딩된 상태로 전송)
+ * - 테이블과 동일하게 디코딩해야 변형 찾기가 정확하게 동작함
+ * 
+ * @returns {Object} { decodedNames: string[], rawToDecoded: Map<string, string> }
  */
-async function getDbCreativeNames(startDate, endDate) {
+async function getDbCreativeNamesWithMapping(startDate, endDate) {
   const query = `
-    SELECT DISTINCT REPLACE(us.utm_params->>'utm_content', '+', ' ') as creative_name
+    SELECT DISTINCT us.utm_params->>'utm_content' as creative_name
     FROM utm_sessions us
     JOIN visitors v ON us.visitor_id = v.visitor_id
     WHERE us.utm_params->>'utm_content' IS NOT NULL
@@ -24,28 +30,71 @@ async function getDbCreativeNames(startDate, endDate) {
       AND v.is_bot = false
   `;
   const result = await db.query(query, [startDate, endDate]);
-  return result.rows.map(r => r.creative_name);
+  
+  // 원본 → 디코딩 매핑 생성
+  const rawToDecoded = new Map();
+  const decodedToRaw = new Map(); // 디코딩 결과 → 원본들 (여러 원본이 같은 결과로 디코딩될 수 있음)
+  const decodedNames = new Set();
+  
+  for (const row of result.rows) {
+    const raw = row.creative_name;
+    const decoded = safeDecodeURIComponent(raw);
+    if (decoded) {
+      rawToDecoded.set(raw, decoded);
+      decodedNames.add(decoded);
+      
+      // 디코딩 결과 → 원본 매핑 (배열로 저장)
+      if (!decodedToRaw.has(decoded)) {
+        decodedToRaw.set(decoded, []);
+      }
+      decodedToRaw.get(decoded).push(raw);
+    }
+  }
+  
+  return { 
+    decodedNames: Array.from(decodedNames), 
+    rawToDecoded, 
+    decodedToRaw 
+  };
 }
 
 /**
- * 광고명의 모든 변형을 찾아서 배열로 반환
+ * 광고명의 모든 변형을 찾아서 배열로 반환 (원본 DB 값 기준)
+ * FIX (2026-02-02): 디코딩된 값으로 변형을 찾고, 해당 변형의 원본 DB 값을 반환
+ * - detailRepository의 쿼리는 원본 DB 값을 기준으로 조회함
+ * - URL 인코딩된 광고명도 쿼리에서 찾을 수 있도록 원본 값 반환
+ * 
  * @param {string} creative_name - 요청받은 광고명
  * @param {Date} startDate - 시작일
  * @param {Date} endDate - 종료일
- * @returns {Promise<string[]>} - 변형 광고명들의 배열
+ * @returns {Promise<string[]>} - 변형 광고명들의 배열 (원본 DB 값)
  */
 async function getCreativeVariants(creative_name, startDate, endDate) {
-  // DB에서 해당 기간 내 존재하는 광고명 목록 조회
-  const dbCreativeNames = await getDbCreativeNames(startDate, endDate);
+  // DB에서 해당 기간 내 존재하는 광고명 목록 조회 (매핑 포함)
+  const { decodedNames, decodedToRaw } = await getDbCreativeNamesWithMapping(startDate, endDate);
   
   // 메타 API에서 등록된 광고명 목록 조회 (별도 광고 판별용)
   const metaAdNames = await getMetaAdNames();
   
   // 요청받은 광고명이 메타 광고명인 경우 변형들 찾기
   // 메타에 별도로 등록된 광고는 변형에서 제외
-  const variants = getAllVariantNames(creative_name, dbCreativeNames, metaAdNames);
+  const decodedVariants = getAllVariantNames(creative_name, decodedNames, metaAdNames);
   
-  return variants.length > 0 ? variants : [creative_name];
+  // 디코딩된 변형들의 원본 DB 값들을 수집
+  const rawVariants = new Set();
+  for (const decoded of decodedVariants) {
+    const rawValues = decodedToRaw.get(decoded);
+    if (rawValues) {
+      for (const raw of rawValues) {
+        rawVariants.add(raw);
+      }
+    } else {
+      // 매핑이 없으면 그대로 사용 (이미 원본 값일 수 있음)
+      rawVariants.add(decoded);
+    }
+  }
+  
+  return rawVariants.size > 0 ? Array.from(rawVariants) : [creative_name];
 }
 
 /**

@@ -198,6 +198,7 @@ router.get('/meta/ad/:adId/media', async (req, res) => {
  * GET /api/meta/ad-by-name
  * 광고 이름으로 광고 ID 및 미디어 정보 조회
  * - creative_name을 Meta 광고명으로 매핑 후 미디어 정보 반환
+ * FIX (2026-02-02): DB에 없는 경우 Meta API에서 직접 검색
  */
 router.get('/meta/ad-by-name', async (req, res) => {
   try {
@@ -211,7 +212,7 @@ router.get('/meta/ad-by-name', async (req, res) => {
     }
     
     // 매핑 서비스 사용
-    const { mapToMetaAdName } = require('../services/creative/metaAdNameMapping');
+    const { mapToMetaAdName, getAdIdByName } = require('../services/creative/metaAdNameMapping');
     
     // 1. creative_name을 Meta 광고명으로 매핑
     const metaAdName = await mapToMetaAdName(name);
@@ -225,40 +226,77 @@ router.get('/meta/ad-by-name', async (req, res) => {
       });
     }
     
-    // 2. DB에서 직접 광고 ID 검색 (Meta API 호출 대신 - API 제한 회피)
+    // 2. DB에서 직접 광고 ID 검색 (캐시 역할)
     const db = require('../utils/database');
     const dbResult = await db.query(
       'SELECT ad_id, name FROM meta_ads WHERE name = $1 LIMIT 1',
       [metaAdName]
     );
     
-    if (dbResult.rows.length === 0) {
+    let adId = null;
+    let adName = metaAdName;
+    
+    if (dbResult.rows.length > 0) {
+      // DB에서 찾은 경우
+      adId = dbResult.rows[0].ad_id;
+      adName = dbResult.rows[0].name;
+    } else {
+      // 3. DB에 없으면 캐시에서 먼저 조회
+      const cachedAdId = await getAdIdByName(metaAdName);
+      
+      if (cachedAdId) {
+        adId = cachedAdId;
+        adName = metaAdName;
+        console.log(`[Meta API] Found ad in cache: ${adId}`);
+        
+        // DB에 캐시로 저장 (다음 조회 시 빠르게)
+        try {
+          await db.query(
+            `INSERT INTO meta_ads (ad_id, account_id, name, status, created_time, updated_time)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             ON CONFLICT (ad_id) DO UPDATE SET name = EXCLUDED.name, updated_time = EXCLUDED.updated_time`,
+            [
+              adId,
+              process.env.META_AD_ACCOUNT_ID,
+              metaAdName,
+              'ACTIVE',
+              new Date().toISOString(),
+              new Date().toISOString()
+            ]
+          );
+          console.log(`[Meta API] Cached ad to DB: ${adId}`);
+        } catch (cacheError) {
+          console.log(`[Meta API] Failed to cache ad: ${cacheError.message}`);
+        }
+      } else {
+        console.log(`[Meta API] Ad not found in cache: ${metaAdName}`);
+      }
+    }
+    
+    if (!adId) {
       return res.json({
         success: false,
         matched: true,
         metaAdName,
-        error: 'Ad found in mapping but not in DB',
+        error: 'Ad name mapped but ad not found in Meta',
         originalName: name
       });
     }
     
-    // DB에서 찾은 경우
-    const dbAd = dbResult.rows[0];
-    
+    // 4. 미디어 정보 조회
     let mediaDetails = null;
     try {
-      mediaDetails = await metaService.getAdMediaDetails(dbAd.ad_id);
+      mediaDetails = await metaService.getAdMediaDetails(adId);
     } catch (mediaError) {
-      // 미디어 조회 실패해도 기본 정보는 반환
-      console.log(`[Meta API] getAdMediaDetails failed for ${dbAd.ad_id}:`, mediaError.message);
+      console.log(`[Meta API] getAdMediaDetails failed for ${adId}:`, mediaError.message);
     }
     
     res.json({
       success: true,
       matched: true,
       data: {
-        adId: dbAd.ad_id,
-        name: dbAd.name,
+        adId: adId,
+        name: adName,
         originalName: name,
         thumbnailUrl: mediaDetails?.videoThumbnail || mediaDetails?.imageUrl || null,
         isVideo: mediaDetails?.isVideo || false,

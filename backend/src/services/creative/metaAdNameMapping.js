@@ -10,6 +10,9 @@ let metaAdNamesCache = null;
 let metaAdNamesCacheTime = null;
 const CACHE_TTL = 10 * 60 * 1000; // 10분
 
+// 광고명 → ad_id 매핑 캐시 (미리보기용)
+let adNameToIdCache = new Map();
+
 const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
 const META_AD_ACCOUNT_ID = process.env.META_AD_ACCOUNT_ID;
 const API_VERSION = 'v20.0';
@@ -59,16 +62,16 @@ async function getMetaAdNames() {
   let apiNames = [];
   let dbNames = [];
 
-  // 1. 메타 API에서 ACTIVE/PAUSED 광고명 가져오기
+  // 1. 메타 API에서 ACTIVE/PAUSED 광고명 가져오기 (id도 함께)
   try {
     const [activeResult, pausedResult] = await Promise.all([
       callMetaApiSimple(`${META_AD_ACCOUNT_ID}/ads`, {
-        fields: 'name',
+        fields: 'id,name',
         filtering: JSON.stringify([{ field: 'effective_status', operator: 'IN', value: ['ACTIVE'] }]),
         limit: 500
       }),
       callMetaApiSimple(`${META_AD_ACCOUNT_ID}/ads`, {
-        fields: 'name',
+        fields: 'id,name',
         filtering: JSON.stringify([{ field: 'effective_status', operator: 'IN', value: ['PAUSED'] }]),
         limit: 500
       })
@@ -76,6 +79,13 @@ async function getMetaAdNames() {
     
     const apiAds = [...(activeResult.data || []), ...(pausedResult.data || [])];
     apiNames = apiAds.map(ad => ad.name).filter(Boolean);
+    
+    // 광고명 → ad_id 매핑 캐시 업데이트
+    for (const ad of apiAds) {
+      if (ad.name && ad.id) {
+        adNameToIdCache.set(ad.name, ad.id);
+      }
+    }
   } catch (apiError) {
     console.warn('[MetaAdNameMapping] Meta API failed:', apiError.message);
   }
@@ -296,13 +306,18 @@ async function mapToMetaAdName(truncatedName, metaAdNames = null) {
  * 정상 메타 광고명에 매핑되는 모든 변형 광고명들을 찾기
  * (상세 API에서 사용: 정상 광고명 클릭 시 잘린 광고명 데이터도 포함해서 조회)
  * 
- * 중요: "잘린" 광고명만 변형으로 인정
- * - DB 광고명이 메타 광고명보다 짧고, 메타 광고명이 DB 광고명으로 시작하는 경우만 변형
+ * 중요: "잘린" 광고명도 변형으로 인정
+ * - DB 광고명이 메타 광고명보다 짧고, 메타 광고명이 DB 광고명으로 시작하는 경우 변형
  * - 단, DB 광고명이 메타에 별도로 등록된 광고면 변형이 아님 (예: "...1초"와 "...1초 - 사본")
  * 
  * FIX (2026-01-27): 빈 문자열 처리
  * - metaAdName이 빈 문자열이어도 유효한 값으로 처리
  * - 실제로 utm_content가 빈 문자열로 저장된 데이터가 존재함
+ * 
+ * FIX (2026-02-02): 접두사 매칭 로직 추가 (테이블과 동일하게)
+ * - 잘린 광고명도 변형으로 인정 (mapToMetaAdName과 동일한 로직)
+ * - 최소 17자 이상이어야 의미있는 매칭
+ * - 다른 메타 광고가 같은 접두사를 가지지 않는 경우만 변형으로 인정
  * 
  * @param {string} metaAdName - 정상 메타 광고명
  * @param {string[]} dbCreativeNames - DB에 있는 모든 광고명 목록
@@ -323,10 +338,15 @@ function getAllVariantNames(metaAdName, dbCreativeNames, metaAdNames = []) {
   }
   
   const variants = new Set([metaAdName]);
+  const normalizedMeta = metaAdName.replace(/\+/g, ' ');
   
-  // FIX (2026-01-30): 잘린 광고명을 변형으로 취급하지 않음
-  // 잘린 광고명은 별도 행으로 표시되어야 함 (어떤 광고인지 확정할 수 없음)
-  // 변형으로 인정하는 경우: URL 디코딩, +/공백 변환으로 정확히 일치하는 경우만
+  // (중지) 접두사 제거한 버전도 준비
+  const metaWithoutPrefix = metaAdName.startsWith('(중지)') 
+    ? metaAdName.substring(4) 
+    : null;
+  const normalizedMetaWithoutPrefix = metaWithoutPrefix 
+    ? metaWithoutPrefix.replace(/\+/g, ' ') 
+    : null;
   
   for (const dbName of dbCreativeNames) {
     // 정확히 일치
@@ -338,11 +358,36 @@ function getAllVariantNames(metaAdName, dbCreativeNames, metaAdNames = []) {
     // 메타에 별도로 등록된 광고면 변형이 아님 (별도 광고)
     if (metaAdNames.includes(dbName)) continue;
     
-    // +/공백 변환으로 일치하는 경우만 변형으로 인정
     const normalizedDb = dbName.replace(/\+/g, ' ');
-    const normalizedMeta = metaAdName.replace(/\+/g, ' ');
+    
+    // 1. +/공백 변환으로 정확히 일치하는 경우 변형으로 인정
     if (normalizedDb === normalizedMeta) {
       variants.add(dbName);
+      continue;
+    }
+    
+    // 2. 접두사 매칭 (잘린 광고명 → 원본에 병합)
+    // 최소 17자 이상이어야 의미있는 매칭
+    if (dbName.length >= 17 && dbName.length < metaAdName.length) {
+      // 원본이 DB 광고명으로 시작하면 변형으로 인정
+      if (metaAdName.startsWith(dbName)) {
+        variants.add(dbName);
+        continue;
+      }
+      // 정규화 후 접두사 매칭
+      if (normalizedMeta.startsWith(normalizedDb)) {
+        variants.add(dbName);
+        continue;
+      }
+      // (중지) 제거 후 접두사 매칭
+      if (metaWithoutPrefix && metaWithoutPrefix.startsWith(dbName)) {
+        variants.add(dbName);
+        continue;
+      }
+      if (normalizedMetaWithoutPrefix && normalizedMetaWithoutPrefix.startsWith(normalizedDb)) {
+        variants.add(dbName);
+        continue;
+      }
     }
   }
   
@@ -382,6 +427,24 @@ async function groupByMetaAdName(rows) {
 function clearCache() {
   metaAdNamesCache = null;
   metaAdNamesCacheTime = null;
+  adNameToIdCache.clear();
+}
+
+/**
+ * 광고명으로 ad_id 조회 (캐시에서)
+ * FIX (2026-02-02): 미리보기 모달용 - DB 조회 없이 캐시에서 직접 조회
+ * @param {string} adName - 메타 광고명
+ * @returns {Promise<string|null>} - ad_id 또는 null
+ */
+async function getAdIdByName(adName) {
+  if (!adName) return null;
+  
+  // 캐시가 비어 있으면 먼저 로드
+  if (adNameToIdCache.size === 0) {
+    await getMetaAdNames();
+  }
+  
+  return adNameToIdCache.get(adName) || null;
 }
 
 module.exports = {
@@ -389,5 +452,6 @@ module.exports = {
   mapToMetaAdName,
   getAllVariantNames,
   groupByMetaAdName,
-  clearCache
+  clearCache,
+  getAdIdByName
 };
