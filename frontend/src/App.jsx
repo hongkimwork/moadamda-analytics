@@ -132,6 +132,12 @@ function AppLayout() {
           onClick: () => navigate('/')
         },
         {
+          key: 'creative-performance',
+          icon: <BarChartOutlined />,
+          label: '광고 성과 파악',
+          onClick: () => navigate('/creative-performance')
+        },
+        {
           key: 'meta-insights',
           icon: <GlobalOutlined />,
           label: '메타 성과 조회',
@@ -142,12 +148,6 @@ function AppLayout() {
           icon: <AppstoreOutlined />,
           label: '나만의 대시보드',
           onClick: () => navigate('/my-dashboard')
-        },
-        {
-          key: 'creative-performance',
-          icon: <BarChartOutlined />,
-          label: '광고 성과 파악',
-          onClick: () => navigate('/creative-performance')
         },
         {
           key: 'our-data-compare',
@@ -309,7 +309,7 @@ function AppLayout() {
           <Dropdown menu={{ items: profileMenuItems }} placement="bottomRight">
             <Space style={{ cursor: 'pointer' }}>
               <Avatar 
-                style={{ backgroundColor: user?.role === 'master' ? '#f5222d' : user?.role === 'admin' ? '#1890ff' : '#52c41a' }}
+                style={{ backgroundColor: '#1890ff' }}
                 icon={<UserOutlined />} 
               />
               <span style={{ fontWeight: 500 }}>{user?.name}</span>

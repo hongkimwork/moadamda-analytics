@@ -495,14 +495,15 @@ function PerformanceFilters({
               <Button
                 type="primary"
                 size="small"
-                icon={<Filter size={14} />}
                 onClick={handleApplyOutlierFilters}
                 disabled={loading || !isOutlierFilterChanged()}
                 style={{
                   height: '42px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
+                  padding: '0 12px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  boxShadow: 'none'
                 }}
               >
                 적용

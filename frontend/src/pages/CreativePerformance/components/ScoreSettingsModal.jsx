@@ -273,7 +273,7 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
       }
 
       const lastBoundary = config.boundaries[currentCount - 1];
-      const newBoundary = Math.max(Math.floor(lastBoundary / 2), 1);
+      const newBoundary = Math.max(Math.floor(lastBoundary * 0.9), 1);
       const lastScore = config.scores[currentCount - 1];
       const remainderScore = config.scores[currentCount];
       const newScore = Math.max(lastScore - 10, remainderScore + 5);
@@ -601,38 +601,66 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
             {METRIC_DEFINITIONS.map(({ key, field, label, icon }) => {
               const isEnabled = enabledMetrics.includes(key);
               return (
-                <div key={field} className={`flex items-center gap-3 p-2 rounded-lg transition-colors ${isEnabled ? 'bg-white' : 'bg-gray-50'}`}>
-                  <input
-                    type="checkbox"
-                    checked={isEnabled}
-                    onChange={() => handleToggleMetric(key)}
-                    className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
-                  />
-                  <div className={`w-24 flex items-center gap-1.5 text-xs font-medium ${isEnabled ? 'text-gray-700' : 'text-gray-400'}`}>
-                    {icon} {label}
+                <div 
+                  key={field} 
+                  className={`
+                    flex items-center gap-4 p-3 rounded-xl border transition-all duration-200
+                    ${isEnabled 
+                      ? 'bg-white border-blue-200 shadow-sm' 
+                      : 'bg-gray-50 border-transparent opacity-60 hover:opacity-100'}
+                  `}
+                >
+                  <div className="flex items-center gap-3 min-w-[120px]">
+                    <div className={`
+                      w-8 h-8 rounded-lg flex items-center justify-center transition-colors
+                      ${isEnabled ? 'bg-blue-100 text-blue-600' : 'bg-gray-200 text-gray-400'}
+                    `}>
+                      {icon}
+                    </div>
+                    <div className="flex flex-col">
+                      <span className={`text-sm font-semibold ${isEnabled ? 'text-gray-800' : 'text-gray-500'}`}>
+                        {label}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex-1">
+
+                  <div className="flex-1 flex items-center gap-4">
                     <Slider
+                      className="flex-1"
                       min={0}
                       max={100}
                       value={settings[field] || 0}
                       onChange={(value) => handleWeightChange(field, value)}
                       disabled={!isEnabled}
                       trackStyle={{ backgroundColor: isEnabled ? '#3b82f6' : '#d1d5db' }}
-                      handleStyle={{ borderColor: isEnabled ? '#3b82f6' : '#d1d5db', boxShadow: 'none' }}
+                      handleStyle={{ 
+                        borderColor: isEnabled ? '#3b82f6' : '#d1d5db',
+                        boxShadow: 'none',
+                        opacity: isEnabled ? 1 : 0
+                      }}
                     />
+                    <div className="w-20">
+                      <InputNumber
+                        className={`w-full ${isEnabled ? 'font-bold text-blue-600' : 'text-gray-400'}`}
+                        size="middle"
+                        min={0}
+                        max={100}
+                        value={settings[field] || 0}
+                        onChange={(value) => handleWeightChange(field, value || 0)}
+                        disabled={!isEnabled}
+                        formatter={value => `${value}%`}
+                        parser={value => value.replace('%', '')}
+                        bordered={isEnabled}
+                      />
+                    </div>
                   </div>
-                  <div className="w-16">
-                    <InputNumber
-                      className="w-full"
-                      size="small"
-                      min={0}
-                      max={100}
-                      value={settings[field] || 0}
-                      onChange={(value) => handleWeightChange(field, value || 0)}
-                      disabled={!isEnabled}
-                      formatter={value => `${value}%`}
-                      parser={value => value.replace('%', '')}
+
+                  <div className="pl-2 border-l border-gray-100">
+                    <input
+                      type="checkbox"
+                      checked={isEnabled}
+                      onChange={() => handleToggleMetric(key)}
+                      className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer accent-blue-600"
                     />
                   </div>
                 </div>
@@ -719,84 +747,105 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
 
     return (
       <div className="py-2 px-1">
-        <div className="grid grid-cols-12 gap-2 mb-2 text-xs font-medium text-gray-500 border-b border-gray-100 pb-2">
-          <div className="col-span-6 pl-2">수치 구간 ({unit})</div>
+        <div className="grid grid-cols-12 gap-3 mb-3 text-xs font-semibold text-gray-500 px-2">
+          <div className="col-span-6 pl-1">구간 기준 ({unit})</div>
           <div className="col-span-4 text-center">부여 점수</div>
-          <div className="col-span-2 text-center">삭제</div>
+          <div className="col-span-2 text-center">관리</div>
         </div>
         
         <div className="space-y-2">
           {config.boundaries.map((boundary, idx) => (
-            <div key={idx} className="grid grid-cols-12 gap-2 items-center">
-              <div className="col-span-6 flex items-center gap-2">
-                <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white ${getBadgeColor(idx)}`}>
+            <div 
+              key={idx} 
+              className="grid grid-cols-12 gap-3 items-center p-2 rounded-lg hover:bg-gray-50 border border-transparent hover:border-gray-200 transition-all group"
+            >
+              <div className="col-span-6 flex items-center gap-3">
+                <div className={`
+                  w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-sm
+                  ${getBadgeColor(idx)}
+                `}>
                   {idx + 1}
                 </div>
-                <div className="flex items-center gap-1 text-xs text-gray-700">
+                <div className="flex items-center bg-white border border-gray-200 rounded-md px-2 py-1 focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-100 transition-all w-full max-w-[140px]">
                   <InputNumber 
                     size="small" 
-                    className="w-16" 
+                    className="w-full !border-none !shadow-none !bg-transparent [&_.ant-input-number-handler-wrap]:hidden text-right pr-1" 
                     min={1} 
                     value={boundary} 
                     onChange={(v) => handleConfigChange(configField, 'boundaries', idx, v)} 
+                    controls={false}
                   />
-                  <span>{unit} 이상</span>
+                  <span className="text-xs text-gray-500 whitespace-nowrap bg-gray-50 px-1.5 py-0.5 rounded ml-1">{unit} 이상</span>
                 </div>
               </div>
-              <div className="col-span-4 flex items-center justify-center gap-1">
-                <InputNumber 
-                  size="small" 
-                  className="w-14" 
-                  min={0} 
-                  max={100} 
-                  value={config.scores[idx]} 
-                  onChange={(v) => handleConfigChange(configField, 'scores', idx, v)} 
-                />
-                <span className="text-xs text-gray-500">점</span>
+              
+              <div className="col-span-4 flex items-center justify-center">
+                <div className="flex items-center bg-white border border-gray-200 rounded-md px-2 py-1 focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-100 transition-all w-[100px]">
+                  <InputNumber 
+                    size="small" 
+                    className="w-full !border-none !shadow-none !bg-transparent [&_.ant-input-number-handler-wrap]:hidden text-right pr-1 font-bold text-gray-700" 
+                    min={0} 
+                    max={100} 
+                    value={config.scores[idx]} 
+                    onChange={(v) => handleConfigChange(configField, 'scores', idx, v)}
+                    controls={false} 
+                  />
+                  <span className="text-xs text-gray-400 ml-1">점</span>
+                </div>
               </div>
-              <div className="col-span-2 flex justify-center">
+              
+              <div className="col-span-2 flex justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                 <Button
                   type="text"
                   size="small"
                   danger
                   disabled={!canRemove}
-                  icon={<Trash2 size={12} />}
+                  icon={<Trash2 size={14} />}
                   onClick={() => handleRemoveBoundary(configField, idx)}
+                  className="hover:bg-red-50 rounded-full w-8 h-8 flex items-center justify-center"
                 />
               </div>
             </div>
           ))}
           
           {/* 그 외 나머지 */}
-          <div className="grid grid-cols-12 gap-2 items-center pt-2 mt-2 border-t border-dashed border-gray-200 bg-gray-50 -mx-1 px-3 pb-2 rounded-b">
-            <div className="col-span-6 flex items-center gap-2 pl-7">
-              <span className="text-xs font-medium text-gray-600">그 외 나머지</span>
+          <div className="grid grid-cols-12 gap-3 items-center mt-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
+            <div className="col-span-6 flex items-center gap-3 pl-1">
+              <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold bg-gray-200 text-gray-500">
+                etc
+              </div>
+              <span className="text-sm font-medium text-gray-600">그 외 나머지 구간</span>
             </div>
-            <div className="col-span-4 flex items-center justify-center gap-1">
-              <InputNumber 
-                size="small" 
-                className="w-14" 
-                min={0} 
-                max={100} 
-                value={config.scores[boundaryCount]} 
-                onChange={(v) => handleConfigChange(configField, 'scores', boundaryCount, v)} 
-              />
-              <span className="text-xs text-gray-500">점</span>
+            <div className="col-span-4 flex items-center justify-center">
+              <div className="flex items-center bg-white border border-gray-200 rounded-md px-2 py-1 w-[100px]">
+                <InputNumber 
+                  size="small" 
+                  className="w-full !border-none !shadow-none !bg-transparent [&_.ant-input-number-handler-wrap]:hidden text-right pr-1 font-bold text-gray-500" 
+                  min={0} 
+                  max={100} 
+                  value={config.scores[boundaryCount]} 
+                  onChange={(v) => handleConfigChange(configField, 'scores', boundaryCount, v)}
+                  controls={false}
+                />
+                <span className="text-xs text-gray-400 ml-1">점</span>
+              </div>
             </div>
             <div className="col-span-2"></div>
           </div>
 
           {/* 구간 추가 버튼 */}
-          <div className="flex justify-center pt-2">
+          <div className="flex justify-center pt-4">
             <Button
               type="dashed"
-              size="small"
               disabled={!canAdd}
-              icon={<Plus size={12} />}
+              icon={<Plus size={14} />}
               onClick={() => handleAddBoundary(configField)}
-              className="text-xs"
+              className={`
+                w-full h-9 flex items-center justify-center gap-1 text-sm transition-all
+                ${!canAdd ? 'opacity-50' : 'hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50'}
+              `}
             >
-              구간 추가 ({boundaryCount}/{MAX_BOUNDARIES})
+              새로운 구간 추가하기 ({boundaryCount}/{MAX_BOUNDARIES})
             </Button>
           </div>
         </div>

@@ -41,36 +41,36 @@ function ScoreSettingsCard({ settings, onClick }) {
   return (
     <div
       onClick={onClick}
-      className="group relative flex flex-col justify-center p-4 bg-white border border-gray-200 rounded-lg cursor-pointer hover:border-blue-400 hover:shadow-sm transition-all duration-200 h-[76px]"
+      className="group relative flex flex-col justify-center px-4 bg-white border border-gray-200 rounded-lg cursor-pointer hover:border-blue-400 hover:shadow-sm transition-all duration-200 h-[42px]"
     >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-md bg-green-100">
-              <TrendingUp size={16} className="text-green-600" />
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 overflow-hidden">
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="p-1 rounded-md bg-green-100">
+              <TrendingUp size={14} className="text-green-600" />
             </div>
-            <span className="text-sm font-bold text-gray-800 whitespace-nowrap">
+            <span className="text-xs font-bold text-gray-800 whitespace-nowrap">
               절대평가
             </span>
           </div>
           
-          <div className="flex items-center gap-2 text-[11px] text-gray-500 bg-gray-50 px-2 py-1 rounded border border-gray-100 whitespace-nowrap">
-            <span className="font-medium">중요도:</span>
-            <div className="flex gap-2">
+          <div className="flex items-center gap-2 text-[11px] text-gray-500 bg-gray-50 px-2 py-0.5 rounded border border-gray-100 whitespace-nowrap overflow-hidden">
+            <span className="font-medium flex-shrink-0">중요도:</span>
+            <div className="flex gap-2 overflow-hidden">
               {enabledMetrics.map((metric, idx) => {
                 const def = metricLabels[metric];
                 if (!def) return null;
                 return (
                   <React.Fragment key={metric}>
                     {idx > 0 && <span className="text-gray-300">|</span>}
-                    <span>{def.label} <b className="text-gray-700">{settings[def.field] || 0}%</b></span>
+                    <span className="whitespace-nowrap">{def.label} <b className="text-gray-700">{settings[def.field] || 0}%</b></span>
                   </React.Fragment>
                 );
               })}
             </div>
           </div>
         </div>
-        <ChevronRight size={16} className="text-gray-300 group-hover:text-blue-400 transition-colors flex-shrink-0" />
+        <ChevronRight size={14} className="text-gray-300 group-hover:text-blue-400 transition-colors flex-shrink-0" />
       </div>
     </div>
   );

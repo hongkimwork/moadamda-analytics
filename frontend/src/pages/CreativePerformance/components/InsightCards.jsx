@@ -163,12 +163,12 @@ function InsightCards({ data, scoreSettings }) {
     }
 
     // 2. 유입당 가치 Top 5 계산
-    // 유입당 가치 = (직접 매출 + 기여 매출) / 방문자 수
+    // 유입당 가치 = 기여한 결제액 / 방문자 수 (테이블 "1명당 유입 가치" 컬럼과 동일한 계산)
     // 방문자 수가 너무 적으면(예: 10명 미만) 통계적 의미가 적으므로 제외하거나 후순위로 밀 수 있음 -> 여기선 단순 계산
     const valueData = data.map(item => {
-      const totalRevenue = (item.total_revenue || 0) + (item.attributed_revenue || 0);
+      const attributedRevenue = item.attributed_revenue || 0;
       const visitors = item.unique_visitors || 0;
-      const valuePerVisitor = visitors > 0 ? Math.round(totalRevenue / visitors) : 0;
+      const valuePerVisitor = visitors > 0 ? Math.round(attributedRevenue / visitors) : 0;
       
       return {
         ...item,
@@ -207,7 +207,7 @@ function InsightCards({ data, scoreSettings }) {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Trophy size={18} color="#faad14" />
-                <span>모수(트래픽) 품질 Top 5</span>
+                <span>모수 평가 점수 Top 5</span>
               </div>
               <span style={{ fontSize: '12px', color: '#8c8c8c', fontWeight: 'normal' }}>점수 기준</span>
             </div>
@@ -256,7 +256,7 @@ function InsightCards({ data, scoreSettings }) {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <TrendingUp size={18} color="#1890ff" />
-                <span>유입당 가치(객단가) Top 5</span>
+                <span>1명당 유입 가치 Top 5</span>
               </div>
               <span style={{ fontSize: '12px', color: '#8c8c8c', fontWeight: 'normal' }}>방문자 1명당</span>
             </div>
