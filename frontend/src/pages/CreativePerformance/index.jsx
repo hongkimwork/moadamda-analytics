@@ -371,6 +371,7 @@ function CreativePerformance() {
         onClose={() => setScoreSettingsModalVisible(false)}
         currentSettings={scoreSettings}
         onSaveSuccess={(newSettings) => setScoreSettings(newSettings)}
+        outlierFilters={{ maxScroll, maxPv, maxDuration }}
       />
 
       {/* 미디어 프리뷰 모달 */}

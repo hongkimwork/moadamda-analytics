@@ -48,31 +48,74 @@ const MAX_METRICS = 5;
 const METRIC_DEFINITIONS = [
   { key: 'scroll', field: 'weight_scroll', configField: 'scroll_config', label: '평균 스크롤', icon: <MousePointerClick size={16} />, unit: 'px' },
   { key: 'pv', field: 'weight_pv', configField: 'pv_config', label: '평균 PV', icon: <Eye size={16} />, unit: '개' },
-  { key: 'duration', field: 'weight_duration', configField: 'duration_config', label: '평균 체류시간', icon: <Clock size={16} />, unit: '초' },
+  { key: 'duration', field: 'weight_duration', configField: 'duration_config', label: '평균 체류시간', icon: <Clock size={16} />, unit: '분' },
   { key: 'view', field: 'weight_view', configField: 'view_config', label: 'View', icon: <BarChart2 size={16} />, unit: '회' },
   { key: 'uv', field: 'weight_uv', configField: 'uv_config', label: 'UV', icon: <TrendingUp size={16} />, unit: '명' }
 ];
 
-// 기본 설정값
-const DEFAULT_SETTINGS = {
-  evaluation_type: 'absolute',
-  weight_scroll: 30,
-  weight_pv: 35,
-  weight_duration: 35,
-  weight_view: 0,
-  weight_uv: 0,
-  scroll_config: { boundaries: [3000, 1500, 500], scores: [100, 80, 50, 20] },
-  pv_config: { boundaries: [5, 3, 2], scores: [100, 80, 50, 20] },
-  duration_config: { boundaries: [120, 60, 30], scores: [100, 80, 50, 20] },
-  view_config: { boundaries: [1000, 500, 100], scores: [100, 80, 50, 20] },
-  uv_config: { boundaries: [500, 200, 50], scores: [100, 80, 50, 20] },
-  enabled_metrics: ['scroll', 'pv', 'duration']
+// 체류시간 변환 함수 (DB는 초 단위, UI는 분 단위)
+const convertDurationToMinutes = (settings) => {
+  if (!settings?.duration_config?.boundaries) return settings;
+  return {
+    ...settings,
+    duration_config: {
+      ...settings.duration_config,
+      boundaries: settings.duration_config.boundaries.map(b => b / 60)
+    }
+  };
+};
+
+const convertDurationToSeconds = (settings) => {
+  if (!settings?.duration_config?.boundaries) return settings;
+  return {
+    ...settings,
+    duration_config: {
+      ...settings.duration_config,
+      boundaries: settings.duration_config.boundaries.map(b => Math.round(b * 60))
+    }
+  };
+};
+
+// 이상치 필터 기반 구간 기본값 계산 (10%씩 감소)
+const calculateBoundaries = (maxValue, count = 3) => {
+  const boundaries = [];
+  let current = maxValue * 0.9; // 1등급: 이상치의 90%
+  for (let i = 0; i < count; i++) {
+    boundaries.push(Math.round(current * 100) / 100); // 소수점 2자리까지
+    current = current * 0.9; // 다음 등급은 10% 감소
+  }
+  return boundaries;
+};
+
+// 기본 설정값 생성 함수 (이상치 필터 기반)
+const createDefaultSettings = (outlierFilters = {}) => {
+  const { maxScroll = 10000, maxPv = 15, maxDuration = 60 } = outlierFilters;
+  
+  return {
+    evaluation_type: 'absolute',
+    weight_scroll: 30,
+    weight_pv: 35,
+    weight_duration: 35,
+    weight_view: 0,
+    weight_uv: 0,
+    // 스크롤, PV, 체류시간: 이상치 필터 기반 계산
+    scroll_config: { boundaries: calculateBoundaries(maxScroll), scores: [100, 80, 50, 20] },
+    pv_config: { boundaries: calculateBoundaries(maxPv), scores: [100, 80, 50, 20] },
+    duration_config: { boundaries: calculateBoundaries(maxDuration / 60), scores: [100, 80, 50, 20] }, // 초→분 변환
+    // View, UV: 하드코딩 유지
+    view_config: { boundaries: [1000, 500, 100], scores: [100, 80, 50, 20] },
+    uv_config: { boundaries: [500, 200, 50], scores: [100, 80, 50, 20] },
+    enabled_metrics: ['scroll', 'pv', 'duration']
+  };
 };
 
 /**
  * 모수 평가 기준 설정 모달 (3분할)
  */
-function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }) {
+function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess, outlierFilters }) {
+  // 이상치 필터 기반 기본 설정값
+  const defaultSettings = useMemo(() => createDefaultSettings(outlierFilters), [outlierFilters]);
+  
   // 프리셋 관련 상태
   const [presets, setPresets] = useState([]);
   const [selectedPresetId, setSelectedPresetId] = useState(null);
@@ -82,7 +125,7 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
   const [editingName, setEditingName] = useState('');
   
   // 설정값 상태
-  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState(defaultSettings);
   const [errors, setErrors] = useState([]);
   const [warnings, setWarnings] = useState([]);
   const [saving, setSaving] = useState(false);
@@ -111,15 +154,15 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
         setPresets(presetsResult.data || []);
       }
       
-      // 적용 중인 프리셋이 있으면 자동 선택
+      // 적용 중인 프리셋이 있으면 자동 선택 (초→분 변환)
       if (activeResult.success && activeResult.data) {
         setSelectedPresetId(activeResult.data.id);
-        setSettings(activeResult.data);
+        setSettings(convertDurationToMinutes(activeResult.data));
         setIsCreatingNew(false);
       } else {
         // 프리셋이 없으면 초기 상태
         setSelectedPresetId(null);
-        setSettings(DEFAULT_SETTINGS);
+        setSettings(defaultSettings);
         setIsCreatingNew(false);
       }
     } catch (error) {
@@ -131,10 +174,10 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
     }
   };
 
-  // 프리셋 선택 (불러오기)
+  // 프리셋 선택 (불러오기, 초→분 변환)
   const handleSelectPreset = (preset) => {
     setSelectedPresetId(preset.id);
-    setSettings(preset);
+    setSettings(convertDurationToMinutes(preset));
     setIsCreatingNew(false);
     setErrors([]);
     setWarnings([]);
@@ -145,7 +188,7 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
     setIsCreatingNew(true);
     setNewPresetName('');
     setSelectedPresetId(null);
-    setSettings(DEFAULT_SETTINGS);
+    setSettings(defaultSettings);
     setErrors([]);
     setWarnings([]);
   };
@@ -200,7 +243,7 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
             message.success('프리셋이 삭제되었습니다.');
             if (selectedPresetId === presetId) {
               setSelectedPresetId(null);
-              setSettings(DEFAULT_SETTINGS);
+              setSettings(defaultSettings);
             }
             loadPresets();
           } else {
@@ -392,23 +435,25 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
     }, 0);
   };
 
-  // 저장 및 적용
+  // 저장 및 적용 (분→초 변환 후 저장)
   const handleSaveAndApply = async () => {
     if (!validate()) return;
 
     setSaving(true);
     try {
       let result;
+      // 저장 전 체류시간을 분→초로 변환
+      const settingsToSave = convertDurationToSeconds(settings);
       
       if (isCreatingNew) {
         // 새 프리셋 생성 및 적용
         result = await createAndApplyPreset({
-          ...settings,
+          ...settingsToSave,
           name: newPresetName.trim()
         });
       } else if (selectedPresetId) {
         // 기존 프리셋 저장 및 적용
-        result = await saveAndApplyPreset(selectedPresetId, settings);
+        result = await saveAndApplyPreset(selectedPresetId, settingsToSave);
       } else {
         message.warning('프리셋을 선택하거나 새로 만들어주세요.');
         setSaving(false);
@@ -739,6 +784,10 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
     const boundaryCount = config.boundaries.length;
     const canAdd = boundaryCount < MAX_BOUNDARIES;
     const canRemove = boundaryCount > MIN_BOUNDARIES;
+    // 체류시간은 분 단위로 소수점 입력 허용
+    const isDuration = configField === 'duration_config';
+    const minValue = isDuration ? 0.1 : 1;
+    const stepValue = isDuration ? 0.1 : 1;
 
     const getBadgeColor = (idx) => {
       const colors = ['bg-blue-600', 'bg-blue-500', 'bg-blue-400', 'bg-blue-300', 'bg-blue-200'];
@@ -770,7 +819,8 @@ function ScoreSettingsModal({ visible, onClose, currentSettings, onSaveSuccess }
                   <InputNumber 
                     size="small" 
                     className="w-full !border-none !shadow-none !bg-transparent [&_.ant-input-number-handler-wrap]:hidden text-right pr-1" 
-                    min={1} 
+                    min={minValue}
+                    step={stepValue}
                     value={boundary} 
                     onChange={(v) => handleConfigChange(configField, 'boundaries', idx, v)} 
                     controls={false}
