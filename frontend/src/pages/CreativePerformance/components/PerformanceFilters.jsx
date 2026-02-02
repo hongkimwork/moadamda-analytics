@@ -98,8 +98,11 @@ const DateNavigatorGroup = ({
 
 /**
  * Search Input - 높이 36px, Enter로 검색
+ * FIX (2026-02-02): onClear prop 추가하여 X 버튼 클릭 시 명시적으로 빈 검색어 전달
+ * - 기존: onChange('') 후 onSearch() 호출 시 React state 업데이트가 비동기라 이전 검색어로 검색됨
+ * - 수정: onClear prop으로 빈 문자열을 명시적으로 전달하여 전체 보기로 전환
  */
-const SearchInput = ({ value, onChange, onSearch, disabled, placeholder }) => (
+const SearchInput = ({ value, onChange, onSearch, onClear, disabled, placeholder }) => (
   <div style={{
     display: 'flex',
     alignItems: 'center',
@@ -132,7 +135,7 @@ const SearchInput = ({ value, onChange, onSearch, disabled, placeholder }) => (
     />
     {value && (
       <button
-        onClick={() => { onChange(''); onSearch(); }}
+        onClick={() => { onChange(''); onClear(); }}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -388,6 +391,7 @@ function PerformanceFilters({
             value={searchTerm}
             onChange={setSearchTerm}
             onSearch={handleSearchSubmit}
+            onClear={() => onSearch?.('')}
             disabled={loading}
             placeholder="광고 소재 이름으로 검색..."
           />

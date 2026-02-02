@@ -57,15 +57,20 @@ async function getCreativePerformance(params) {
     validateSortColumn(sort_by, sort_order);
 
   // 4. 검색 조건 구성
+  // FIX (2026-02-02): 검색 필터를 DB에서 적용하지 않고, 메타 광고명 병합 후 JavaScript에서 적용
+  // - 원인: DB에 URL 인코딩된 utm_content가 저장되어 있어 한글 ILIKE 검색이 매칭되지 않음
+  // - 예: '%EC%84%A4%EB%82%A0' (URL 인코딩된 "설날")은 ILIKE '%설날%'로 검색 안 됨
+  // - 해결: 모든 데이터를 가져온 후, 메타 광고명으로 병합한 뒤 JavaScript에서 검색 필터 적용
   let searchCondition = '';
   const queryParams = [startDate, endDate];
   let paramIndex = 3;
 
-  if (search) {
-    searchCondition = `AND us.utm_params->>'utm_content' ILIKE $${paramIndex}`;
-    queryParams.push(`%${search}%`);
-    paramIndex++;
-  }
+  // 검색 조건은 DB에서 적용하지 않음 (병합 후 적용)
+  // if (search) {
+  //   searchCondition = `AND us.utm_params->>'utm_content' ILIKE $${paramIndex}`;
+  //   queryParams.push(`%${search}%`);
+  //   paramIndex++;
+  // }
 
   // 5. 동적 UTM 필터 적용
   const { conditions: utmFilterConditions, nextIndex } = 
@@ -204,11 +209,22 @@ async function getCreativePerformance(params) {
     _variant_names: row._variant_names // 상세 조회용 원본 광고명들
   }));
 
-  // 9. 기여도 계산 (결제건 기여 포함 수, 결제건 기여 금액, 기여 결제건 총 결제금액)
-  const attributionData = await calculateCreativeAttribution(data, startDate, endDate);
+  // 9. 검색 필터 적용 (메타 광고명 병합 후 JavaScript에서 적용)
+  // FIX (2026-02-02): DB가 아닌 병합 후 적용하여 URL 인코딩 데이터 누락 방지
+  let filteredData = data;
+  if (search) {
+    const searchLower = search.toLowerCase();
+    filteredData = data.filter(row => 
+      row.creative_name && row.creative_name.toLowerCase().includes(searchLower)
+    );
+  }
 
-  // 10. 기여도 데이터를 기본 데이터에 병합
-  let finalData = data.map(row => {
+  // 10. 기여도 계산 (결제건 기여 포함 수, 결제건 기여 금액, 기여 결제건 총 결제금액)
+  // FIX (2026-02-02): 검색 필터 적용된 데이터(filteredData) 사용
+  const attributionData = await calculateCreativeAttribution(filteredData, startDate, endDate);
+
+  // 11. 기여도 데이터를 기본 데이터에 병합
+  let finalData = filteredData.map(row => {
     const creativeKey = `${row.creative_name}||${row.utm_source}||${row.utm_medium}||${row.utm_campaign}`;
     const attr = attributionData[creativeKey] || {};
     

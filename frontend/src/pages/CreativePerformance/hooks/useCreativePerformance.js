@@ -50,21 +50,13 @@ export const useCreativePerformance = () => {
   // 인증 정보
   const { user } = useAuth();
   
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/546a3f56-d046-4164-8da1-9726e1a92f02',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useCreativePerformance.js:INIT',message:'Hook 초기화 - user 상태',data:{userId:user?.id,userName:user?.name,userExists:!!user},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
-  // #endregion
-  
   // URL 쿼리 파라미터 읽기 (광고 클릭 카드에서 이동 시 search 파라미터 사용)
   const [searchParams] = useSearchParams();
   const initialSearchTerm = searchParams.get('search') || '';
 
   // 저장된 필터 설정 불러오기
   const savedFilters = useMemo(() => {
-    const result = loadFiltersFromStorage(user?.id);
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/546a3f56-d046-4164-8da1-9726e1a92f02',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useCreativePerformance.js:savedFilters',message:'로컬스토리지에서 필터 불러오기',data:{userId:user?.id,savedFilters:result},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
-    return result;
+    return loadFiltersFromStorage(user?.id);
   }, [user?.id]);
 
   // 데이터 state
@@ -81,13 +73,9 @@ export const useCreativePerformance = () => {
   const [searchTerm, setSearchTerm] = useState(initialSearchTerm);
   const [filters, setFilters] = useState(() => {
     // 저장된 날짜 범위가 있으면 사용, 없으면 기본값
-    const initialFilters = savedFilters?.dateRange 
+    return savedFilters?.dateRange 
       ? { dateRange: savedFilters.dateRange }
       : { dateRange: [dayjs().subtract(29, 'day').format('YYYY-MM-DD'), dayjs().format('YYYY-MM-DD')] };
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/546a3f56-d046-4164-8da1-9726e1a92f02',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useCreativePerformance.js:filters-init',message:'filters 초기값 설정',data:{savedDateRange:savedFilters?.dateRange,initialFilters},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
-    return initialFilters;
   });
 
   // 정렬 state
@@ -255,10 +243,6 @@ export const useCreativePerformance = () => {
 
   // 필터 변경 핸들러
   const handleFilterChange = (newFilters) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/546a3f56-d046-4164-8da1-9726e1a92f02',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useCreativePerformance.js:handleFilterChange',message:'필터 변경 호출됨',data:{newFilters,stack:new Error().stack?.split('\n').slice(0,5)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
-    
     const formattedFilters = { ...newFilters };
     
     if (newFilters.dateRange && newFilters.dateRange[0] && newFilters.dateRange[1]) {

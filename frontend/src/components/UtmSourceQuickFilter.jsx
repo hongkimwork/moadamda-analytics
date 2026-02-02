@@ -32,10 +32,6 @@ const EXCLUDED_SOURCES = ['viral'];
  * @param {boolean} loading - 로딩 상태
  */
 function UtmSourceQuickFilter({ onFilterChange, loading = false, initialSources = null }) {
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/546a3f56-d046-4164-8da1-9726e1a92f02',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UtmSourceQuickFilter.jsx:render',message:'컴포넌트 렌더링 - props 확인',data:{hasOnFilterChange:!!onFilterChange,loading,initialSources},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C'})}).catch(()=>{});
-  // #endregion
-  
   // initialSources에서 선택된 그룹 계산
   const getGroupsFromSources = (sources) => {
     if (!sources || sources.length === 0) {
@@ -63,9 +59,6 @@ function UtmSourceQuickFilter({ onFilterChange, loading = false, initialSources 
   useEffect(() => {
     if (!isInitialized && initialSources !== null) {
       const groups = getGroupsFromSources(initialSources);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/546a3f56-d046-4164-8da1-9726e1a92f02',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UtmSourceQuickFilter.jsx:useEffect-init',message:'initialSources로 그룹 초기화',data:{initialSources,calculatedGroups:groups},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
-      // #endregion
       setSelectedGroups(groups);
       setIsInitialized(true);
     }
