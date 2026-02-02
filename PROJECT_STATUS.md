@@ -1,3 +1,6 @@
+| 2026-02-02 | 검색창 너비 축소 | OrderFilterBar.jsx |
+| 2026-02-02 | 빈utm_content복구+트래커v054 | tracker.js |
+| 2026-02-02 | 날짜필터 네비게이션 개선 | PerformanceFilters.jsx |
 | 2026-02-02 | 광고DB자동동기화+토큰갱신 | metaAdNameMapping.js |
 | 2026-02-02 | 모달URL인코딩변형수정 | detailService.js |
 | 2026-02-02 | 모달 잘린광고명 병합수정 | metaAdNameMapping.js |
@@ -10,6 +13,3 @@
 | 2026-02-02 | 구간추가 10%감소로 변경 | ScoreSettingsModal.jsx |
 | 2026-02-02 | 평가카드 높이 42px 조정 | ScoreSettingsCard.jsx |
 | 2026-02-02 | 적용 버튼 디자인 개선 | PerformanceFilters.jsx |
-| 2026-02-02 | 유입 가치 텍스트 변경 | InsightCards.jsx |
-| 2026-02-02 | 모수 품질 텍스트 변경 | InsightCards.jsx |
-| 2026-02-02 | Top5 유입가치 계산 통일 | InsightCards.jsx |

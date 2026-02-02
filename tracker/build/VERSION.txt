@@ -1,9 +1,16 @@
-v25.0 (v053)
-Updated: 2026-01-29
+v26.0 (v054)
+Updated: 2026-02-02
 
-🔧 UTM 파라미터 + 문자 디코딩 수정
+🔧 빈 utm_content 자동 복구 로직 추가
 
-NEW IN v25.0 (v053):
+NEW IN v26.0 (v054):
+✅ 빈 utm_content 복구 로직 추가
+  - Meta 광고에서 일부 URL에 utm_content가 누락되어 전송되는 문제
+  - utm_id를 기반으로 이전에 수집한 utm_content를 localStorage에 캐싱
+  - 빈 utm_content가 들어오면 같은 utm_id의 캐시된 값으로 자동 복구
+  - 캐시 크기 제한: 최대 50개 (오래된 것부터 삭제)
+
+PREVIOUS v25.0 (v053):
 ✅ UTM 파라미터에서 + 문자를 공백으로 변환
   - URL 쿼리 스트링에서 +는 공백을 의미 (application/x-www-form-urlencoded)
   - decodeURIComponent는 +를 공백으로 변환하지 않음 (버그)

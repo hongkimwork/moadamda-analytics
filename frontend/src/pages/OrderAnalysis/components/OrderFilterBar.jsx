@@ -167,8 +167,8 @@ const SearchInput = ({ value, onChange, onSearch, disabled, placeholder }) => (
     background: '#f8f9fa',
     border: '1px solid transparent',
     borderRadius: '8px',
-    minWidth: '400px',
-    width: '505px',
+    minWidth: '200px',
+    width: '300px',
     transition: 'all 150ms ease',
     borderRadius: '8px'
   }}>
