@@ -108,7 +108,7 @@ async function getCreativeAggregation({
       GROUP BY session_id
     ),
     session_metrics AS (
-      -- 고유 세션 기준 평균 지표 집계 (이상치 제외)
+      -- 고유 세션 기준 평균 지표 집계 (이상치는 기준값으로 대체)
       SELECT 
         us.creative_name,
         us.utm_source,
@@ -116,21 +116,21 @@ async function getCreativeAggregation({
         us.utm_campaign,
         ROUND(
           COALESCE(
-            AVG(CASE WHEN us.pageview_count <= ${maxPvCount} THEN us.pageview_count ELSE NULL END)::NUMERIC,
+            AVG(CASE WHEN us.pageview_count <= ${maxPvCount} THEN us.pageview_count ELSE ${maxPvCount} END)::NUMERIC,
             0
           ),
           1
         ) as avg_pageviews,
         ROUND(
           COALESCE(
-            AVG(CASE WHEN us.duration_seconds <= ${maxDurationSeconds} THEN us.duration_seconds ELSE NULL END)::NUMERIC,
+            AVG(CASE WHEN us.duration_seconds <= ${maxDurationSeconds} THEN us.duration_seconds ELSE ${maxDurationSeconds} END)::NUMERIC,
             0
           ),
           1
         ) as avg_duration_seconds,
         ROUND(
           COALESCE(
-            AVG(CASE WHEN sd.total_scroll_px <= ${maxScrollPx} THEN sd.total_scroll_px ELSE NULL END)::NUMERIC,
+            AVG(CASE WHEN sd.total_scroll_px <= ${maxScrollPx} THEN sd.total_scroll_px ELSE ${maxScrollPx} END)::NUMERIC,
             0
           ),
           0

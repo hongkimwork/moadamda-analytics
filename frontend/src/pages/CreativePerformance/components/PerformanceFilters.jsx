@@ -532,7 +532,7 @@ function PerformanceFilters({
         </div>
       </Card>
 
-      {/* 이상치 값 제외 필터 영역 */}
+      {/* 이상치 값 대체 필터 영역 */}
       <Card 
         size="small" 
         style={{ 
@@ -543,14 +543,14 @@ function PerformanceFilters({
         }}
       >
         <div className="flex gap-6 flex-wrap">
-          {/* 좌측: 이상치 값 제외 필터 */}
+          {/* 좌측: 이상치 값 대체 필터 */}
           <div className="flex-1 min-w-[300px]">
             <div className="mb-3 text-sm text-gray-700 font-semibold flex items-center gap-2">
               <AlertTriangle size={18} strokeWidth={2} className="text-amber-500" />
-              이상치 값 제외 필터
+              이상치 값 대체 필터
             </div>
             <div className="flex gap-3 flex-wrap items-center">
-              {/* 체류시간 초과 제외 (분 단위 입력, 내부는 초 단위) */}
+              {/* 체류시간 초과 대체 (분 단위 입력, 내부는 초 단위) */}
               <div className="flex items-center gap-2 bg-gray-50 px-3 h-[42px] rounded-lg border border-gray-100">
                 <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
                   <Clock size={14} className="text-green-500" />
@@ -566,10 +566,10 @@ function PerformanceFilters({
                   disabled={loading}
                   className="bg-white rounded border border-gray-200"
                 />
-                <span className="text-xs text-gray-600">분 초과 제외</span>
+                <span className="text-xs text-gray-600">분 초과 대체</span>
               </div>
               
-              {/* PV 초과 제외 */}
+              {/* PV 초과 대체 */}
               <div className="flex items-center gap-2 bg-gray-50 px-3 h-[42px] rounded-lg border border-gray-100">
                 <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
                   <Eye size={14} className="text-purple-500" />
@@ -585,10 +585,10 @@ function PerformanceFilters({
                   disabled={loading}
                   className="bg-white rounded border border-gray-200"
                 />
-                <span className="text-xs text-gray-600">초과 제외</span>
+                <span className="text-xs text-gray-600">초과 대체</span>
               </div>
               
-              {/* 스크롤 초과 제외 */}
+              {/* 스크롤 초과 대체 */}
               <div className="flex items-center gap-2 bg-gray-50 px-3 h-[42px] rounded-lg border border-gray-100">
                 <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
                   <MousePointerClick size={14} className="text-blue-500" />
@@ -606,7 +606,7 @@ function PerformanceFilters({
                   formatter={(value) => value ? `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''}
                   parser={(value) => value.replace(/,/g, '')}
                 />
-                <span className="text-xs text-gray-600">px 초과 제외</span>
+                <span className="text-xs text-gray-600">px 초과 대체</span>
               </div>
               
               {/* 적용 버튼 */}

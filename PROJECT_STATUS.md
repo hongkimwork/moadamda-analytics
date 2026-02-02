@@ -1,3 +1,5 @@
+| 2026-02-02 | 이상치 필터 텍스트 변경 | PerformanceFilters.jsx |
+| 2026-02-02 | 이상치필터 대체방식변경 | creativeRepository.js |
 | 2026-02-02 | 검색창 너비 축소 | OrderFilterBar.jsx |
 | 2026-02-02 | 빈utm_content복구+트래커v054 | tracker.js |
 | 2026-02-02 | 날짜필터 네비게이션 개선 | PerformanceFilters.jsx |
@@ -11,5 +13,3 @@
 | 2026-02-02 | 헤더 아바타 색상 변경 | App.jsx |
 | 2026-02-02 | 사이드바 메뉴 순서 변경 | App.jsx |
 | 2026-02-02 | 구간추가 10%감소로 변경 | ScoreSettingsModal.jsx |
-| 2026-02-02 | 평가카드 높이 42px 조정 | ScoreSettingsCard.jsx |
-| 2026-02-02 | 적용 버튼 디자인 개선 | PerformanceFilters.jsx |
