@@ -1,6 +1,6 @@
 /**
- * Moadamda Analytics Tracker v26.0 (v054)
- * Updated: 2026-02-02
+ * Moadamda Analytics Tracker v27.0 (v054)
+ * Updated: 2026-02-03
  * 
  * DEPLOYMENT INFO:
  * - Production Domain: marketingzon.com
@@ -8,7 +8,15 @@
  * - Dashboard: https://dashboard.marketingzon.com
  * - SSL: Let's Encrypt (Trusted Certificate)
  * 
- * LATEST UPDATE (v26.0):
+ * LATEST UPDATE (v27.0):
+ * - FIX: 스크롤 뎁스 0px 수집 문제 해결 (iOS Safari/인앱 브라우저 대응)
+ *   - requestAnimationFrame 폴링 추가 (모멘텀 스크롤 중에도 위치 추적)
+ *   - touchmove 이벤트 추가 (터치 스크롤 감지)
+ *   - wheel 이벤트 추가 (PC 마우스 휠 감지)
+ *   - scrollend 이벤트 추가 (지원 브라우저용, 스크롤 완료 시점 캡처)
+ *   - 3단계 조합 방식: rAF 폴링(Primary) + 이벤트(Backup) + 이탈 시 캡처(Final)
+ * 
+ * PREVIOUS (v26.0):
  * - FIX: 빈 utm_content 복구 로직 추가
  *   - Meta 광고에서 일부 URL에 utm_content가 누락되어 전송되는 문제
  *   - utm_id를 기반으로 이전에 수집한 utm_content를 캐싱
@@ -66,7 +74,7 @@
  * - In-app browser detection & enhanced sending
  * - Failed event retry mechanism
  * - Coupon select page tracking
- * - Scroll depth tracking (NEW)
+ * - Scroll depth tracking (enhanced with rAF polling)
  */
 (function() {
   'use strict';
@@ -100,6 +108,9 @@
   let maxScrollY = 0;  // Maximum scroll position reached (px)
   let scrollDepthSent = false;  // Prevent duplicate scroll_depth events
   let lastScrollTime = 0;  // For throttling scroll events
+  let rafScrollId = null;  // requestAnimationFrame ID for scroll polling
+  let isScrollPollingActive = false;  // Flag to control rAF polling
+  let touchStartY = 0;  // Touch start position for touchmove tracking
   
   // NEW: Detect in-app browser (Facebook, Instagram, KakaoTalk, Naver, Line, etc.)
   function isInAppBrowser() {
@@ -109,7 +120,7 @@
   
   const IS_IN_APP = isInAppBrowser();
   
-  console.log('[MA] Initializing Moadamda Analytics v26.0 (v054)...');
+  console.log('[MA] Initializing Moadamda Analytics v27.0 (v054)...');
   console.log('[MA] In-app browser detected:', IS_IN_APP);
   console.log('[MA] API URL:', CONFIG.apiUrl);
   console.log('[MA] Visitor ID:', visitorId);
@@ -858,7 +869,12 @@
   }
   
   // =====================================================
-  // SCROLL DEPTH TRACKING
+  // SCROLL DEPTH TRACKING (Enhanced v27.0)
+  // - requestAnimationFrame polling for iOS Safari momentum scroll
+  // - touchmove event for mobile touch scroll
+  // - wheel event for PC mouse wheel
+  // - scrollend event for modern browsers
+  // - Fallback: traditional scroll event
   // =====================================================
   
   // Get current scroll position (max of scrollY and page height that's been scrolled)
@@ -881,23 +897,93 @@
     return window.innerHeight || document.documentElement.clientHeight || 0;
   }
   
-  // Handle scroll event (throttled)
-  function handleScroll() {
-    const now = Date.now();
-    // Throttle: only process every 100ms
-    if (now - lastScrollTime < 100) return;
-    lastScrollTime = now;
-    
+  // Update max scroll position (core function used by all tracking methods)
+  function updateMaxScroll() {
     const currentScroll = getCurrentScrollY();
     if (currentScroll > maxScrollY) {
       maxScrollY = currentScroll;
     }
   }
   
+  // Handle scroll event (throttled) - BACKUP method
+  function handleScroll() {
+    const now = Date.now();
+    // Throttle: only process every 100ms
+    if (now - lastScrollTime < 100) return;
+    lastScrollTime = now;
+    
+    updateMaxScroll();
+  }
+  
+  // Handle wheel event (PC mouse wheel) - BACKUP method
+  function handleWheel() {
+    // Small delay to let scroll position update
+    setTimeout(updateMaxScroll, 16);
+  }
+  
+  // Handle touchstart event - store initial touch position
+  function handleTouchStart(e) {
+    if (e.touches && e.touches.length > 0) {
+      touchStartY = e.touches[0].clientY;
+    }
+  }
+  
+  // Handle touchmove event (mobile touch scroll) - BACKUP method
+  function handleTouchMove(e) {
+    // Update scroll position during active touch
+    updateMaxScroll();
+  }
+  
+  // Handle touchend event - final capture after touch
+  function handleTouchEnd() {
+    // Small delay to let final scroll position settle
+    setTimeout(updateMaxScroll, 50);
+  }
+  
+  // Handle scrollend event (modern browsers) - captures exact end position
+  function handleScrollEnd() {
+    updateMaxScroll();
+    console.log('[MA] Scrollend captured, max scroll:', maxScrollY, 'px');
+  }
+  
+  // requestAnimationFrame polling loop - PRIMARY method for iOS Safari
+  // This runs continuously and captures scroll position even during momentum scroll
+  function scrollPollingLoop() {
+    if (!isScrollPollingActive) return;
+    
+    updateMaxScroll();
+    
+    // Continue polling
+    rafScrollId = requestAnimationFrame(scrollPollingLoop);
+  }
+  
+  // Start rAF scroll polling
+  function startScrollPolling() {
+    if (isScrollPollingActive) return;
+    isScrollPollingActive = true;
+    rafScrollId = requestAnimationFrame(scrollPollingLoop);
+    console.log('[MA] Scroll polling started (rAF)');
+  }
+  
+  // Stop rAF scroll polling
+  function stopScrollPolling() {
+    isScrollPollingActive = false;
+    if (rafScrollId) {
+      cancelAnimationFrame(rafScrollId);
+      rafScrollId = null;
+    }
+    // Final capture when stopping
+    updateMaxScroll();
+    console.log('[MA] Scroll polling stopped, final max scroll:', maxScrollY, 'px');
+  }
+  
   // Send scroll depth event
   function sendScrollDepth() {
     // Prevent duplicate sends
     if (scrollDepthSent) return;
+    
+    // Final update before sending
+    updateMaxScroll();
     
     // Only send if user has scrolled at least a little
     if (maxScrollY === 0) return;
@@ -923,15 +1009,32 @@
     return sent;
   }
   
-  // Setup scroll tracking
+  // Setup scroll tracking (enhanced with multiple methods)
   function setupScrollTracking() {
-    // Add scroll event listener (passive for better performance)
+    // PRIMARY: requestAnimationFrame polling (works during iOS momentum scroll)
+    startScrollPolling();
+    
+    // BACKUP 1: Traditional scroll event listener
     window.addEventListener('scroll', handleScroll, { passive: true });
     
-    // Also track initial scroll position (in case page loads scrolled)
-    maxScrollY = getCurrentScrollY();
+    // BACKUP 2: Wheel event for PC mouse wheel
+    window.addEventListener('wheel', handleWheel, { passive: true });
     
-    console.log('[MA] Scroll depth tracking initialized');
+    // BACKUP 3: Touch events for mobile
+    window.addEventListener('touchstart', handleTouchStart, { passive: true });
+    window.addEventListener('touchmove', handleTouchMove, { passive: true });
+    window.addEventListener('touchend', handleTouchEnd, { passive: true });
+    
+    // ENHANCEMENT: scrollend event for modern browsers (fires when scroll stops)
+    if ('onscrollend' in window) {
+      window.addEventListener('scrollend', handleScrollEnd, { passive: true });
+      console.log('[MA] scrollend event supported');
+    }
+    
+    // Capture initial scroll position (in case page loads scrolled)
+    updateMaxScroll();
+    
+    console.log('[MA] Scroll depth tracking initialized (enhanced v27.0)');
   }
   
   // Setup error logging
@@ -1009,6 +1112,7 @@
         // Page is hidden (user switched to another app/tab)
         console.log('[MA] Page hidden, sending session data');
         stopHeartbeat();
+        stopScrollPolling();  // Stop rAF polling to save battery
         sendScrollDepth();  // Send scroll depth before session ends
         sendSessionEnd();
       } else if (document.visibilityState === 'visible') {
@@ -1017,6 +1121,7 @@
         sessionEndSent = false;  // Reset flag to allow new session_end
         scrollDepthSent = false;  // Reset scroll depth flag
         startHeartbeat();
+        startScrollPolling();  // Resume rAF polling
         // Also retry failed events when page becomes visible
         retryFailedEvents();
       }

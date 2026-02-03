@@ -64,9 +64,10 @@ async function getMetaAdNames() {
 
   const db = require('../../utils/database');
   
-  // 1. 메타 API에서 ACTIVE/PAUSED 광고명 가져오기 (id도 함께)
+  // 1. 메타 API에서 광고명 가져오기 (ACTIVE, PAUSED, CAMPAIGN_PAUSED, ADSET_PAUSED 포함)
+  // FIX (2026-02-03): 캠페인/광고세트가 중지된 광고도 조회하도록 상태 추가
   try {
-    const [activeResult, pausedResult] = await Promise.all([
+    const [activeResult, pausedResult, campaignPausedResult, adsetPausedResult] = await Promise.all([
       callMetaApiSimple(`${META_AD_ACCOUNT_ID}/ads`, {
         fields: 'id,name,status',
         filtering: JSON.stringify([{ field: 'effective_status', operator: 'IN', value: ['ACTIVE'] }]),
@@ -76,10 +77,25 @@ async function getMetaAdNames() {
         fields: 'id,name,status',
         filtering: JSON.stringify([{ field: 'effective_status', operator: 'IN', value: ['PAUSED'] }]),
         limit: 500
+      }),
+      callMetaApiSimple(`${META_AD_ACCOUNT_ID}/ads`, {
+        fields: 'id,name,status',
+        filtering: JSON.stringify([{ field: 'effective_status', operator: 'IN', value: ['CAMPAIGN_PAUSED'] }]),
+        limit: 500
+      }),
+      callMetaApiSimple(`${META_AD_ACCOUNT_ID}/ads`, {
+        fields: 'id,name,status',
+        filtering: JSON.stringify([{ field: 'effective_status', operator: 'IN', value: ['ADSET_PAUSED'] }]),
+        limit: 500
       })
     ]);
     
-    const apiAds = [...(activeResult.data || []), ...(pausedResult.data || [])];
+    const apiAds = [
+      ...(activeResult.data || []), 
+      ...(pausedResult.data || []),
+      ...(campaignPausedResult.data || []),
+      ...(adsetPausedResult.data || [])
+    ];
     apiNames = apiAds.map(ad => ad.name).filter(Boolean);
     
     // 광고명 → ad_id 매핑 캐시 업데이트 + DB 저장
@@ -268,10 +284,11 @@ async function mapToMetaAdName(truncatedName, metaAdNames = null) {
   }
   
   // 5. (중지) 접두사 제거 후 비교
+  // FIX (2026-02-03): '(중지) ' 공백 포함 처리를 위해 trim() 사용
   for (const metaName of adNames) {
     // Meta 광고명에서 (중지) 제거
     if (metaName.startsWith('(중지)')) {
-      const withoutPrefix = metaName.substring(4); // '(중지)' 는 4글자
+      const withoutPrefix = metaName.replace(/^\(중지\)\s*/, '').trim(); // '(중지)' + 공백 제거
       // 정확 일치
       if (truncatedName === withoutPrefix) {
         return metaName;
@@ -296,8 +313,9 @@ async function mapToMetaAdName(truncatedName, metaAdNames = null) {
         return metaName;
       }
       // (중지) 제거 후 접두사 매칭
+      // FIX (2026-02-03): '(중지) ' 공백 포함 처리
       if (metaName.startsWith('(중지)')) {
-        const withoutPrefix = metaName.substring(4);
+        const withoutPrefix = metaName.replace(/^\(중지\)\s*/, '').trim();
         if (withoutPrefix.startsWith(truncatedName)) {
           return metaName;
         }
@@ -361,8 +379,9 @@ function getAllVariantNames(metaAdName, dbCreativeNames, metaAdNames = []) {
   const normalizedMeta = metaAdName.replace(/\+/g, ' ');
   
   // (중지) 접두사 제거한 버전도 준비
+  // FIX (2026-02-03): '(중지) ' 공백 포함 처리
   const metaWithoutPrefix = metaAdName.startsWith('(중지)') 
-    ? metaAdName.substring(4) 
+    ? metaAdName.replace(/^\(중지\)\s*/, '').trim()
     : null;
   const normalizedMetaWithoutPrefix = metaWithoutPrefix 
     ? metaWithoutPrefix.replace(/\+/g, ' ') 

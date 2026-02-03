@@ -1,3 +1,6 @@
+| 2026-02-03 | 스크롤뎁스0px수집문제해결 | tracker-v054.js |
+| 2026-02-03 | 중지광고 미디어조회 수정 | metaAdNameMapping.js |
+| 2026-02-02 | 한글 검색 개선 | creativeService.js |
 | 2026-02-02 | 이상치 필터 텍스트 변경 | PerformanceFilters.jsx |
 | 2026-02-02 | 이상치필터 대체방식변경 | creativeRepository.js |
 | 2026-02-02 | 검색창 너비 축소 | OrderFilterBar.jsx |
@@ -10,6 +13,3 @@
 | 2026-02-02 | 구간값 정수 반올림 추가 | ScoreSettingsModal.jsx |
 | 2026-02-02 | 구간 기본값 이상치 연동 | ScoreSettingsModal.jsx |
 | 2026-02-02 | 체류시간 단위 분 변경 | ScoreSettingsModal.jsx |
-| 2026-02-02 | 헤더 아바타 색상 변경 | App.jsx |
-| 2026-02-02 | 사이드바 메뉴 순서 변경 | App.jsx |
-| 2026-02-02 | 구간추가 10%감소로 변경 | ScoreSettingsModal.jsx |
