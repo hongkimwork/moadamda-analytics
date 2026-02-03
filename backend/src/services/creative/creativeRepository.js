@@ -32,7 +32,7 @@ async function getCreativeAggregation({
   minDurationSeconds = 0,
   minPvCount = 0,
   minScrollPx = 0
-) {
+}) {
   // 카페24 호환: visitors 테이블과 조인하여 봇 트래픽 제외
   // FIX (2026-01-23): View를 "진입 횟수"로 변경
   // - 기존: 고유 세션 수 (같은 세션에서 여러 번 진입해도 1번)
