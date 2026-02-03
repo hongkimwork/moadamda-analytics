@@ -28,8 +28,11 @@ async function getCreativeAggregation({
   queryParams,
   maxDurationSeconds = 300,
   maxPvCount = 15,
-  maxScrollPx = 10000
-}) {
+  maxScrollPx = 10000,
+  minDurationSeconds = 0,
+  minPvCount = 0,
+  minScrollPx = 0
+) {
   // 카페24 호환: visitors 테이블과 조인하여 봇 트래픽 제외
   // FIX (2026-01-23): View를 "진입 횟수"로 변경
   // - 기존: 고유 세션 수 (같은 세션에서 여러 번 진입해도 1번)
@@ -108,7 +111,8 @@ async function getCreativeAggregation({
       GROUP BY session_id
     ),
     session_metrics AS (
-      -- 고유 세션 기준 평균 지표 집계 (이상치는 기준값으로 대체)
+      -- 고유 세션 기준 평균 지표 집계
+      -- 이하치 이하: 제외 (NULL), 이상치 초과: 기준값으로 대체
       SELECT 
         us.creative_name,
         us.utm_source,
@@ -116,21 +120,39 @@ async function getCreativeAggregation({
         us.utm_campaign,
         ROUND(
           COALESCE(
-            AVG(CASE WHEN us.pageview_count <= ${maxPvCount} THEN us.pageview_count ELSE ${maxPvCount} END)::NUMERIC,
+            AVG(
+              CASE 
+                WHEN us.pageview_count <= ${minPvCount} THEN NULL  -- 이하치 이하 제외
+                WHEN us.pageview_count <= ${maxPvCount} THEN us.pageview_count  -- 정상 범위
+                ELSE ${maxPvCount}  -- 이상치 대체
+              END
+            )::NUMERIC,
             0
           ),
           1
         ) as avg_pageviews,
         ROUND(
           COALESCE(
-            AVG(CASE WHEN us.duration_seconds <= ${maxDurationSeconds} THEN us.duration_seconds ELSE ${maxDurationSeconds} END)::NUMERIC,
+            AVG(
+              CASE 
+                WHEN us.duration_seconds <= ${minDurationSeconds} THEN NULL  -- 이하치 이하 제외
+                WHEN us.duration_seconds <= ${maxDurationSeconds} THEN us.duration_seconds  -- 정상 범위
+                ELSE ${maxDurationSeconds}  -- 이상치 대체
+              END
+            )::NUMERIC,
             0
           ),
           1
         ) as avg_duration_seconds,
         ROUND(
           COALESCE(
-            AVG(CASE WHEN sd.total_scroll_px <= ${maxScrollPx} THEN sd.total_scroll_px ELSE ${maxScrollPx} END)::NUMERIC,
+            AVG(
+              CASE 
+                WHEN COALESCE(sd.total_scroll_px, 0) <= ${minScrollPx} THEN NULL  -- 이하치 이하 제외
+                WHEN COALESCE(sd.total_scroll_px, 0) <= ${maxScrollPx} THEN sd.total_scroll_px  -- 정상 범위
+                ELSE ${maxScrollPx}  -- 이상치 대체
+              END
+            )::NUMERIC,
             0
           ),
           0
@@ -188,8 +210,12 @@ async function getCreativeCount({
   endDate,
   searchCondition,
   utmFilterConditions,
-  queryParams
+  queryParams,
+  minDurationSeconds = 0,
+  minPvCount = 0,
+  minScrollPx = 0
 }) {
+  // Note: 이하치 필터는 평균 지표 계산에만 적용되며, 광고 소재 총 개수에는 영향 없음
   // 카페24 호환: visitors 테이블과 조인하여 봇 트래픽 제외
   const countQuery = `
     SELECT COUNT(DISTINCT us.utm_params->>'utm_content') as total

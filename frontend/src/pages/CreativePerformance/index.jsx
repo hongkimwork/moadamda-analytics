@@ -65,6 +65,9 @@ function CreativePerformance() {
     maxDuration,
     maxPv,
     maxScroll,
+    minDuration,
+    minPv,
+    minScroll,
     
     // 모달 상태
     ordersModalVisible,
@@ -78,6 +81,9 @@ function CreativePerformance() {
     setMaxDuration,
     setMaxPv,
     setMaxScroll,
+    setMinDuration,
+    setMinPv,
+    setMinScroll,
     setError,
     
     // 점수 설정
@@ -219,6 +225,12 @@ function CreativePerformance() {
         onMaxDurationChange={setMaxDuration}
         onMaxPvChange={setMaxPv}
         onMaxScrollChange={setMaxScroll}
+        minDuration={minDuration}
+        minPv={minPv}
+        minScroll={minScroll}
+        onMinDurationChange={setMinDuration}
+        onMinPvChange={setMinPv}
+        onMinScrollChange={setMinScroll}
         scoreSettings={scoreSettings}
         onScoreSettingsClick={() => setScoreSettingsModalVisible(true)}
         quickFilterSources={quickFilterSources}

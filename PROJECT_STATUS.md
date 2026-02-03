@@ -1,3 +1,5 @@
+| 2026-02-03 | 이하치필터 병합로직 수정 | creativeService.js |
+| 2026-02-03 | 이하치 값 제외 필터 추가 | PerformanceFilters.jsx |
 | 2026-02-03 | 스크롤뎁스0px수집문제해결 | tracker-v054.js |
 | 2026-02-03 | 중지광고 미디어조회 수정 | metaAdNameMapping.js |
 | 2026-02-02 | 한글 검색 개선 | creativeService.js |
@@ -11,5 +13,3 @@
 | 2026-02-02 | 모달 잘린광고명 병합수정 | metaAdNameMapping.js |
 | 2026-02-02 | 평균스크롤 정렬 버그 수정 | utils.js |
 | 2026-02-02 | 구간값 정수 반올림 추가 | ScoreSettingsModal.jsx |
-| 2026-02-02 | 구간 기본값 이상치 연동 | ScoreSettingsModal.jsx |
-| 2026-02-02 | 체류시간 단위 분 변경 | ScoreSettingsModal.jsx |

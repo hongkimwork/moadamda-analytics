@@ -93,10 +93,15 @@ export const useCreativePerformance = () => {
     return ['meta', 'instagram', 'ig'];
   });
 
-  // 이상치 기준 state (저장된 값 우선 사용)
+  // 이상치 기준 state (저장된 값 우선 사용) - 상한선
   const [maxDuration, setMaxDuration] = useState(() => savedFilters?.maxDuration ?? 60);
   const [maxPv, setMaxPv] = useState(() => savedFilters?.maxPv ?? 15);
   const [maxScroll, setMaxScroll] = useState(() => savedFilters?.maxScroll ?? 10000);
+
+  // 이하치 기준 state (저장된 값 우선 사용) - 하한선 (이 값 이하 제외)
+  const [minDuration, setMinDuration] = useState(() => savedFilters?.minDuration ?? 0);
+  const [minPv, setMinPv] = useState(() => savedFilters?.minPv ?? 0);
+  const [minScroll, setMinScroll] = useState(() => savedFilters?.minScroll ?? 0);
 
   // 모달 state
   const [ordersModalVisible, setOrdersModalVisible] = useState(false);
@@ -132,11 +137,14 @@ export const useCreativePerformance = () => {
       quickFilterSources,
       maxDuration,
       maxPv,
-      maxScroll
+      maxScroll,
+      minDuration,
+      minPv,
+      minScroll
     };
     
     saveFiltersToStorage(user.id, filtersToSave);
-  }, [user?.id, filters.dateRange, quickFilterSources, maxDuration, maxPv, maxScroll]);
+  }, [user?.id, filters.dateRange, quickFilterSources, maxDuration, maxPv, maxScroll, minDuration, minPv, minScroll]);
 
   // 요약 통계 계산
   const summaryStats = useMemo(() => {
@@ -193,7 +201,10 @@ export const useCreativePerformance = () => {
         sort_order: sortOrder,
         max_duration: maxDuration,
         max_pv: maxPv,
-        max_scroll: maxScroll
+        max_scroll: maxScroll,
+        min_duration: minDuration,
+        min_pv: minPv,
+        min_scroll: minScroll
       };
 
       // 동적 UTM 필터 + 퀵 필터 병합
@@ -233,7 +244,7 @@ export const useCreativePerformance = () => {
   // 의존성 변경 시 재조회
   useEffect(() => {
     fetchData();
-  }, [currentPage, pageSize, filters, searchTerm, sortField, sortOrder, activeUtmFilters, quickFilterSources, maxDuration, maxPv, maxScroll]);
+  }, [currentPage, pageSize, filters, searchTerm, sortField, sortOrder, activeUtmFilters, quickFilterSources, maxDuration, maxPv, maxScroll, minDuration, minPv, minScroll]);
 
   // 검색 핸들러
   const handleSearch = (term) => {
@@ -309,6 +320,9 @@ export const useCreativePerformance = () => {
     maxDuration,
     maxPv,
     maxScroll,
+    minDuration,
+    minPv,
+    minScroll,
     
     // 모달 상태
     ordersModalVisible,
@@ -327,6 +341,9 @@ export const useCreativePerformance = () => {
     setMaxDuration,
     setMaxPv,
     setMaxScroll,
+    setMinDuration,
+    setMinPv,
+    setMinScroll,
     setError,
     
     // 핸들러

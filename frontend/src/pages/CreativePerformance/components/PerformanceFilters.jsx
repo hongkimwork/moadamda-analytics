@@ -173,6 +173,12 @@ function PerformanceFilters({
   onMaxDurationChange,
   onMaxPvChange,
   onMaxScrollChange,
+  minDuration,
+  minPv,
+  minScroll,
+  onMinDurationChange,
+  onMinPvChange,
+  onMinScrollChange,
   scoreSettings,
   onScoreSettingsClick,
   quickFilterSources
@@ -259,6 +265,11 @@ function PerformanceFilters({
   const [localDuration, setLocalDuration] = useState(maxDuration ? maxDuration / 60 : 1);
   const [localPv, setLocalPv] = useState(maxPv || 35);
   const [localScroll, setLocalScroll] = useState(maxScroll || 30000);
+
+  // 이하치 필터 로컬 state (적용 버튼 클릭 전까지 로컬에서만 관리)
+  const [localMinDuration, setLocalMinDuration] = useState(minDuration ? minDuration : 0);
+  const [localMinPv, setLocalMinPv] = useState(minPv || 0);
+  const [localMinScroll, setLocalMinScroll] = useState(minScroll || 0);
   
   // 상위 컴포넌트 값이 변경되면 로컬 state도 동기화
   useEffect(() => {
@@ -272,6 +283,18 @@ function PerformanceFilters({
   useEffect(() => {
     if (maxScroll) setLocalScroll(maxScroll);
   }, [maxScroll]);
+
+  useEffect(() => {
+    setLocalMinDuration(minDuration || 0);
+  }, [minDuration]);
+
+  useEffect(() => {
+    setLocalMinPv(minPv || 0);
+  }, [minPv]);
+
+  useEffect(() => {
+    setLocalMinScroll(minScroll || 0);
+  }, [minScroll]);
 
   // 마운트 시 기본값 설정 제거 - 부모 훅에서 저장된 값 또는 기본값을 이미 사용함
   // useEffect에서 기본값으로 덮어쓰면 저장된 필터가 무시됨
@@ -337,6 +360,10 @@ function PerformanceFilters({
     setLocalDuration(maxDuration ? maxDuration / 60 : 1);
     setLocalPv(maxPv || 35);
     setLocalScroll(maxScroll || 30000);
+    // 이하치 필터도 초기화
+    setLocalMinDuration(minDuration || 0);
+    setLocalMinPv(minPv || 0);
+    setLocalMinScroll(minScroll || 0);
     onFilterChange?.({ dateRange: getDateRangeByGroupAndOffset('month', 0) });
     onReset?.();
   };
@@ -354,12 +381,47 @@ function PerformanceFilters({
     }
   };
 
+  // 이하치 필터 적용 버튼 핸들러
+  const handleApplyMinFilters = () => {
+    // 범위 충돌 검사 (이하치는 이상치보다 작아야 함)
+    const maxDurationSec = localDuration * 60;
+    if (localMinDuration >= maxDurationSec) {
+      return; // 충돌 시 적용 안 함
+    }
+    if (localMinPv >= localPv) {
+      return;
+    }
+    if (localMinScroll >= localScroll) {
+      return;
+    }
+    
+    onMinDurationChange?.(localMinDuration);
+    onMinPvChange?.(localMinPv);
+    onMinScrollChange?.(localMinScroll);
+  };
+
   // 이상치 필터 값이 변경되었는지 확인
   const isOutlierFilterChanged = () => {
     const currentDurationMin = maxDuration ? maxDuration / 60 : 1;
     const currentPv = maxPv || 35;
     const currentScroll = maxScroll || 30000;
     return localDuration !== currentDurationMin || localPv !== currentPv || localScroll !== currentScroll;
+  };
+
+  // 이하치 필터 값이 변경되었는지 확인
+  const isMinFilterChanged = () => {
+    const currentMinDuration = minDuration || 0;
+    const currentMinPv = minPv || 0;
+    const currentMinScroll = minScroll || 0;
+    return localMinDuration !== currentMinDuration || localMinPv !== currentMinPv || localMinScroll !== currentMinScroll;
+  };
+
+  // 범위 충돌 여부 확인 (이하치 >= 이상치)
+  const hasRangeConflict = () => {
+    const maxDurationSec = localDuration * 60;
+    return (localMinDuration > 0 && localMinDuration >= maxDurationSec) ||
+           (localMinPv > 0 && localMinPv >= localPv) ||
+           (localMinScroll > 0 && localMinScroll >= localScroll);
   };
 
   const isDefaultState = () => !searchTerm && activeGroup === 'month' && offset === 0;
@@ -536,7 +598,7 @@ function PerformanceFilters({
         </div>
       </Card>
 
-      {/* 이상치 값 대체 필터 영역 */}
+      {/* 이상치 값 대체 필터 + 이하치 값 제외 필터 영역 */}
       <Card 
         size="small" 
         style={{ 
@@ -547,11 +609,12 @@ function PerformanceFilters({
         }}
       >
         <div className="flex gap-6 flex-wrap">
-          {/* 좌측: 이상치 값 대체 필터 */}
+          {/* 좌측: 이상치 값 대체 필터 (상한선) */}
           <div className="flex-1 min-w-[300px]">
             <div className="mb-3 text-sm text-gray-700 font-semibold flex items-center gap-2">
               <AlertTriangle size={18} strokeWidth={2} className="text-amber-500" />
               이상치 값 대체 필터
+              <span className="text-xs font-normal text-gray-400">(기준 초과 시 대체)</span>
             </div>
             <div className="flex gap-3 flex-wrap items-center">
               {/* 체류시간 초과 대체 (분 단위 입력, 내부는 초 단위) */}
@@ -636,18 +699,120 @@ function PerformanceFilters({
           {/* 구분선 */}
           <Divider type="vertical" className="h-auto m-0" />
 
-          {/* 우측: 모수 평가 기준 설정 */}
+          {/* 우측: 이하치 값 제외 필터 (하한선) */}
           <div className="flex-1 min-w-[300px]">
             <div className="mb-3 text-sm text-gray-700 font-semibold flex items-center gap-2">
-              <Settings size={18} strokeWidth={2} className="text-purple-600" />
-              모수 평가 기준
+              <Filter size={18} strokeWidth={2} className="text-blue-500" />
+              이하치 값 제외 필터
+              <span className="text-xs font-normal text-gray-400">(기준 이하 시 제외)</span>
             </div>
-            <ScoreSettingsCard
-              settings={scoreSettings}
-              onClick={onScoreSettingsClick}
-            />
+            <div className="flex gap-3 flex-wrap items-center">
+              {/* 체류시간 이하 제외 (초 단위 입력) */}
+              <div className="flex items-center gap-2 bg-gray-50 px-3 h-[42px] rounded-lg border border-gray-100">
+                <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
+                  <Clock size={14} className="text-green-500" />
+                  <span>체류시간</span>
+                </div>
+                <InputNumber
+                  size="small"
+                  value={localMinDuration}
+                  onChange={(val) => setLocalMinDuration(val || 0)}
+                  min={0}
+                  step={1}
+                  style={{ width: 70 }}
+                  disabled={loading}
+                  className="bg-white rounded border border-gray-200"
+                />
+                <span className="text-xs text-gray-600">초 이하 제외</span>
+              </div>
+              
+              {/* PV 이하 제외 */}
+              <div className="flex items-center gap-2 bg-gray-50 px-3 h-[42px] rounded-lg border border-gray-100">
+                <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
+                  <Eye size={14} className="text-purple-500" />
+                  <span>PV</span>
+                </div>
+                <InputNumber
+                  size="small"
+                  value={localMinPv}
+                  onChange={(val) => setLocalMinPv(val || 0)}
+                  min={0}
+                  step={1}
+                  style={{ width: 70 }}
+                  disabled={loading}
+                  className="bg-white rounded border border-gray-200"
+                />
+                <span className="text-xs text-gray-600">이하 제외</span>
+              </div>
+              
+              {/* 스크롤 이하 제외 */}
+              <div className="flex items-center gap-2 bg-gray-50 px-3 h-[42px] rounded-lg border border-gray-100">
+                <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
+                  <MousePointerClick size={14} className="text-blue-500" />
+                  <span>스크롤</span>
+                </div>
+                <InputNumber
+                  size="small"
+                  value={localMinScroll}
+                  onChange={(val) => setLocalMinScroll(val || 0)}
+                  min={0}
+                  step={100}
+                  style={{ width: 100 }}
+                  disabled={loading}
+                  className="bg-white rounded border border-gray-200"
+                  formatter={(value) => value ? `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''}
+                  parser={(value) => value.replace(/,/g, '')}
+                />
+                <span className="text-xs text-gray-600">px 이하 제외</span>
+              </div>
+              
+              {/* 적용 버튼 */}
+              <Button
+                type="primary"
+                size="small"
+                onClick={handleApplyMinFilters}
+                disabled={loading || !isMinFilterChanged() || hasRangeConflict()}
+                style={{
+                  height: '42px',
+                  padding: '0 12px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  boxShadow: 'none'
+                }}
+              >
+                적용
+              </Button>
+            </div>
+            {/* 범위 충돌 경고 */}
+            {hasRangeConflict() && (
+              <div className="mt-2 text-xs text-red-500 flex items-center gap-1">
+                <AlertTriangle size={12} />
+                이하치 값은 이상치 값보다 작아야 합니다
+              </div>
+            )}
           </div>
         </div>
+      </Card>
+
+      {/* 모수 평가 기준 설정 영역 (별도 카드) */}
+      <Card 
+        size="small" 
+        style={{ 
+          marginBottom: '20px',
+          borderRadius: '12px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+          border: '1px solid #e8eaed'
+        }}
+      >
+        <div className="mb-3 text-sm text-gray-700 font-semibold flex items-center gap-2">
+          <Settings size={18} strokeWidth={2} className="text-purple-600" />
+          모수 평가 기준
+        </div>
+        <ScoreSettingsCard
+          settings={scoreSettings}
+          onClick={onScoreSettingsClick}
+        />
       </Card>
     </>
   );

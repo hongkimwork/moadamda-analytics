@@ -25,7 +25,11 @@ async function getCreativePerformance(params) {
     utm_filters = '[]',
     max_duration = 60,
     max_pv = 15,
-    max_scroll = 10000
+    max_scroll = 10000,
+    // 이하치 제외 필터 (기본값 0 = 필터 미적용)
+    min_duration = 0,
+    min_pv = 0,
+    min_scroll = 0
   } = params;
 
   // 1. 날짜 파라미터 검증
@@ -39,13 +43,32 @@ async function getCreativePerformance(params) {
   const endDate = new Date(end);
   endDate.setHours(23, 59, 59, 999);
 
-  // 이상치 기준 검증
+  // 이상치 기준 검증 (상한선)
   // 체류시간: 30초~10분 (초 단위)
   const maxDurationSeconds = Math.min(Math.max(parseInt(max_duration) || 60, 30), 600);
   // PV: 5~35
   const maxPvCount = Math.min(Math.max(parseInt(max_pv) || 15, 5), 35);
   // 스크롤: 5000~30000 (px 단위)
   const maxScrollPx = Math.min(Math.max(parseInt(max_scroll) || 10000, 5000), 30000);
+
+  // 이하치 기준 검증 (하한선 - 이 값 이하는 제외)
+  // 체류시간: 0~이상치기준-1 (초 단위, 0이면 필터 미적용)
+  let minDurationSeconds = Math.max(parseInt(min_duration) || 0, 0);
+  // PV: 0~이상치기준-1 (0이면 필터 미적용)
+  let minPvCount = Math.max(parseInt(min_pv) || 0, 0);
+  // 스크롤: 0~이상치기준-1 (px 단위, 0이면 필터 미적용)
+  let minScrollPx = Math.max(parseInt(min_scroll) || 0, 0);
+
+  // 범위 충돌 방지: 이하치는 반드시 이상치보다 작아야 함
+  if (minDurationSeconds >= maxDurationSeconds) {
+    minDurationSeconds = 0; // 충돌 시 이하치 필터 해제
+  }
+  if (minPvCount >= maxPvCount) {
+    minPvCount = 0;
+  }
+  if (minScrollPx >= maxScrollPx) {
+    minScrollPx = 0;
+  }
 
   // 2. 페이지네이션 파라미터
   const pageNum = parseInt(page);
@@ -89,14 +112,20 @@ async function getCreativePerformance(params) {
       queryParams,
       maxDurationSeconds,
       maxPvCount,
-      maxScrollPx
+      maxScrollPx,
+      minDurationSeconds,
+      minPvCount,
+      minScrollPx
     }),
     repository.getCreativeCount({
       startDate,
       endDate,
       searchCondition,
       utmFilterConditions,
-      queryParams
+      queryParams,
+      minDurationSeconds,
+      minPvCount,
+      minScrollPx
     })
   ]);
 
@@ -144,9 +173,20 @@ async function getCreativePerformance(params) {
         const existing = mergedDataMap.get(key);
         existing.unique_visitors += row.unique_visitors;
         existing.total_views += row.total_views;
-        existing._total_pageviews += row.unique_visitors * row.avg_pageviews;
-        existing._total_duration += row.unique_visitors * row.avg_duration_seconds;
-        existing._total_scroll += row.unique_visitors * row.avg_scroll_px;
+        // FIX: 이하치 필터로 모든 세션이 제외된 경우(avg=0), 해당 UV는 평균 계산에서 제외
+        // 각 지표별로 유효 UV를 별도 추적
+        if (row.avg_pageviews > 0) {
+          existing._total_pageviews += row.unique_visitors * row.avg_pageviews;
+          existing._valid_uv_pv += row.unique_visitors;
+        }
+        if (row.avg_duration_seconds > 0) {
+          existing._total_duration += row.unique_visitors * row.avg_duration_seconds;
+          existing._valid_uv_duration += row.unique_visitors;
+        }
+        if (row.avg_scroll_px > 0) {
+          existing._total_scroll += row.unique_visitors * row.avg_scroll_px;
+          existing._valid_uv_scroll += row.unique_visitors;
+        }
         // 원본 광고명들 추적 (상세 조회용)
         if (!existing._variant_names.includes(row.creative_name)) {
           existing._variant_names.push(row.creative_name);
@@ -159,9 +199,12 @@ async function getCreativePerformance(params) {
           utm_campaign: row.utm_campaign,
           unique_visitors: row.unique_visitors,
           total_views: row.total_views,
-          _total_pageviews: row.unique_visitors * row.avg_pageviews,
-          _total_duration: row.unique_visitors * row.avg_duration_seconds,
-          _total_scroll: row.unique_visitors * row.avg_scroll_px,
+          _total_pageviews: row.avg_pageviews > 0 ? row.unique_visitors * row.avg_pageviews : 0,
+          _total_duration: row.avg_duration_seconds > 0 ? row.unique_visitors * row.avg_duration_seconds : 0,
+          _total_scroll: row.avg_scroll_px > 0 ? row.unique_visitors * row.avg_scroll_px : 0,
+          _valid_uv_pv: row.avg_pageviews > 0 ? row.unique_visitors : 0,
+          _valid_uv_duration: row.avg_duration_seconds > 0 ? row.unique_visitors : 0,
+          _valid_uv_scroll: row.avg_scroll_px > 0 ? row.unique_visitors : 0,
           purchase_count: 0,
           total_revenue: 0,
           _variant_names: [row.creative_name] // 원본 광고명 추적
@@ -171,9 +214,12 @@ async function getCreativePerformance(params) {
       // 매핑 실패: 그대로 유지 (깨진 문자, 메타에 없는 광고 등)
       unmappedRows.push({
         ...row,
-        _total_pageviews: row.unique_visitors * row.avg_pageviews,
-        _total_duration: row.unique_visitors * row.avg_duration_seconds,
-        _total_scroll: row.unique_visitors * row.avg_scroll_px,
+        _total_pageviews: row.avg_pageviews > 0 ? row.unique_visitors * row.avg_pageviews : 0,
+        _total_duration: row.avg_duration_seconds > 0 ? row.unique_visitors * row.avg_duration_seconds : 0,
+        _total_scroll: row.avg_scroll_px > 0 ? row.unique_visitors * row.avg_scroll_px : 0,
+        _valid_uv_pv: row.avg_pageviews > 0 ? row.unique_visitors : 0,
+        _valid_uv_duration: row.avg_duration_seconds > 0 ? row.unique_visitors : 0,
+        _valid_uv_scroll: row.avg_scroll_px > 0 ? row.unique_visitors : 0,
         _variant_names: [row.creative_name]
       });
     }
@@ -188,6 +234,8 @@ async function getCreativePerformance(params) {
   });
   
   // 평균값 재계산 후 최종 data 배열 생성
+  // FIX: 이하치 필터로 인해 avg=0인 광고의 UV는 평균 계산에서 제외
+  // _valid_uv_* 필드를 사용하여 유효 UV로 나눔
   const data = Array.from(mergedDataMap.values()).map(row => ({
     creative_name: row.creative_name,
     utm_source: row.utm_source,
@@ -195,14 +243,14 @@ async function getCreativePerformance(params) {
     utm_campaign: row.utm_campaign,
     unique_visitors: row.unique_visitors,
     total_views: row.total_views,
-    avg_pageviews: row.unique_visitors > 0 
-      ? Math.round((row._total_pageviews / row.unique_visitors) * 10) / 10 
+    avg_pageviews: (row._valid_uv_pv || 0) > 0 
+      ? Math.round((row._total_pageviews / row._valid_uv_pv) * 10) / 10 
       : 0,
-    avg_duration_seconds: row.unique_visitors > 0 
-      ? Math.round((row._total_duration / row.unique_visitors) * 10) / 10 
+    avg_duration_seconds: (row._valid_uv_duration || 0) > 0 
+      ? Math.round((row._total_duration / row._valid_uv_duration) * 10) / 10 
       : 0,
-    avg_scroll_px: row.unique_visitors > 0 
-      ? Math.round(row._total_scroll / row.unique_visitors) 
+    avg_scroll_px: (row._valid_uv_scroll || 0) > 0 
+      ? Math.round(row._total_scroll / row._valid_uv_scroll) 
       : 0,
     purchase_count: row.purchase_count,
     total_revenue: row.total_revenue,
