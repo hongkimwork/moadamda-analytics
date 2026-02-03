@@ -222,10 +222,44 @@ async function getCreativeOrders(params) {
   
   // 구매한 visitor들의 전체 여정 조회
   const purchaserIds = [...new Set(allOrders.map(o => o.visitor_id))];
-  const journeyRows = await repository.getVisitorJourneys({ visitorIds: purchaserIds });
+  
+  // FIX (2026-02-03): IP/member_id 수집 (쿠키 끊김 대응)
+  const purchaserIps = [...new Set(allOrders
+    .map(o => o.ip_address)
+    .filter(ip => ip && ip !== 'unknown')
+  )];
+  const purchaserMemberIds = [...new Set(allOrders
+    .map(o => o.member_id)
+    .filter(id => id && id !== '')
+  )];
+  
+  // visitor_id 기반 여정 + IP/member_id 기반 여정 병렬 조회
+  const [journeyRows, ipJourneyRows, memberJourneyRows] = await Promise.all([
+    repository.getVisitorJourneys({ visitorIds: purchaserIds }),
+    repository.getVisitorJourneysByIp({ purchaserIps, purchaserIds }),
+    repository.getVisitorJourneysByMemberId({ purchaserMemberIds, purchaserIds })
+  ]);
   
   // visitor별 여정 그룹화
   const visitorJourneys = groupJourneysByVisitor(journeyRows);
+  
+  // IP별 여정 그룹화
+  const ipJourneys = {};
+  ipJourneyRows.forEach(row => {
+    if (!ipJourneys[row.ip_address]) {
+      ipJourneys[row.ip_address] = [];
+    }
+    ipJourneys[row.ip_address].push(row);
+  });
+  
+  // member_id별 여정 그룹화
+  const memberJourneys = {};
+  memberJourneyRows.forEach(row => {
+    if (!memberJourneys[row.member_id]) {
+      memberJourneys[row.member_id] = [];
+    }
+    memberJourneys[row.member_id].push(row);
+  });
   
   // 기여도 기반 주문 필터링 및 상세 계산
   const contributedOrders = [];
@@ -239,7 +273,44 @@ async function getCreativeOrders(params) {
   let singleTouchCount = 0;
   
   allOrders.forEach(order => {
-    const fullJourney = visitorJourneys[order.visitor_id] || [];
+    let fullJourney = visitorJourneys[order.visitor_id] || [];
+    
+    // FIX (2026-02-03): IP 기반 여정 병합 (쿠키 끊김 대응)
+    if (order.ip_address && order.ip_address !== 'unknown') {
+      const ipJourney = ipJourneys[order.ip_address] || [];
+      if (ipJourney.length > 0) {
+        const existingKeys = new Set(fullJourney.map(j => 
+          `${j.entry_timestamp}||${j.utm_content}`
+        ));
+        const newTouches = ipJourney.filter(j => {
+          const key = `${j.entry_timestamp}||${j.utm_content}`;
+          return !existingKeys.has(key);
+        });
+        fullJourney = [...fullJourney, ...newTouches];
+      }
+    }
+    
+    // FIX (2026-02-03): member_id 기반 여정 병합 (회원 기반 연결)
+    if (order.member_id && order.member_id !== '') {
+      const memberJourney = memberJourneys[order.member_id] || [];
+      if (memberJourney.length > 0) {
+        const existingKeys = new Set(fullJourney.map(j => 
+          `${j.entry_timestamp}||${j.utm_content}`
+        ));
+        const newTouches = memberJourney.filter(j => {
+          const key = `${j.entry_timestamp}||${j.utm_content}`;
+          return !existingKeys.has(key);
+        });
+        fullJourney = [...fullJourney, ...newTouches];
+      }
+    }
+    
+    // 병합 후 시간순 정렬
+    if (fullJourney.length > 1) {
+      fullJourney.sort((a, b) => new Date(a.entry_timestamp) - new Date(b.entry_timestamp));
+      fullJourney = fullJourney.map((j, idx) => ({ ...j, sequence_order: idx + 1 }));
+    }
+    
     if (fullJourney.length === 0) return;
     
     // 구매일 기준 30일 이내 여정만 필터링
