@@ -1,3 +1,5 @@
+| 2026-02-03 | member_id기반UTM연결추가 | creativeAttribution.js |
+| 2026-02-03 | IP기반 과거여정연결추가 | ordersRepository.js |
 | 2026-02-03 | 파라미터 문법 오류 수정 | creativeRepository.js |
 | 2026-02-03 | 이하치필터 병합로직 수정 | creativeService.js |
 | 2026-02-03 | 이하치 값 제외 필터 추가 | PerformanceFilters.jsx |
@@ -11,5 +13,3 @@
 | 2026-02-02 | 날짜필터 네비게이션 개선 | PerformanceFilters.jsx |
 | 2026-02-02 | 광고DB자동동기화+토큰갱신 | metaAdNameMapping.js |
 | 2026-02-02 | 모달URL인코딩변형수정 | detailService.js |
-| 2026-02-02 | 모달 잘린광고명 병합수정 | metaAdNameMapping.js |
-| 2026-02-02 | 평균스크롤 정렬 버그 수정 | utils.js |

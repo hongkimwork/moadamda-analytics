@@ -151,6 +151,7 @@ async function syncOrdersForRange(startDate, endDate, options = {}) {
         const cafe24Status = order.items?.[0]?.order_status || null;
         const canceled = order.canceled || 'F';
         const firstOrder = order.first_order || null; // Cafe24 최초 주문 여부 (T=신규, F=재구매)
+        const memberId = order.member_id || null; // Cafe24 회원 ID (비회원 주문 시 null)
         
         // order_status 결정 (Cafe24 상태 코드 기반)
         // C로 시작 = 취소, R로 시작 = 반품, 그 외 = confirmed
@@ -196,16 +197,17 @@ async function syncOrdersForRange(startDate, endDate, options = {}) {
         // conversions 테이블에 UPSERT
         // - 새 주문: 전체 데이터 저장
         // - 기존 주문: visitor_id 유지, 결제 정보는 Cafe24 값으로 업데이트
+        // FIX (2026-02-03): member_id 추가 - 쿠키 끊김 시 동일 사용자 연결용
         await db.query(
           `INSERT INTO conversions (
             visitor_id, session_id, order_id, total_amount, final_payment, 
             product_count, timestamp, discount_amount, mileage_used, 
             shipping_fee, order_status, synced_at, product_name, paid,
             points_spent, credits_spent, order_place_name, payment_method_name,
-            cafe24_status, canceled, first_order
+            cafe24_status, canceled, first_order, member_id
           ) VALUES (
             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), $12, $13,
-            $14, $15, $16, $17, $18, $19, $20
+            $14, $15, $16, $17, $18, $19, $20, $21
           )
           ON CONFLICT (order_id) DO UPDATE SET
             paid = EXCLUDED.paid,
@@ -224,6 +226,7 @@ async function syncOrdersForRange(startDate, endDate, options = {}) {
             canceled = EXCLUDED.canceled,
             order_status = EXCLUDED.order_status,
             first_order = EXCLUDED.first_order,
+            member_id = COALESCE(EXCLUDED.member_id, conversions.member_id),
             synced_at = NOW()`,
           [
             visitorId,
@@ -245,7 +248,8 @@ async function syncOrdersForRange(startDate, endDate, options = {}) {
             paymentMethodName,
             cafe24Status,
             canceled,
-            firstOrder
+            firstOrder,
+            memberId
           ]
         );
         
@@ -607,6 +611,87 @@ async function backfillFirstOrder() {
   }
 }
 
+/**
+ * 기존 주문들의 member_id 일괄 업데이트
+ * member_id가 NULL인 주문들 대상으로 Cafe24 API에서 member_id 조회하여 UPDATE
+ * 
+ * FIX (2026-02-03): 쿠키 끊김 시 동일 사용자 연결용
+ */
+async function backfillMemberIds() {
+  const MEMBER_PREFIX = '[Cafe24 Member Backfill]';
+  
+  try {
+    console.log(`${MEMBER_PREFIX} Starting member_id backfill...`);
+    
+    // member_id가 NULL이고 synced_at이 있는 주문들 조회 (Cafe24 동기화 주문만)
+    const ordersResult = await db.query(
+      `SELECT order_id 
+       FROM conversions 
+       WHERE member_id IS NULL
+         AND synced_at IS NOT NULL
+       ORDER BY timestamp DESC
+       LIMIT 1000`
+    );
+    
+    if (ordersResult.rows.length === 0) {
+      console.log(`${MEMBER_PREFIX} No orders need member_id update`);
+      return { total: 0, updated: 0 };
+    }
+    
+    console.log(`${MEMBER_PREFIX} Found ${ordersResult.rows.length} orders to update`);
+    
+    let updatedCount = 0;
+    let errorCount = 0;
+    
+    // 배치 처리 (Rate limit 고려)
+    for (let i = 0; i < ordersResult.rows.length; i++) {
+      const order = ordersResult.rows[i];
+      
+      try {
+        // Cafe24 API에서 주문 상세 조회
+        const orderDetail = await getOrderDetail(order.order_id);
+        
+        if (orderDetail.order && orderDetail.order.member_id) {
+          const memberId = orderDetail.order.member_id;
+          
+          await db.query(
+            `UPDATE conversions SET member_id = $1 WHERE order_id = $2`,
+            [memberId, order.order_id]
+          );
+          updatedCount++;
+          
+          // 진행 상황 로그 (100개마다)
+          if (updatedCount % 100 === 0) {
+            console.log(`${MEMBER_PREFIX} Progress: ${updatedCount}/${ordersResult.rows.length}`);
+          }
+        }
+        
+        // Rate limit 방지 (200ms 대기)
+        await sleep(200);
+        
+      } catch (orderError) {
+        errorCount++;
+        // 에러는 조용히 처리 (로그만 남김)
+        if (errorCount <= 5) {
+          console.error(`${MEMBER_PREFIX} Error ${order.order_id}:`, orderError.message);
+        }
+      }
+    }
+    
+    console.log(`${MEMBER_PREFIX} Completed: ${updatedCount} updated, ${errorCount} errors out of ${ordersResult.rows.length}`);
+    
+    return {
+      total: ordersResult.rows.length,
+      updated: updatedCount,
+      errors: errorCount
+    };
+    
+  } catch (error) {
+    console.error(`${MEMBER_PREFIX} Error:`, error.message);
+    return { total: 0, updated: 0, error: error.message };
+  }
+}
+
 module.exports = {
   findMatchingVisitor,
   syncOrdersForRange,
@@ -614,5 +699,6 @@ module.exports = {
   backfillVisitorIds,
   backfillProductNames,
   updatePendingPayments,
-  backfillFirstOrder
+  backfillFirstOrder,
+  backfillMemberIds
 };

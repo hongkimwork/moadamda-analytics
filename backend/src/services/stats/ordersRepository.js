@@ -230,6 +230,7 @@ async function getOrdersCount(options) {
 
 /**
  * 주문 기본 정보 조회
+ * FIX (2026-02-03): member_id 추가 (회원 기반 연결)
  */
 async function getOrderBasicInfo(orderId) {
   const query = `
@@ -241,6 +242,7 @@ async function getOrderBasicInfo(orderId) {
       c.product_count,
       c.visitor_id,
       c.session_id,
+      c.member_id,
       c.discount_amount,
       c.mileage_used,
       c.points_spent,
@@ -503,6 +505,213 @@ async function getSameIpVisits(ipAddress, excludeSessionId) {
 }
 
 /**
+ * IP 기반 과거 방문 기록 조회 (쿠키 끊김 대응)
+ * 
+ * 쿠키가 끊어져서 visitor_id가 달라진 경우에도
+ * 동일 IP로 과거 방문 기록을 연결합니다.
+ * 
+ * @param {string} ipAddress - IP 주소
+ * @param {string} currentVisitorId - 현재 visitor_id (제외용)
+ * @param {Date} purchaseTimestamp - 구매일시 (이전 기록만 조회)
+ */
+async function getPreviousVisitsByIp(ipAddress, currentVisitorId, purchaseTimestamp) {
+  if (!ipAddress || ipAddress === 'unknown') {
+    return [];
+  }
+
+  const query = `
+    WITH ip_visitors AS (
+      -- 동일 IP의 다른 visitor_id들 찾기
+      SELECT DISTINCT v.visitor_id
+      FROM visitors v
+      WHERE v.ip_address = $1
+        AND v.visitor_id != $2
+        AND v.is_bot = false
+    ),
+    ip_pageviews AS (
+      SELECT
+        p.page_url,
+        p.page_title,
+        p.timestamp,
+        DATE(p.timestamp AT TIME ZONE 'Asia/Seoul') as visit_date,
+        p.visitor_id,
+        LEAD(p.timestamp) OVER (PARTITION BY DATE(p.timestamp AT TIME ZONE 'Asia/Seoul') ORDER BY p.timestamp) as next_timestamp
+      FROM pageviews p
+      WHERE p.visitor_id IN (SELECT visitor_id FROM ip_visitors)
+        AND p.timestamp < ($3::timestamptz AT TIME ZONE 'Asia/Seoul')
+    )
+    SELECT
+      visit_date,
+      page_url,
+      page_title,
+      timestamp,
+      visitor_id,
+      CASE
+        WHEN next_timestamp IS NOT NULL THEN
+          LEAST(
+            EXTRACT(EPOCH FROM (next_timestamp - timestamp))::INTEGER,
+            600
+          )
+        ELSE 0
+      END as time_spent_seconds
+    FROM ip_pageviews
+    ORDER BY timestamp ASC
+  `;
+
+  const result = await db.query(query, [ipAddress, currentVisitorId, purchaseTimestamp]);
+  return result.rows;
+}
+
+/**
+ * IP 기반 UTM 히스토리 조회 (쿠키 끊김 대응)
+ * 
+ * 동일 IP의 다른 visitor_id들의 UTM 세션 기록을 조회합니다.
+ * 
+ * @param {string} ipAddress - IP 주소
+ * @param {string} currentVisitorId - 현재 visitor_id (제외용)
+ * @param {Date} purchaseTimestamp - 구매일시 (30일 이내 조회)
+ * @param {number} attributionWindowDays - Attribution Window (기본 30일)
+ */
+async function getUtmHistoryByIp(ipAddress, currentVisitorId, purchaseTimestamp, attributionWindowDays = 30) {
+  if (!ipAddress || ipAddress === 'unknown') {
+    return [];
+  }
+
+  const query = `
+    WITH ip_visitors AS (
+      -- 동일 IP의 다른 visitor_id들 찾기
+      SELECT DISTINCT v.visitor_id
+      FROM visitors v
+      WHERE v.ip_address = $1
+        AND v.visitor_id != $2
+        AND v.is_bot = false
+    )
+    SELECT
+      us.visitor_id,
+      COALESCE(us.utm_source, us.utm_params->>'utm_source', 'direct') as utm_source,
+      COALESCE(us.utm_medium, us.utm_params->>'utm_medium') as utm_medium,
+      COALESCE(us.utm_campaign, us.utm_params->>'utm_campaign') as utm_campaign,
+      us.utm_params->>'utm_content' as utm_content,
+      us.entry_timestamp,
+      us.duration_seconds,
+      us.sequence_order
+    FROM utm_sessions us
+    WHERE us.visitor_id IN (SELECT visitor_id FROM ip_visitors)
+      AND us.entry_timestamp >= ($3::timestamp - INTERVAL '${attributionWindowDays} days')
+      AND us.entry_timestamp <= $3::timestamp
+    ORDER BY us.entry_timestamp ASC
+  `;
+
+  const result = await db.query(query, [ipAddress, currentVisitorId, purchaseTimestamp]);
+  return result.rows;
+}
+
+/**
+ * member_id 기반 과거 방문 기록 조회 (쿠키 끊김 대응)
+ * 
+ * 동일 회원 ID를 가진 다른 주문의 visitor_id들의 과거 방문 기록을 연결합니다.
+ * 
+ * @param {string} memberId - Cafe24 회원 ID
+ * @param {string} currentVisitorId - 현재 visitor_id (제외용)
+ * @param {Date} purchaseTimestamp - 구매일시 (이전 기록만 조회)
+ */
+async function getPreviousVisitsByMemberId(memberId, currentVisitorId, purchaseTimestamp) {
+  if (!memberId || memberId === '') {
+    return [];
+  }
+
+  const query = `
+    WITH member_visitors AS (
+      -- 동일 member_id를 가진 다른 주문의 visitor_id들 찾기
+      SELECT DISTINCT c.visitor_id
+      FROM conversions c
+      JOIN visitors v ON c.visitor_id = v.visitor_id
+      WHERE c.member_id = $1
+        AND c.visitor_id IS NOT NULL
+        AND c.visitor_id != $2
+        AND v.is_bot = false
+    ),
+    member_pageviews AS (
+      SELECT
+        p.page_url,
+        p.page_title,
+        p.timestamp,
+        DATE(p.timestamp AT TIME ZONE 'Asia/Seoul') as visit_date,
+        p.visitor_id,
+        LEAD(p.timestamp) OVER (PARTITION BY DATE(p.timestamp AT TIME ZONE 'Asia/Seoul') ORDER BY p.timestamp) as next_timestamp
+      FROM pageviews p
+      WHERE p.visitor_id IN (SELECT visitor_id FROM member_visitors)
+        AND p.timestamp < ($3::timestamptz AT TIME ZONE 'Asia/Seoul')
+    )
+    SELECT
+      visit_date,
+      page_url,
+      page_title,
+      timestamp,
+      visitor_id,
+      CASE
+        WHEN next_timestamp IS NOT NULL THEN
+          LEAST(
+            EXTRACT(EPOCH FROM (next_timestamp - timestamp))::INTEGER,
+            600
+          )
+        ELSE 0
+      END as time_spent_seconds
+    FROM member_pageviews
+    ORDER BY timestamp ASC
+  `;
+
+  const result = await db.query(query, [memberId, currentVisitorId, purchaseTimestamp]);
+  return result.rows;
+}
+
+/**
+ * member_id 기반 UTM 히스토리 조회 (쿠키 끊김 대응)
+ * 
+ * 동일 회원 ID를 가진 다른 주문의 visitor_id들의 UTM 세션 기록을 조회합니다.
+ * 
+ * @param {string} memberId - Cafe24 회원 ID
+ * @param {string} currentVisitorId - 현재 visitor_id (제외용)
+ * @param {Date} purchaseTimestamp - 구매일시 (30일 이내 조회)
+ * @param {number} attributionWindowDays - Attribution Window (기본 30일)
+ */
+async function getUtmHistoryByMemberId(memberId, currentVisitorId, purchaseTimestamp, attributionWindowDays = 30) {
+  if (!memberId || memberId === '') {
+    return [];
+  }
+
+  const query = `
+    WITH member_visitors AS (
+      -- 동일 member_id를 가진 다른 주문의 visitor_id들 찾기
+      SELECT DISTINCT c.visitor_id
+      FROM conversions c
+      JOIN visitors v ON c.visitor_id = v.visitor_id
+      WHERE c.member_id = $1
+        AND c.visitor_id IS NOT NULL
+        AND c.visitor_id != $2
+        AND v.is_bot = false
+    )
+    SELECT
+      us.visitor_id,
+      COALESCE(us.utm_source, us.utm_params->>'utm_source', 'direct') as utm_source,
+      COALESCE(us.utm_medium, us.utm_params->>'utm_medium') as utm_medium,
+      COALESCE(us.utm_campaign, us.utm_params->>'utm_campaign') as utm_campaign,
+      us.utm_params->>'utm_content' as utm_content,
+      us.entry_timestamp,
+      us.duration_seconds,
+      us.sequence_order
+    FROM utm_sessions us
+    WHERE us.visitor_id IN (SELECT visitor_id FROM member_visitors)
+      AND us.entry_timestamp >= ($3::timestamp - INTERVAL '${attributionWindowDays} days')
+      AND us.entry_timestamp <= $3::timestamp
+    ORDER BY us.entry_timestamp ASC
+  `;
+
+  const result = await db.query(query, [memberId, currentVisitorId, purchaseTimestamp]);
+  return result.rows;
+}
+
+/**
  * 과거 구매 이력 조회
  */
 async function getPastPurchases(visitorId, excludeOrderId) {
@@ -546,7 +755,11 @@ module.exports = {
   getOrderBasicInfo,
   getPurchaseJourney,
   getPreviousVisits,
+  getPreviousVisitsByIp,
+  getPreviousVisitsByMemberId,
   getUtmHistory,
+  getUtmHistoryByIp,
+  getUtmHistoryByMemberId,
   getSameIpVisits,
   getPastPurchases,
   buildOrderFilters,

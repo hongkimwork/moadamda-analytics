@@ -223,7 +223,8 @@ function groupVisitsByDate(visits) {
       clean_url: cleanUrl(row.page_url),
       page_title: row.page_title || null,
       timestamp: row.timestamp,
-      time_spent_seconds: row.time_spent_seconds || 0
+      time_spent_seconds: row.time_spent_seconds || 0,
+      visitor_id: row.visitor_id || null // IP 기반 조회 시 어떤 visitor_id인지 표시
     });
   });
 
@@ -233,6 +234,50 @@ function groupVisitsByDate(visits) {
       pages: pages,
       total_duration: pages.reduce((sum, p) => sum + p.time_spent_seconds, 0),
       page_count: pages.length
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/**
+ * visitor_id 기반 방문과 IP 기반 방문을 병합
+ * 중복 제거 및 시간순 정렬
+ */
+function mergeVisitsByDate(visitorVisits, ipVisits) {
+  const allVisits = [...visitorVisits, ...ipVisits];
+  
+  // 날짜별로 그룹화
+  const grouped = {};
+  
+  allVisits.forEach(visit => {
+    const date = visit.date;
+    if (!grouped[date]) {
+      grouped[date] = {
+        date: date,
+        pages: [],
+        total_duration: 0,
+        page_count: 0,
+        source: visit.source || 'visitor_id' // 데이터 출처 표시
+      };
+    }
+    
+    // 페이지 병합 (중복 제거: 같은 timestamp의 같은 URL)
+    visit.pages.forEach(page => {
+      const isDuplicate = grouped[date].pages.some(p => 
+        p.timestamp === page.timestamp && p.page_url === page.page_url
+      );
+      if (!isDuplicate) {
+        grouped[date].pages.push(page);
+      }
+    });
+  });
+  
+  // 각 날짜의 페이지를 시간순 정렬하고 통계 재계산
+  return Object.values(grouped)
+    .map(visit => ({
+      ...visit,
+      pages: visit.pages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp)),
+      total_duration: visit.pages.reduce((sum, p) => sum + (p.time_spent_seconds || 0), 0),
+      page_count: visit.pages.length
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
 }
@@ -268,20 +313,44 @@ async function getOrderDetail(orderId) {
   // getUtmHistory: session_id를 추가로 전달 (인앱 브라우저 쿠키 문제 대응)
   // FIX (2026-01-27): 구매일(order.timestamp) 전달하여 Attribution Window (30일) 적용
   // FIX (2026-01-27): 타임존 문제 - DB timestamp는 KST로 저장되어 있으므로 로컬 시간 문자열로 변환
+  // FIX (2026-02-03): IP 기반 과거 방문 기록 추가 (쿠키 끊김 대응)
   const d = new Date(order.timestamp);
   const localTimestamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}.${String(d.getMilliseconds()).padStart(3, '0')}`;
+  
+  const hasValidIp = order.ip_address && order.ip_address !== 'unknown';
+  const hasValidMemberId = order.member_id && order.member_id !== '';
   
   const [
     purchaseJourneyRows,
     previousVisitsRows,
+    previousVisitsByIpRows,
+    previousVisitsByMemberIdRows,
     utmHistoryRows,
+    utmHistoryByIpRows,
+    utmHistoryByMemberIdRows,
     sameIpVisits,
     pastPurchases
   ] = await Promise.all([
     repository.getPurchaseJourney(order.visitor_id, order.timestamp),
     repository.getPreviousVisits(order.visitor_id, order.timestamp),
+    // IP 기반 과거 방문 조회 (쿠키 끊김 대응)
+    hasValidIp
+      ? repository.getPreviousVisitsByIp(order.ip_address, order.visitor_id, order.timestamp)
+      : Promise.resolve([]),
+    // FIX (2026-02-03): member_id 기반 과거 방문 조회 (회원 기반 연결)
+    hasValidMemberId
+      ? repository.getPreviousVisitsByMemberId(order.member_id, order.visitor_id, order.timestamp)
+      : Promise.resolve([]),
     repository.getUtmHistory(order.visitor_id, order.session_id, localTimestamp),
-    order.ip_address && order.ip_address !== 'unknown'
+    // IP 기반 UTM 히스토리 조회 (쿠키 끊김 대응)
+    hasValidIp
+      ? repository.getUtmHistoryByIp(order.ip_address, order.visitor_id, localTimestamp)
+      : Promise.resolve([]),
+    // FIX (2026-02-03): member_id 기반 UTM 히스토리 조회 (회원 기반 연결)
+    hasValidMemberId
+      ? repository.getUtmHistoryByMemberId(order.member_id, order.visitor_id, localTimestamp)
+      : Promise.resolve([]),
+    hasValidIp
       ? repository.getSameIpVisits(order.ip_address, order.session_id)
       : Promise.resolve([]),
     repository.getPastPurchases(order.visitor_id, orderId)
@@ -296,16 +365,75 @@ async function getOrderDetail(orderId) {
     time_spent_seconds: row.time_spent_seconds || 0
   }));
 
-  const previousVisits = groupVisitsByDate(previousVisitsRows);
+  // visitor_id 기반 과거 방문
+  const visitorPreviousVisits = groupVisitsByDate(previousVisitsRows).map(v => ({
+    ...v,
+    source: 'visitor_id'
+  }));
+  
+  // IP 기반 과거 방문 (쿠키 끊김 대응)
+  const ipPreviousVisits = groupVisitsByDate(previousVisitsByIpRows).map(v => ({
+    ...v,
+    source: 'ip_address'
+  }));
+  
+  // FIX (2026-02-03): member_id 기반 과거 방문 (회원 기반 연결)
+  const memberPreviousVisits = groupVisitsByDate(previousVisitsByMemberIdRows).map(v => ({
+    ...v,
+    source: 'member_id'
+  }));
+  
+  // 세 소스 병합 (중복 제거): visitor_id → IP → member_id
+  const previousVisits = mergeVisitsByDate(
+    mergeVisitsByDate(visitorPreviousVisits, ipPreviousVisits),
+    memberPreviousVisits
+  );
 
-  const utmHistory = utmHistoryRows.map(row => ({
+  // visitor_id 기반 UTM 히스토리
+  const visitorUtmHistory = utmHistoryRows.map(row => ({
     utm_source: row.utm_source || 'direct',
     utm_medium: row.utm_medium || null,
     utm_campaign: row.utm_campaign || null,
     utm_content: row.utm_content || null,
     entry_time: row.entry_timestamp,
-    total_duration: row.duration_seconds || 0
+    total_duration: row.duration_seconds || 0,
+    source: 'visitor_id'
   }));
+  
+  // IP 기반 UTM 히스토리 (쿠키 끊김 대응)
+  const ipUtmHistory = utmHistoryByIpRows.map(row => ({
+    utm_source: row.utm_source || 'direct',
+    utm_medium: row.utm_medium || null,
+    utm_campaign: row.utm_campaign || null,
+    utm_content: row.utm_content || null,
+    entry_time: row.entry_timestamp,
+    total_duration: row.duration_seconds || 0,
+    source: 'ip_address',
+    original_visitor_id: row.visitor_id // 원래 어떤 visitor_id였는지
+  }));
+  
+  // FIX (2026-02-03): member_id 기반 UTM 히스토리 (회원 기반 연결)
+  const memberUtmHistory = utmHistoryByMemberIdRows.map(row => ({
+    utm_source: row.utm_source || 'direct',
+    utm_medium: row.utm_medium || null,
+    utm_campaign: row.utm_campaign || null,
+    utm_content: row.utm_content || null,
+    entry_time: row.entry_timestamp,
+    total_duration: row.duration_seconds || 0,
+    source: 'member_id',
+    original_visitor_id: row.visitor_id // 원래 어떤 visitor_id였는지
+  }));
+  
+  // UTM 히스토리 병합 (중복 제거: 같은 entry_time의 같은 utm_content)
+  const allUtmHistory = [...visitorUtmHistory, ...ipUtmHistory, ...memberUtmHistory];
+  const utmHistory = allUtmHistory
+    .filter((utm, idx, arr) => {
+      // 중복 제거: 같은 entry_time과 utm_content 조합은 첫 번째만
+      return arr.findIndex(u => 
+        u.entry_time === utm.entry_time && u.utm_content === utm.utm_content
+      ) === idx;
+    })
+    .sort((a, b) => new Date(a.entry_time) - new Date(b.entry_time));
 
   const sameIpVisitsMapped = sameIpVisits.map(row => ({
     session_id: row.session_id,
@@ -389,7 +517,20 @@ async function getOrderDetail(orderId) {
     page_path: purchaseJourneyPages,
     utm_history: utmHistory,
     same_ip_visits: sameIpVisitsMapped,
-    past_purchases: pastPurchasesMapped
+    past_purchases: pastPurchasesMapped,
+    // 데이터 연결 정보 (IP + member_id 기반)
+    data_enrichment: {
+      ip_based_visits_found: ipPreviousVisits.length > 0,
+      ip_based_utm_found: ipUtmHistory.length > 0,
+      member_based_visits_found: memberPreviousVisits.length > 0,
+      member_based_utm_found: memberUtmHistory.length > 0,
+      visitor_visits_count: visitorPreviousVisits.length,
+      ip_visits_count: ipPreviousVisits.length,
+      member_visits_count: memberPreviousVisits.length,
+      visitor_utm_count: visitorUtmHistory.length,
+      ip_utm_count: ipUtmHistory.length,
+      member_utm_count: memberUtmHistory.length
+    }
   };
 }
 
