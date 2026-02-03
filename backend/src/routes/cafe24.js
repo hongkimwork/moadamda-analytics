@@ -347,5 +347,30 @@ router.post('/cafe24/backfill-first-order', async (req, res) => {
   }
 });
 
+/**
+ * member_id 일괄 업데이트
+ * member_id가 NULL인 주문들에 Cafe24 API에서 member_id 조회하여 UPDATE
+ * 쿠키 끊김 시 동일 사용자 연결용
+ */
+router.post('/cafe24/backfill-member-ids', async (req, res) => {
+  try {
+    console.log('[Cafe24 Member ID Backfill] Starting member_id backfill via API...');
+    
+    const result = await cafe24.backfillMemberIds();
+    
+    res.json({
+      success: true,
+      total_orders: result.total,
+      updated: result.updated,
+      errors: result.errors || 0,
+      error: result.error || null
+    });
+    
+  } catch (error) {
+    console.error('[Cafe24 Member ID Backfill] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
 

@@ -33,7 +33,8 @@ const {
   backfillVisitorIds,
   backfillProductNames,
   updatePendingPayments,
-  backfillFirstOrder
+  backfillFirstOrder,
+  backfillMemberIds
 } = require('./orderSync');
 
 // Scheduler (자동 실행 작업)
@@ -69,6 +70,7 @@ module.exports = {
   backfillProductNames,
   updatePendingPayments,
   backfillFirstOrder,
+  backfillMemberIds,
   
   // Scheduler
   startTokenRefreshTask,
