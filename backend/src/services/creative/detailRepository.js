@@ -65,8 +65,48 @@ async function getCreativeVisitors({ creative_name, utm_source, utm_medium, utm_
 }
 
 /**
+ * 선택 기간 내 모든 구매 조회 (creativeAttribution.js와 동일한 방식)
+ * FIX (2026-02-03): visitor 조회 방식 변경 - 모든 구매 먼저 조회
+ * - 기존: UTM 세션 있는 visitor만 조회 → 그 visitor들의 주문 조회 (IP/member_id 연결 누락)
+ * - 수정: 모든 구매 먼저 조회 → IP/member_id로 여정 연결 (creativeAttribution.js와 동일)
+ */
+async function getAllOrdersInPeriod({ startDate, endDate }) {
+  const query = `
+    SELECT 
+      c.order_id,
+      c.visitor_id,
+      c.session_id,
+      c.member_id,
+      c.final_payment,
+      c.total_amount,
+      c.product_name,
+      c.product_count,
+      c.discount_amount,
+      c.timestamp as order_date,
+      c.paid,
+      s.visitor_id as session_visitor_id,
+      COALESCE(s.ip_address, v.ip_address) as ip_address
+    FROM conversions c
+    LEFT JOIN sessions s ON c.session_id = s.session_id
+    LEFT JOIN visitors v ON c.visitor_id = v.visitor_id
+    WHERE c.order_id IS NOT NULL
+      AND c.paid = 'T'
+      AND c.final_payment > 0
+      AND c.timestamp >= $1
+      AND c.timestamp <= $2
+      AND (c.canceled = 'F' OR c.canceled IS NULL)
+      AND (c.order_status = 'confirmed' OR c.order_status IS NULL)
+    ORDER BY c.visitor_id, c.timestamp
+  `;
+  
+  const result = await db.query(query, [startDate, endDate]);
+  return result.rows;
+}
+
+/**
  * Visitor들의 주문 목록 조회
  * FIX (2026-02-03): IP/member_id 추가 (쿠키 끊김 대응)
+ * FIX (2026-02-03): 취소/환불 필터 추가 (creativeAttribution.js와 동일)
  */
 async function getVisitorOrders({ visitorIds, startDate, endDate }) {
   const query = `
@@ -91,6 +131,8 @@ async function getVisitorOrders({ visitorIds, startDate, endDate }) {
       AND c.final_payment > 0
       AND c.timestamp >= $2
       AND c.timestamp <= $3
+      AND (c.canceled = 'F' OR c.canceled IS NULL)
+      AND (c.order_status = 'confirmed' OR c.order_status IS NULL)
     ORDER BY c.timestamp DESC
   `;
   
@@ -1539,6 +1581,7 @@ async function getCreativeOriginalUrl({ creative_name, utm_source, utm_medium, u
 
 module.exports = {
   getAllVisitorsInPeriod,
+  getAllOrdersInPeriod,
   getCreativeVisitors,
   getVisitorOrders,
   getVisitorJourneys,

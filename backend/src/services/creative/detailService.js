@@ -158,7 +158,9 @@ function filterJourneyByAttributionWindow(journey, purchaseDate) {
  * 특정 광고 소재에 기여한 주문 목록 조회 (기여도 상세 정보 포함)
  * 
  * 중요: 테이블(creativeAttribution.js)과 동일한 로직으로 계산
- * - 선택 기간 내 구매한 모든 visitor의 여정을 분석
+ * FIX (2026-02-03): visitor 조회 방식을 creativeAttribution.js와 완전히 동일하게 변경
+ * - 기존: UTM 세션 있는 visitor 먼저 조회 → 그 visitor들의 주문 조회 (IP/member_id 연결 누락)
+ * - 수정: 모든 구매 먼저 조회 → IP/member_id로 여정 연결 (creativeAttribution.js와 동일)
  * - 구매일 기준 30일 이내에 본 광고만 기여 인정 (Attribution Window)
  * - 해당 광고가 30일 이내 여정에 포함된 경우만 기여 주문으로 인정
  */
@@ -173,11 +175,6 @@ async function getCreativeOrders(params) {
   
   // 이상치 기준 검증 (5분~2시간30분, 초 단위)
   const maxDurationSeconds = Math.min(Math.max(parseInt(max_duration) || 600, 300), 9000);
-  
-  // visitor 조회 시작일을 30일 전으로 확장 (기여 인정 기간만큼)
-  // 이렇게 해야 선택 기간 시작일에 결제한 사람이 30일 전에 본 광고도 집계됨
-  const extendedStartDate = new Date(startDate);
-  extendedStartDate.setDate(extendedStartDate.getDate() - ATTRIBUTION_WINDOW_DAYS);
   
   const emptyResponse = {
     success: true,
@@ -202,32 +199,25 @@ async function getCreativeOrders(params) {
     }
   };
   
-  // 테이블과 동일하게: 확장된 기간 내 모든 광고를 본 visitor 조회
-  const allVisitorIds = await repository.getAllVisitorsInPeriod({ startDate: extendedStartDate, endDate });
-  
-  if (allVisitorIds.length === 0) {
-    return emptyResponse;
-  }
-  
-  // 해당 visitor들의 주문 조회 (선택 기간 내)
-  const allOrders = await repository.getVisitorOrders({ 
-    visitorIds: allVisitorIds, 
-    startDate, 
-    endDate 
-  });
+  // FIX (2026-02-03): creativeAttribution.js와 동일하게 모든 구매 먼저 조회
+  const allOrders = await repository.getAllOrdersInPeriod({ startDate, endDate });
   
   if (allOrders.length === 0) {
     return emptyResponse;
   }
   
-  // 구매한 visitor들의 전체 여정 조회
-  const purchaserIds = [...new Set(allOrders.map(o => o.visitor_id))];
+  // 구매한 visitor들의 ID 수집 (인앱 브라우저 대응: session 기반 visitor_id도 포함)
+  const purchaserIds = [...new Set(allOrders.flatMap(o => 
+    [o.visitor_id, o.session_visitor_id].filter(Boolean)
+  ))];
   
-  // FIX (2026-02-03): IP/member_id 수집 (쿠키 끊김 대응)
+  // IP 주소 수집 (쿠키 끊김 대응)
   const purchaserIps = [...new Set(allOrders
     .map(o => o.ip_address)
     .filter(ip => ip && ip !== 'unknown')
   )];
+  
+  // member_id 수집 (회원 기반 연결)
   const purchaserMemberIds = [...new Set(allOrders
     .map(o => o.member_id)
     .filter(id => id && id !== '')
@@ -273,9 +263,13 @@ async function getCreativeOrders(params) {
   let singleTouchCount = 0;
   
   allOrders.forEach(order => {
+    // 인앱 브라우저 대응: visitor_id로 못 찾으면 session_visitor_id로 시도
     let fullJourney = visitorJourneys[order.visitor_id] || [];
+    if (fullJourney.length === 0 && order.session_visitor_id) {
+      fullJourney = visitorJourneys[order.session_visitor_id] || [];
+    }
     
-    // FIX (2026-02-03): IP 기반 여정 병합 (쿠키 끊김 대응)
+    // IP 기반 여정 병합 (쿠키 끊김 대응)
     if (order.ip_address && order.ip_address !== 'unknown') {
       const ipJourney = ipJourneys[order.ip_address] || [];
       if (ipJourney.length > 0) {
@@ -290,7 +284,7 @@ async function getCreativeOrders(params) {
       }
     }
     
-    // FIX (2026-02-03): member_id 기반 여정 병합 (회원 기반 연결)
+    // member_id 기반 여정 병합 (회원 기반 연결)
     if (order.member_id && order.member_id !== '') {
       const memberJourney = memberJourneys[order.member_id] || [];
       if (memberJourney.length > 0) {
@@ -305,7 +299,7 @@ async function getCreativeOrders(params) {
       }
     }
     
-    // 병합 후 시간순 정렬
+    // IP/member_id 병합 후 시간순 정렬 및 sequence_order 재할당
     if (fullJourney.length > 1) {
       fullJourney.sort((a, b) => new Date(a.entry_timestamp) - new Date(b.entry_timestamp));
       fullJourney = fullJourney.map((j, idx) => ({ ...j, sequence_order: idx + 1 }));
