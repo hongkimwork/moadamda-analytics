@@ -1,3 +1,4 @@
+| 2026-02-03 | 상세모달IP/memberID연결 | detailService.js |
 | 2026-02-03 | member_id기반UTM연결추가 | creativeAttribution.js |
 | 2026-02-03 | IP기반 과거여정연결추가 | ordersRepository.js |
 | 2026-02-03 | 파라미터 문법 오류 수정 | creativeRepository.js |
