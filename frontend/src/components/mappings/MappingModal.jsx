@@ -241,7 +241,13 @@ function MappingModal({ visible, onClose, onSubmit, url, form, submitting, initi
       onCancel={onClose}
       footer={null}
       width={680}
-      style={{ top: 20 }}
+      style={{ top: 20, maxHeight: 'calc(100vh - 40px)' }}
+      styles={{
+        body: {
+          maxHeight: 'calc(100vh - 140px)',
+          overflowY: 'auto'
+        }
+      }}
     >
       <div style={{ marginBottom: 16 }}>
         <Text type="secondary">URL:</Text>
