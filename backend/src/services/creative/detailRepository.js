@@ -27,7 +27,7 @@ async function getAllVisitorsInPeriod({ startDate, endDate }) {
 
 /**
  * 특정 광고 소재를 본 visitor 목록 조회
- * (테이블과 동일하게 REPLACE 적용하여 + → 공백 변환)
+ * FIX (2026-02-04): REPLACE 제거 - View/UV 계산과 동일하게 원본 값 사용
  * 카페24 호환: visitors 테이블과 조인하여 봇 트래픽 제외
  * 
  * @param {Object} params
@@ -51,7 +51,7 @@ async function getCreativeVisitors({ creative_name, utm_source, utm_medium, utm_
     SELECT DISTINCT us.visitor_id
     FROM utm_sessions us
     JOIN visitors v ON us.visitor_id = v.visitor_id
-    WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = ANY($1)
+    WHERE us.utm_params->>'utm_content' = ANY($1)
       AND ${sourceCondition}
       AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $${creativeNames.length + 2}
       AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $${creativeNames.length + 3}
@@ -142,14 +142,14 @@ async function getVisitorOrders({ visitorIds, startDate, endDate }) {
 
 /**
  * Visitor들의 UTM 여정 조회
- * (테이블과 동일하게 REPLACE 적용하여 + → 공백 변환)
+ * FIX (2026-02-04): REPLACE 제거 - View/UV 계산과 동일하게 원본 값 사용
  * 카페24 호환: visitors 테이블과 조인하여 봇 트래픽 제외
  */
 async function getVisitorJourneys({ visitorIds }) {
   const query = `
     SELECT 
       us.visitor_id,
-      REPLACE(us.utm_params->>'utm_content', '+', ' ') as utm_content,
+      us.utm_params->>'utm_content' as utm_content,
       COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') as utm_source,
       COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') as utm_medium,
       COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') as utm_campaign,
@@ -181,7 +181,7 @@ async function getVisitorJourneysByIp({ purchaserIps, purchaserIds }) {
     SELECT 
       v.ip_address,
       us.visitor_id,
-      REPLACE(us.utm_params->>'utm_content', '+', ' ') as utm_content,
+      us.utm_params->>'utm_content' as utm_content,
       COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') as utm_source,
       COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') as utm_medium,
       COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') as utm_campaign,
@@ -214,7 +214,7 @@ async function getVisitorJourneysByMemberId({ purchaserMemberIds, purchaserIds }
     SELECT 
       c2.member_id,
       us.visitor_id,
-      REPLACE(us.utm_params->>'utm_content', '+', ' ') as utm_content,
+      us.utm_params->>'utm_content' as utm_content,
       COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') as utm_source,
       COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') as utm_medium,
       COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') as utm_campaign,
@@ -249,7 +249,7 @@ async function getDailyTrend({ creative_name, utm_source, utm_medium, utm_campai
         COUNT(DISTINCT us.visitor_id) as uv
       FROM utm_sessions us
       JOIN visitors v ON us.visitor_id = v.visitor_id
-      WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = ANY($1)
+      WHERE us.utm_params->>'utm_content' = ANY($1)
         AND (COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2 )
         AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
         AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
@@ -301,7 +301,7 @@ async function getDeviceStats({ creative_name, utm_source, utm_medium, utm_campa
         COUNT(DISTINCT us.visitor_id) as uv
       FROM utm_sessions us
       JOIN visitors v ON us.visitor_id = v.visitor_id
-      WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = ANY($1)
+      WHERE us.utm_params->>'utm_content' = ANY($1)
         AND (COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2 )
         AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
         AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
@@ -571,7 +571,7 @@ async function getCreativeMetrics({ creative_name, utm_source, utm_medium, utm_c
       ROUND(AVG(us.duration_seconds)::NUMERIC, 0) as avg_duration
     FROM utm_sessions us
     JOIN visitors v ON us.visitor_id = v.visitor_id
-    WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = $1
+    WHERE us.utm_params->>'utm_content' = $1
       AND COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2
       AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
       AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
@@ -638,7 +638,7 @@ async function getLastTouchRevenue({ visitorIds, startDate, endDate, creative_na
     WITH visitor_journeys AS (
       SELECT 
         us.visitor_id,
-        REPLACE(us.utm_params->>'utm_content', '+', ' ') as utm_content,
+        us.utm_params->>'utm_content' as utm_content,
         COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') as utm_source,
         COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') as utm_medium,
         COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') as utm_campaign,
@@ -686,7 +686,7 @@ async function getDailyTrends({ creative_name, utm_source, utm_medium, utm_campa
         COUNT(DISTINCT us.visitor_id) as uv
       FROM utm_sessions us
       JOIN visitors v ON us.visitor_id = v.visitor_id
-      WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = $1
+      WHERE us.utm_params->>'utm_content' = $1
         AND COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2
         AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
         AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
@@ -761,7 +761,7 @@ async function getRawSessions({ creative_name, utm_source, utm_medium, utm_campa
       AND c.timestamp >= us.entry_timestamp
       AND c.timestamp <= us.entry_timestamp + INTERVAL '30 days'
       AND c.order_status = 'confirmed'
-    WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = ANY($1)
+    WHERE us.utm_params->>'utm_content' = ANY($1)
       AND (COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2 )
       AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
       AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
@@ -803,7 +803,7 @@ async function getRawSessionsCount({ creative_name, utm_source, utm_medium, utm_
         AND c.timestamp >= us.entry_timestamp
         AND c.timestamp <= us.entry_timestamp + INTERVAL '30 days'
         AND c.order_status = 'confirmed'
-      WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = ANY($1)
+      WHERE us.utm_params->>'utm_content' = ANY($1)
         AND (COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2 )
         AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
         AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
@@ -839,7 +839,7 @@ async function getRawTrafficSummary({ creative_name, utm_source, utm_medium, utm
       )::NUMERIC, 1) as avg_duration_seconds
     FROM utm_sessions us
     JOIN visitors v ON us.visitor_id = v.visitor_id
-    WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = ANY($1)
+    WHERE us.utm_params->>'utm_content' = ANY($1)
       AND (COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2 )
       AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
       AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
@@ -880,7 +880,7 @@ async function getVisitorSessionInfoForCreative({ visitorIds, creative_name, utm
     FROM utm_sessions us
     JOIN visitors v ON us.visitor_id = v.visitor_id
     WHERE us.visitor_id = ANY($1)
-      AND REPLACE(us.utm_params->>'utm_content', '+', ' ') = $2
+      AND us.utm_params->>'utm_content' = $2
       AND COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $3
       AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $4
       AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $5
@@ -1035,7 +1035,7 @@ async function getCreativeTouchCounts({ purchaserOrders, creative_name, utm_sour
     FROM utm_sessions us
     JOIN visitors v ON us.visitor_id = v.visitor_id
     JOIN purchaser_dates pd ON us.visitor_id = pd.visitor_id
-    WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = $1
+    WHERE us.utm_params->>'utm_content' = $1
       AND COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2
       AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
       AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
@@ -1350,7 +1350,7 @@ async function getCreativeSessions({ creative_name, utm_source, utm_medium, utm_
       SELECT DISTINCT us.session_id
       FROM utm_sessions us
       JOIN visitors v2 ON us.visitor_id = v2.visitor_id
-      WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = ANY($1)
+      WHERE us.utm_params->>'utm_content' = ANY($1)
         AND (COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2 )
         AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
         AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
@@ -1397,7 +1397,7 @@ async function getCreativeSessionsCount({ creative_name, utm_source, utm_medium,
     FROM utm_sessions us
     JOIN sessions s ON us.session_id = s.session_id
     JOIN visitors v ON us.visitor_id = v.visitor_id
-    WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = ANY($1)
+    WHERE us.utm_params->>'utm_content' = ANY($1)
       AND (COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2 )
       AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
       AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
@@ -1457,7 +1457,7 @@ async function getCreativeEntries({ creative_name, utm_source, utm_medium, utm_c
         ) as prev_entry
       FROM utm_sessions us
       JOIN visitors v ON us.visitor_id = v.visitor_id
-      WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = ANY($1)
+      WHERE us.utm_params->>'utm_content' = ANY($1)
         AND (COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2 )
         AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
         AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
@@ -1509,7 +1509,7 @@ async function getCreativeEntriesCount({ creative_name, utm_source, utm_medium, 
     SELECT COUNT(*) as total
     FROM utm_sessions us
     JOIN visitors v ON us.visitor_id = v.visitor_id
-    WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = ANY($1)
+    WHERE us.utm_params->>'utm_content' = ANY($1)
       AND (COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2 )
       AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
       AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
@@ -1548,7 +1548,7 @@ async function getCreativeOriginalUrl({ creative_name, utm_source, utm_medium, u
         COUNT(*) as cnt
       FROM v_sessions_cafe24 s
       JOIN utm_sessions us ON s.session_id = us.session_id
-      WHERE REPLACE(us.utm_params->>'utm_content', '+', ' ') = ANY($1)
+      WHERE us.utm_params->>'utm_content' = ANY($1)
         AND (
           COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2
           OR us.utm_params->>'utm_source' IS NULL
