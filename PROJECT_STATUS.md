@@ -1,4 +1,5 @@
-| 2026-02-04 | +기호키매칭버그수정 | creativeAttribution.js |
+| 2026-02-04 | 광고명매핑양방향비교추가 | metaAdNameMapping.js |
+| 2026-02-04 | +기호키매칭버그수정 | detailRepository.js |
 | 2026-02-04 | 과거데이터타임존수정 | pageviews테이블(DB) |
 | 2026-02-04 | 타임존매칭오류수정 | journeyCalculations.js |
 | 2026-02-04 | 광고클릭만있는방문표시 | journeyCalculations.js |
@@ -12,5 +13,3 @@
 | 2026-02-03 | 파라미터 문법 오류 수정 | creativeRepository.js |
 | 2026-02-03 | 이하치필터 병합로직 수정 | creativeService.js |
 | 2026-02-03 | 이하치 값 제외 필터 추가 | PerformanceFilters.jsx |
-| 2026-02-03 | 스크롤뎁스0px수집문제해결 | tracker-v054.js |
-| 2026-02-03 | 중지광고 미디어조회 수정 | metaAdNameMapping.js |
