@@ -10,7 +10,8 @@
  *   node src/scripts/adScheduler.js --now    # 지금 즉시 실행
  */
 
-require('dotenv').config({ path: '.env.local' });
+// FIX (2026-02-04): 서버에서는 .env 사용, 로컬에서는 .env.local 사용
+require('dotenv').config({ path: process.env.NODE_ENV === 'production' ? '.env' : '.env.local' });
 
 const cron = require('node-cron');
 const { spawn } = require('child_process');

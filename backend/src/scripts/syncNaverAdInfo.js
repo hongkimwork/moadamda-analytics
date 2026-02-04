@@ -5,7 +5,9 @@
  * 실행: node src/scripts/syncNaverAdInfo.js
  */
 
-require('dotenv').config({ path: require('path').join(__dirname, '../../.env.local') });
+// FIX (2026-02-04): 서버에서는 .env 사용, 로컬에서는 .env.local 사용
+const envFile = process.env.NODE_ENV === 'production' ? '.env' : '.env.local';
+require('dotenv').config({ path: require('path').join(__dirname, '../../' + envFile) });
 
 const db = require('../utils/database');
 const naverAd = require('../utils/naverAd');

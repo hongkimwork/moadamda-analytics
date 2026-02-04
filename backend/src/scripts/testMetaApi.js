@@ -3,7 +3,8 @@
  * 광고 계정의 기본 정보와 최근 광고 성과를 가져옵니다.
  */
 
-require('dotenv').config({ path: '.env.local' });
+// FIX (2026-02-04): 서버에서는 .env 사용, 로컬에서는 .env.local 사용
+require('dotenv').config({ path: process.env.NODE_ENV === 'production' ? '.env' : '.env.local' });
 
 const https = require('https');
 
