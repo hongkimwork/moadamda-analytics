@@ -160,22 +160,35 @@ async function getMetaAdNames() {
 
 /**
  * 광고명 정규화 (비교용)
+ * FIX (2026-02-04): 양방향 비교를 위한 정규화 강화
  * - 플러스(+)와 공백을 동일하게 취급
+ * - 끝에 붙은 불필요한 문자(_ 등) 제거
+ * - 연속 공백을 단일 공백으로 변환
  * @param {string} name - 광고명
  * @returns {string} - 정규화된 광고명
  */
 function normalizeAdName(name) {
   if (!name) return '';
+  let normalized = name;
   // 플러스를 공백으로 통일
-  return name.replace(/\+/g, ' ');
+  normalized = normalized.replace(/\+/g, ' ');
+  // 끝에 붙은 불필요한 문자 제거 (_ 등)
+  normalized = normalized.replace(/_+$/, '');
+  // 연속 공백을 단일 공백으로
+  normalized = normalized.replace(/\s+/g, ' ');
+  // 앞뒤 공백 제거
+  normalized = normalized.trim();
+  return normalized;
 }
 
 /**
  * URL 디코딩 시도
  * FIX (2026-01-30): 77% 같은 패턴 처리 및 끝부분 잘림 개선
+ * FIX (2026-02-04): 더 강력한 디코딩 로직
  * - % 뒤에 유효한 16진수 두 자리가 아니면 %25로 치환
  * - 끝에 불완전한 UTF-8 시퀀스 제거 (반복적으로 시도)
  * - 부분 디코딩된 상태에서 끝에 %X, %XX 남은 경우도 처리
+ * - 중간에 잘린 인코딩도 처리
  * 
  * @param {string} name - 광고명
  * @returns {string} - 디코딩된 광고명 (실패 시 원본 반환)
@@ -200,6 +213,11 @@ function tryDecodeURIComponent(name) {
   // FIX (2026-01-30): % 뒤에 유효한 16진수 두 자리가 아닌 경우 %25로 치환
   // 예: "77% 그립" → "77%25 그립", "77%그" → "77%25그"
   processed = processed.replace(/%(?![0-9A-Fa-f]{2})/g, '%25');
+  
+  // FIX (2026-02-04): 중간에 잘린 UTF-8 시퀀스도 처리
+  // UTF-8 한글은 3바이트, 중간이 잘리면 디코딩 실패
+  // %XX%XX 또는 %XX 형태로 끝나는 불완전 시퀀스 제거
+  processed = processed.replace(/%[89AB][0-9A-Fa-f](%[89AB][0-9A-Fa-f])?$/, '');
   
   // FIX (2026-01-30): 끝에 불완전한 UTF-8 시퀀스 제거
   // UTF-8 한글은 3바이트 (%XX%XX%XX), 끝이 잘리면 디코딩 실패
@@ -246,6 +264,11 @@ function tryDecodeURIComponent(name) {
  * - 플러스(+) ↔ 공백 변환 후 비교
  * - URL 인코딩된 값 디코딩 후 비교
  * 
+ * FIX (2026-02-04): 양방향 비교 및 (중지) 접두사 처리 강화
+ * - 트래커 광고명도 정규화해서 비교 (플러스→공백, 끝 _ 제거)
+ * - "(중지) " 공백 포함 접두사 처리
+ * - 메타 광고명 끝에 _ 붙은 경우도 처리
+ * 
  * @param {string} truncatedName - 잘린/변형된 광고명
  * @param {string[]} metaAdNames - 메타 광고명 목록 (옵션, 없으면 자동 조회)
  * @returns {Promise<string|null>} - 매핑된 정상 광고명 또는 null
@@ -274,8 +297,10 @@ async function mapToMetaAdName(truncatedName, metaAdNames = null) {
     if (decodedMatch) return decodedMatch;
   }
   
-  // 4. 플러스(+) ↔ 공백 변환 후 비교
+  // FIX (2026-02-04): 트래커 광고명도 정규화 (양방향 비교)
   const normalizedInput = normalizeAdName(truncatedName);
+  
+  // 4. 플러스(+) ↔ 공백 변환 후 비교 (양방향)
   for (const metaName of adNames) {
     const normalizedMeta = normalizeAdName(metaName);
     if (normalizedInput === normalizedMeta) {
@@ -284,23 +309,40 @@ async function mapToMetaAdName(truncatedName, metaAdNames = null) {
   }
   
   // 5. (중지) 접두사 제거 후 비교
-  // FIX (2026-02-03): '(중지) ' 공백 포함 처리를 위해 trim() 사용
+  // FIX (2026-02-04): '(중지) ' 공백 포함 및 다양한 형태 처리
   for (const metaName of adNames) {
-    // Meta 광고명에서 (중지) 제거
+    // Meta 광고명에서 (중지) 제거 (공백 포함)
     if (metaName.startsWith('(중지)')) {
-      const withoutPrefix = metaName.replace(/^\(중지\)\s*/, '').trim(); // '(중지)' + 공백 제거
+      const withoutPrefix = metaName.replace(/^\(중지\)\s*/, '').trim();
       // 정확 일치
       if (truncatedName === withoutPrefix) {
         return metaName;
       }
       // 정규화 후 일치
-      if (normalizeAdName(truncatedName) === normalizeAdName(withoutPrefix)) {
+      if (normalizedInput === normalizeAdName(withoutPrefix)) {
         return metaName;
       }
     }
   }
   
-  // 6. 접두사 매칭 (잘린 광고명 → 원본 광고에 병합)
+  // 6. 트래커 광고명에 (중지) 접두사가 있는 경우 제거 후 비교
+  // FIX (2026-02-04): 트래커에서 (중지) 붙어서 수집된 경우도 처리
+  if (truncatedName.startsWith('(중지)')) {
+    const trackerWithoutPrefix = truncatedName.replace(/^\(중지\)\s*/, '').trim();
+    const normalizedTrackerWithoutPrefix = normalizeAdName(trackerWithoutPrefix);
+    
+    for (const metaName of adNames) {
+      // 메타에 (중지) 없는 원본이 있는지 확인
+      if (metaName === trackerWithoutPrefix) {
+        return metaName;
+      }
+      if (normalizeAdName(metaName) === normalizedTrackerWithoutPrefix) {
+        return metaName;
+      }
+    }
+  }
+  
+  // 7. 접두사 매칭 (잘린 광고명 → 원본 광고에 병합)
   // FIX (2026-01-30): 복구 - 잘린 광고명 세션이 전체의 0.19%로 미미하여 병합해도 무방
   // 최소 17자 이상이어야 의미있는 매칭
   if (truncatedName.length >= 17) {
@@ -309,11 +351,12 @@ async function mapToMetaAdName(truncatedName, metaAdNames = null) {
         return metaName;
       }
       // 정규화 후 접두사 매칭
-      if (normalizeAdName(metaName).startsWith(normalizedInput)) {
+      const normalizedMeta = normalizeAdName(metaName);
+      if (normalizedMeta.startsWith(normalizedInput)) {
         return metaName;
       }
       // (중지) 제거 후 접두사 매칭
-      // FIX (2026-02-03): '(중지) ' 공백 포함 처리
+      // FIX (2026-02-04): '(중지) ' 공백 포함 처리
       if (metaName.startsWith('(중지)')) {
         const withoutPrefix = metaName.replace(/^\(중지\)\s*/, '').trim();
         if (withoutPrefix.startsWith(truncatedName)) {
@@ -326,15 +369,27 @@ async function mapToMetaAdName(truncatedName, metaAdNames = null) {
     }
   }
   
-  // 8. (패키지 수정) 병합 로직 - 제거됨 (2026-01-30)
+  // 8. 정규화된 트래커 이름으로 접두사 매칭 (역방향)
+  // FIX (2026-02-04): 트래커 광고명이 정규화 후 메타 광고명의 접두사인 경우
+  if (normalizedInput.length >= 17) {
+    for (const metaName of adNames) {
+      const normalizedMeta = normalizeAdName(metaName);
+      // 메타 광고명이 정규화된 트래커 이름으로 시작하는 경우
+      if (normalizedMeta.startsWith(normalizedInput)) {
+        return metaName;
+      }
+    }
+  }
+  
+  // (패키지 수정) 병합 로직 - 제거됨 (2026-01-30)
   // Meta에 "(패키지 수정)" 광고가 별도로 등록되어 있음
   // 원본과 다른 광고이므로 별도 취급 필요
   
-  // 9. "- 사본" 병합 로직 - 제거됨 (2026-01-30)
+  // "- 사본" 병합 로직 - 제거됨 (2026-01-30)
   // "- 사본" 광고는 원본과 별개의 광고로 취급
   // 타겟팅/예산이 다를 수 있으므로 별도 추적 필요
   
-  // 10. 날짜 버전 변형 매칭 - 제거됨 (2026-01-30)
+  // 날짜 버전 변형 매칭 - 제거됨 (2026-01-30)
   // 241216-02 → 241216-01 같은 임의 매칭은 데이터 왜곡 발생
   
   return null;
@@ -357,6 +412,9 @@ async function mapToMetaAdName(truncatedName, metaAdNames = null) {
  * - 최소 17자 이상이어야 의미있는 매칭
  * - 다른 메타 광고가 같은 접두사를 가지지 않는 경우만 변형으로 인정
  * 
+ * FIX (2026-02-04): normalizeAdName 함수 사용으로 통일
+ * - 플러스→공백, 끝 _ 제거, 연속 공백 처리 등 일관성 유지
+ * 
  * @param {string} metaAdName - 정상 메타 광고명
  * @param {string[]} dbCreativeNames - DB에 있는 모든 광고명 목록
  * @param {string[]} metaAdNames - 메타 API에서 가져온 광고명 목록 (옵션)
@@ -376,15 +434,16 @@ function getAllVariantNames(metaAdName, dbCreativeNames, metaAdNames = []) {
   }
   
   const variants = new Set([metaAdName]);
-  const normalizedMeta = metaAdName.replace(/\+/g, ' ');
+  // FIX (2026-02-04): normalizeAdName 함수 사용으로 통일
+  const normalizedMeta = normalizeAdName(metaAdName);
   
   // (중지) 접두사 제거한 버전도 준비
-  // FIX (2026-02-03): '(중지) ' 공백 포함 처리
+  // FIX (2026-02-04): '(중지) ' 공백 포함 처리
   const metaWithoutPrefix = metaAdName.startsWith('(중지)') 
     ? metaAdName.replace(/^\(중지\)\s*/, '').trim()
     : null;
   const normalizedMetaWithoutPrefix = metaWithoutPrefix 
-    ? metaWithoutPrefix.replace(/\+/g, ' ') 
+    ? normalizeAdName(metaWithoutPrefix)
     : null;
   
   for (const dbName of dbCreativeNames) {
@@ -397,15 +456,32 @@ function getAllVariantNames(metaAdName, dbCreativeNames, metaAdNames = []) {
     // 메타에 별도로 등록된 광고면 변형이 아님 (별도 광고)
     if (metaAdNames.includes(dbName)) continue;
     
-    const normalizedDb = dbName.replace(/\+/g, ' ');
+    // FIX (2026-02-04): normalizeAdName 함수 사용
+    const normalizedDb = normalizeAdName(dbName);
     
-    // 1. +/공백 변환으로 정확히 일치하는 경우 변형으로 인정
+    // 1. 정규화 후 정확히 일치하는 경우 변형으로 인정
     if (normalizedDb === normalizedMeta) {
       variants.add(dbName);
       continue;
     }
     
-    // 2. 접두사 매칭 (잘린 광고명 → 원본에 병합)
+    // 2. (중지) 접두사 제거 후 비교
+    if (normalizedMetaWithoutPrefix && normalizedDb === normalizedMetaWithoutPrefix) {
+      variants.add(dbName);
+      continue;
+    }
+    
+    // 3. DB 광고명에 (중지) 접두사가 있는 경우
+    if (dbName.startsWith('(중지)')) {
+      const dbWithoutPrefix = dbName.replace(/^\(중지\)\s*/, '').trim();
+      const normalizedDbWithoutPrefix = normalizeAdName(dbWithoutPrefix);
+      if (normalizedDbWithoutPrefix === normalizedMeta) {
+        variants.add(dbName);
+        continue;
+      }
+    }
+    
+    // 4. 접두사 매칭 (잘린 광고명 → 원본에 병합)
     // 최소 17자 이상이어야 의미있는 매칭
     if (dbName.length >= 17 && dbName.length < metaAdName.length) {
       // 원본이 DB 광고명으로 시작하면 변형으로 인정
@@ -424,6 +500,14 @@ function getAllVariantNames(metaAdName, dbCreativeNames, metaAdNames = []) {
         continue;
       }
       if (normalizedMetaWithoutPrefix && normalizedMetaWithoutPrefix.startsWith(normalizedDb)) {
+        variants.add(dbName);
+        continue;
+      }
+    }
+    
+    // 5. 정규화된 DB 이름이 정규화된 메타 이름의 접두사인 경우
+    if (normalizedDb.length >= 17 && normalizedDb.length < normalizedMeta.length) {
+      if (normalizedMeta.startsWith(normalizedDb)) {
         variants.add(dbName);
         continue;
       }
