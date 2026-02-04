@@ -89,7 +89,9 @@ export function JourneyMiniCard({ journey, isExpanded, onToggle }) {
         <div style={{
           fontSize: '11px',
           fontWeight: '700',
-          color: journey.type === 'purchase' ? '#2563eb' : '#6b7280',
+          color: journey.type === 'purchase' 
+            ? '#2563eb' // 파란색 (구매)
+            : '#6b7280', // 회색 (이탈)
           letterSpacing: '0.01em'
         }}>
           {journey.label}
@@ -110,7 +112,7 @@ export function JourneyMiniCard({ journey, isExpanded, onToggle }) {
           whiteSpace: 'nowrap'
         }}
       >
-        PV:{journey.pageCount} · {journey.duration}
+        {`PV:${journey.pageCount} · ${journey.duration}`}
       </div>
     </div>
   );

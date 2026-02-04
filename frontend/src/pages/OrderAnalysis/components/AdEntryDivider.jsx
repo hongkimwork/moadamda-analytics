@@ -29,12 +29,12 @@ function getAdSourceLabel(utmSource) {
 }
 
 /**
- * 광고 소재 분석 페이지로 이동
+ * 광고 소재 분석 페이지를 새 탭으로 열기
  */
 function navigateToCreativeAnalysis(utmContent) {
   if (!utmContent) return;
   const searchQuery = encodeURIComponent(utmContent);
-  window.location.href = `/creative-performance?search=${searchQuery}`;
+  window.open(`/creative-performance?search=${searchQuery}`, '_blank');
 }
 
 /**

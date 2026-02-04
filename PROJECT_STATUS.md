@@ -1,3 +1,7 @@
+| 2026-02-04 | +기호키매칭버그수정 | creativeAttribution.js |
+| 2026-02-04 | 과거데이터타임존수정 | pageviews테이블(DB) |
+| 2026-02-04 | 타임존매칭오류수정 | journeyCalculations.js |
+| 2026-02-04 | 광고클릭만있는방문표시 | journeyCalculations.js |
 | 2026-02-04 | 여정전체기간조회로변경 | ordersRepository.js |
 | 2026-02-04 | 전체기여기간쿼리수정 | detailRepository.js |
 | 2026-02-04 | UTM중복기록버그수정 | utmService.js |
@@ -10,6 +14,3 @@
 | 2026-02-03 | 이하치 값 제외 필터 추가 | PerformanceFilters.jsx |
 | 2026-02-03 | 스크롤뎁스0px수집문제해결 | tracker-v054.js |
 | 2026-02-03 | 중지광고 미디어조회 수정 | metaAdNameMapping.js |
-| 2026-02-02 | 한글 검색 개선 | creativeService.js |
-| 2026-02-02 | 이상치 필터 텍스트 변경 | PerformanceFilters.jsx |
-| 2026-02-02 | 이상치필터 대체방식변경 | creativeRepository.js |

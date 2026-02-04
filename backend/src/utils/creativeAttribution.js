@@ -103,10 +103,13 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
 
   // 3단계: 구매한 visitor들의 전체 UTM 여정 조회 (30일 필터링은 각 구매별로 적용)
   // 카페24 호환: visitors 테이블과 조인하여 봇 트래픽 제외
+  // FIX (2026-02-04): REPLACE 제거 - View/UV 계산과 동일하게 원본 값 사용
+  // - 기존: REPLACE('+', ' ')로 인해 '1+1끝나요'가 '1 1끝나요'로 변환되어 키 매칭 실패
+  // - 수정: 원본 값 그대로 사용하여 View/UV 키와 일치하도록 변경
   const journeyQuery = `
     SELECT 
       us.visitor_id,
-      REPLACE(us.utm_params->>'utm_content', '+', ' ') as utm_content,
+      us.utm_params->>'utm_content' as utm_content,
       COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') as utm_source,
       COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') as utm_medium,
       COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') as utm_campaign,
@@ -133,11 +136,12 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
   
   // FIX (2026-02-03): IP 기반 UTM 여정 조회 (쿠키 끊김 대응)
   // 동일 IP의 다른 visitor_id들의 UTM 세션도 조회
+  // FIX (2026-02-04): REPLACE 제거 - View/UV 계산과 동일하게 원본 값 사용
   const ipJourneyQuery = `
     SELECT 
       v.ip_address,
       us.visitor_id,
-      REPLACE(us.utm_params->>'utm_content', '+', ' ') as utm_content,
+      us.utm_params->>'utm_content' as utm_content,
       COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') as utm_source,
       COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') as utm_medium,
       COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') as utm_campaign,
@@ -167,11 +171,12 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
   
   // FIX (2026-02-03): member_id 기반 UTM 여정 조회 (회원 기반 연결)
   // 동일 member_id의 다른 visitor_id들의 UTM 세션도 조회
+  // FIX (2026-02-04): REPLACE 제거 - View/UV 계산과 동일하게 원본 값 사용
   const memberJourneyQuery = `
     SELECT 
       c2.member_id,
       us.visitor_id,
-      REPLACE(us.utm_params->>'utm_content', '+', ' ') as utm_content,
+      us.utm_params->>'utm_content' as utm_content,
       COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') as utm_source,
       COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') as utm_medium,
       COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') as utm_campaign,

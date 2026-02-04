@@ -44,11 +44,10 @@ function markAdEntryPoints(pages, utmHistory) {
   return pages.map((page, idx) => {
     const pageTime = new Date(page.timestamp);
     
-    // 이 페이지가 UTM 세션 시작 직후인지 확인
-    // (UTM entry_time과 페이지 timestamp가 30초 이내 차이)
+    // 30초 이내면 같은 시점의 광고 클릭으로 판단
     const matchingUtm = utmEntryTimes.find(utm => {
       const timeDiff = Math.abs(pageTime - utm.entryTime);
-      return timeDiff <= 30000; // 30초 이내
+      return timeDiff <= 30000;
     });
 
     if (matchingUtm) {
@@ -138,6 +137,7 @@ export function buildAllJourneys(filteredPreviousVisits, validJourneyPages, purc
         pastPurchase: matchingPurchase // 이전 구매 정보 연결
       };
     }),
+
     // 구매 당일 (연속 중복 제거 적용)
     (() => {
       const deduplicatedPages = removeConcecutiveDuplicates(validJourneyPages);
@@ -162,13 +162,15 @@ export function buildAllJourneys(filteredPreviousVisits, validJourneyPages, purc
   // 시간순 정렬 후 방문 순서 부여
   const sortedJourneys = journeys.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-  return sortedJourneys.map((journey, idx) => ({
+  const result = sortedJourneys.map((journey, idx) => ({
     ...journey,
     visitNumber: idx + 1,
     label: journey.type === 'purchase'
       ? `${idx + 1}차 방문 (구매)`
       : `${idx + 1}차 방문 (이탈)`
   }));
+
+  return result;
 }
 
 /**

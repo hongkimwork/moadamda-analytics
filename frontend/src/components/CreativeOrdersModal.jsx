@@ -64,8 +64,14 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange, attributio
   const [selectedOrderId, setSelectedOrderId] = useState(null);
   const { userMappings } = useUserMappings();
 
+  // 테이블 페이지네이션 & 정렬 state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [sortedInfo, setSortedInfo] = useState({});
+
   useEffect(() => {
     if (visible && creative) {
+      setCurrentPage(1); // 새 소재 선택 시 페이지 초기화
+      setSortedInfo({}); // 정렬 상태 초기화
       fetchOrders();
     }
   }, [visible, creative]);
@@ -121,6 +127,14 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange, attributio
       key: 'exposure_date',
       width: 110,
       align: 'center',
+      sorter: (a, b) => {
+        const aInfo = getExposureInfo(a, dateRange);
+        const bInfo = getExposureInfo(b, dateRange);
+        const aTime = aInfo.exposureDate ? aInfo.exposureDate.valueOf() : 0;
+        const bTime = bInfo.exposureDate ? bInfo.exposureDate.valueOf() : 0;
+        return aTime - bTime;
+      },
+      sortOrder: sortedInfo.columnKey === 'exposure_date' ? sortedInfo.order : null,
       render: (_, record) => {
         const { exposureDate, isOutOfRange } = getExposureInfo(record, dateRange);
         if (!exposureDate) return <Text type="secondary">-</Text>;
@@ -179,6 +193,8 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange, attributio
       key: 'order_date',
       width: 100,
       align: 'center',
+      sorter: (a, b) => dayjs(a.order_date).valueOf() - dayjs(b.order_date).valueOf(),
+      sortOrder: sortedInfo.columnKey === 'order_date' ? sortedInfo.order : null,
       render: (date) => <Text style={{ fontSize: 12 }}>{dayjs(date).format('MM-DD HH:mm')}</Text>
     },
     {
@@ -187,6 +203,8 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange, attributio
       key: 'final_payment',
       width: 95,
       align: 'center',
+      sorter: (a, b) => (a.final_payment || 0) - (b.final_payment || 0),
+      sortOrder: sortedInfo.columnKey === 'final_payment' ? sortedInfo.order : null,
       render: (amount) => <Text strong style={{ fontSize: 13 }}>{formatCurrency(amount)}</Text>
     },
     {
@@ -230,6 +248,8 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange, attributio
       key: 'contribution_rate',
       width: 70,
       align: 'center',
+      sorter: (a, b) => (a.contribution_rate || 0) - (b.contribution_rate || 0),
+      sortOrder: sortedInfo.columnKey === 'contribution_rate' ? sortedInfo.order : null,
       render: (rate) => (
         <Text style={{ color: rate === 100 ? '#d48806' : rate >= 50 ? '#1677ff' : '#000000', fontWeight: rate >= 50 ? 600 : 400 }}>
           {rate}%
@@ -246,6 +266,8 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange, attributio
       key: 'attributed_amount',
       width: 95,
       align: 'center',
+      sorter: (a, b) => (a.attributed_amount || 0) - (b.attributed_amount || 0),
+      sortOrder: sortedInfo.columnKey === 'attributed_amount' ? sortedInfo.order : null,
       render: (amount) => <Text strong style={{ color: '#52c41a', fontSize: 13 }}>{formatCurrency(amount)}</Text>
     },
     {
@@ -442,7 +464,16 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange, attributio
           dataSource={orders}
           rowKey="order_id"
           size="small"
-          pagination={{ pageSize: 10, showTotal: (total) => `총 ${total}건`, showSizeChanger: false }}
+          pagination={{ 
+            pageSize: 10, 
+            showTotal: (total) => `총 ${total}건`, 
+            showSizeChanger: false,
+            current: currentPage
+          }}
+          onChange={(pagination, filters, sorter) => {
+            setCurrentPage(pagination.current);
+            setSortedInfo(sorter);
+          }}
           scroll={{ x: 1300 }}
         />
       ) : !loading && (
