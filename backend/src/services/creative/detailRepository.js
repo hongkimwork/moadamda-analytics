@@ -1011,7 +1011,7 @@ async function getCreativeTouchCounts({ purchaserOrders, creative_name, utm_sour
   
   // FIX (2026-01-27): toISOString()은 UTC로 변환되어 타임존 문제 발생
   // DB의 entry_timestamp는 KST로 저장되어 있으므로, 로컬 시간 형식으로 변환해야 함
-  // 구매자별 구매일 기준 30일 이내 세션만 집계
+  // 구매자별 구매일 기준 N일 이내 세션만 집계
   // VALUES로 (visitor_id, order_date) 쌍을 전달하여 각 구매자별로 Attribution Window 적용
   const orderPairs = purchaserOrders.map(o => {
     // order_date를 로컬 시간 문자열로 변환 (DB의 timestamp와 동일한 형식)
@@ -1019,6 +1019,11 @@ async function getCreativeTouchCounts({ purchaserOrders, creative_name, utm_sour
     const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}.${String(d.getMilliseconds()).padStart(3, '0')}`;
     return `('${o.visitor_id}'::text, '${dateStr}'::timestamp)`;
   }).join(',');
+  
+  // FIX (2026-02-04): attributionWindowDays가 null이면 전체 기간 (Attribution Window 제한 없음)
+  const attributionFilter = attributionWindowDays !== null
+    ? `AND us.entry_timestamp >= pd.order_date - INTERVAL '${attributionWindowDays} days'`
+    : '';
   
   const query = `
     WITH purchaser_dates AS (
@@ -1034,7 +1039,7 @@ async function getCreativeTouchCounts({ purchaserOrders, creative_name, utm_sour
       AND COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2
       AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
       AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
-      AND us.entry_timestamp >= pd.order_date - INTERVAL '${attributionWindowDays} days'
+      ${attributionFilter}
       AND us.entry_timestamp <= pd.order_date
       AND v.is_bot = false
     GROUP BY us.visitor_id

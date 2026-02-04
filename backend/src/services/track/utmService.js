@@ -20,7 +20,9 @@ async function trackUtmSession({
   timestamp 
 }) {
   try {
-    // Check if there's an existing UTM session for this visitor with same UTM params
+    // FIX (2026-02-04): 중복 UTM 세션 생성 버그 수정
+    // 기존: exit_timestamp IS NULL 조건 때문에 페이지 이동마다 새 레코드 생성됨
+    // 수정: 같은 session_id + utm_source/medium/campaign이면 항상 업데이트
     const existing = await db.query(`
       SELECT id, entry_timestamp, pageview_count
       FROM utm_sessions
@@ -29,26 +31,22 @@ async function trackUtmSession({
         AND utm_source = $3
         AND COALESCE(utm_medium, '') = COALESCE($4, '')
         AND COALESCE(utm_campaign, '') = COALESCE($5, '')
-        AND exit_timestamp IS NULL
       ORDER BY entry_timestamp DESC
       LIMIT 1
     `, [visitor_id, session_id, utm_source, utm_medium, utm_campaign]);
 
     if (existing.rows.length > 0) {
-      // Update existing UTM session: increase pageview count and update duration
+      // Update existing UTM session: increase pageview count only
+      // FIX: exit_timestamp는 세션 종료 시에만 설정 (closeUtmSessions에서)
       const utmSessionId = existing.rows[0].id;
-      const entryTime = new Date(existing.rows[0].entry_timestamp);
-      const durationSeconds = Math.floor((timestamp - entryTime) / 1000);
 
       await db.query(`
         UPDATE utm_sessions
         SET 
-          exit_timestamp = $1,
-          duration_seconds = $2,
           pageview_count = pageview_count + 1,
-          utm_params = $4
-        WHERE id = $3
-      `, [timestamp, durationSeconds, utmSessionId, utm_params ? JSON.stringify(utm_params) : null]);
+          utm_params = $2
+        WHERE id = $1
+      `, [utmSessionId, utm_params ? JSON.stringify(utm_params) : null]);
     } else {
       // Create new UTM session record
       // Calculate sequence order for this visitor

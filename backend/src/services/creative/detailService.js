@@ -8,8 +8,9 @@ const { getMetaAdNames, getAllVariantNames } = require('./metaAdNameMapping');
 const db = require('../../utils/database');
 const { safeDecodeURIComponent } = require('./utils');
 
-// 기여 인정 기간 (일 단위) - 구매일 기준 이 기간 내에 본 광고만 기여 인정
-const ATTRIBUTION_WINDOW_DAYS = 30;
+// 기여 인정 기간 기본값 (일 단위) - 구매일 기준 이 기간 내에 본 광고만 기여 인정
+// FIX (2026-02-04): 사용자가 선택할 수 있도록 변경 (30, 60, 90, null=전체)
+const DEFAULT_ATTRIBUTION_WINDOW_DAYS = 30;
 
 /**
  * DB에서 해당 기간 내 존재하는 광고명 목록 조회 (변형 찾기용)
@@ -141,12 +142,26 @@ function groupJourneysByVisitor(journeyRows) {
 }
 
 /**
- * 구매일 기준 30일 이내 여정만 필터링
+ * 구매일 기준 N일 이내 여정만 필터링
+ * FIX (2026-02-04): Attribution Window를 사용자가 선택할 수 있도록 변경
+ * @param {Array} journey - 광고 여정 목록
+ * @param {Date|string} purchaseDate - 구매일
+ * @param {number|null} attributionWindowDays - Attribution Window 일수 (null이면 전체 기간)
  */
-function filterJourneyByAttributionWindow(journey, purchaseDate) {
+function filterJourneyByAttributionWindow(journey, purchaseDate, attributionWindowDays = DEFAULT_ATTRIBUTION_WINDOW_DAYS) {
   const orderDate = new Date(purchaseDate);
+  
+  // attributionWindowDays가 null이면 전체 기간 (구매일 이전 모든 광고)
+  if (attributionWindowDays === null) {
+    return journey.filter(touch => {
+      const touchDate = new Date(touch.entry_timestamp);
+      return touchDate <= orderDate;
+    });
+  }
+  
+  // N일 이내 필터링
   const windowStart = new Date(orderDate);
-  windowStart.setDate(windowStart.getDate() - ATTRIBUTION_WINDOW_DAYS);
+  windowStart.setDate(windowStart.getDate() - attributionWindowDays);
   
   return journey.filter(touch => {
     const touchDate = new Date(touch.entry_timestamp);
@@ -161,11 +176,26 @@ function filterJourneyByAttributionWindow(journey, purchaseDate) {
  * FIX (2026-02-03): visitor 조회 방식을 creativeAttribution.js와 완전히 동일하게 변경
  * - 기존: UTM 세션 있는 visitor 먼저 조회 → 그 visitor들의 주문 조회 (IP/member_id 연결 누락)
  * - 수정: 모든 구매 먼저 조회 → IP/member_id로 여정 연결 (creativeAttribution.js와 동일)
- * - 구매일 기준 30일 이내에 본 광고만 기여 인정 (Attribution Window)
- * - 해당 광고가 30일 이내 여정에 포함된 경우만 기여 주문으로 인정
+ * - 구매일 기준 선택한 기간 이내에 본 광고만 기여 인정 (Attribution Window)
+ * - 해당 광고가 기간 내 여정에 포함된 경우만 기여 주문으로 인정
+ * 
+ * FIX (2026-02-04): Attribution Window를 사용자가 선택할 수 있도록 변경
  */
 async function getCreativeOrders(params) {
-  const { creative_name, utm_source, utm_medium, utm_campaign, start, end, max_duration = 600 } = params;
+  const { creative_name, utm_source, utm_medium, utm_campaign, start, end, max_duration = 600, attribution_window } = params;
+  
+  // FIX (2026-02-04): Attribution Window 파싱
+  let attributionWindowDays = DEFAULT_ATTRIBUTION_WINDOW_DAYS;
+  if (attribution_window !== undefined) {
+    if (attribution_window === 'all' || attribution_window === null) {
+      attributionWindowDays = null;
+    } else {
+      const parsed = parseInt(attribution_window, 10);
+      if ([30, 60, 90].includes(parsed)) {
+        attributionWindowDays = parsed;
+      }
+    }
+  }
   
   // 파라미터 검증
   validateCreativeParams(params);
@@ -179,6 +209,7 @@ async function getCreativeOrders(params) {
   const emptyResponse = {
     success: true,
     data: [],
+    attribution_window: attributionWindowDays, // FIX (2026-02-04): 사용자 선택 Attribution Window
     summary: {
       total_orders: 0,
       last_touch_orders: 0,
@@ -307,8 +338,8 @@ async function getCreativeOrders(params) {
     
     if (fullJourney.length === 0) return;
     
-    // 구매일 기준 30일 이내 여정만 필터링
-    const journey = filterJourneyByAttributionWindow(fullJourney, order.order_date);
+    // 구매일 기준 N일 이내 여정만 필터링 (사용자 선택 Attribution Window)
+    const journey = filterJourneyByAttributionWindow(fullJourney, order.order_date, attributionWindowDays);
     if (journey.length === 0) return;
     
     // 고유한 광고 조합 수집
@@ -432,7 +463,7 @@ async function getCreativeOrders(params) {
       utm_source,
       utm_medium,
       utm_campaign,
-      attributionWindowDays: ATTRIBUTION_WINDOW_DAYS
+      attributionWindowDays
     }),
     repository.getVisitorTotalVisits({ visitorIds: contributedVisitorArray })
   ]);
@@ -490,6 +521,7 @@ async function getCreativeOrders(params) {
     success: true,
     creative: { creative_name, utm_source, utm_medium, utm_campaign },
     period: { start, end },
+    attribution_window: attributionWindowDays, // FIX (2026-02-04): 사용자 선택 Attribution Window
     data: formattedOrders,
     summary: {
       total_orders: totalOrders,

@@ -1,13 +1,13 @@
 const db = require('./database');
 
-// 기여 인정 기간 (일 단위) - 구매일 기준 이 기간 내에 본 광고만 기여 인정
-const ATTRIBUTION_WINDOW_DAYS = 30;
+// 기여 인정 기간 기본값 (일 단위) - 구매일 기준 이 기간 내에 본 광고만 기여 인정
+const DEFAULT_ATTRIBUTION_WINDOW_DAYS = 30;
 
 /**
  * 광고 소재별 기여도 계산 (Last Touch 50% + 어시 균등 분배 50%)
  * 
  * 계산 방식:
- * - 구매일 기준 30일 이내에 본 광고만 기여 인정 (Attribution Window)
+ * - 구매일 기준 선택한 기간 이내에 본 광고만 기여 인정 (Attribution Window)
  * - 광고 1개만 봤으면: 해당 광고가 100% 기여
  * - 여러 광고를 봤으면: 막타 50% + 나머지 어시 광고들이 50%를 균등 분배
  * - 같은 광고를 여러 번 봤어도 1개로 카운트 (고유 조합 기준)
@@ -17,12 +17,16 @@ const ATTRIBUTION_WINDOW_DAYS = 30;
  * - 동일 IP의 다른 visitor_id들의 UTM 여정도 조회하여 병합
  * - 이를 통해 쿠키가 끊어져도 과거 광고 노출 기여도 인정
  * 
+ * FIX (2026-02-04): Attribution Window를 사용자가 선택할 수 있도록 변경
+ * - attributionWindowDays: 30, 60, 90, 또는 null(전체)
+ * 
  * @param {Array} creatives - 광고 소재 목록 [{ creative_name, utm_source, utm_medium, utm_campaign, ... }]
  * @param {String} startDate - 시작일
  * @param {String} endDate - 종료일
+ * @param {number|null} attributionWindowDays - Attribution Window 일수 (30, 60, 90, null=전체)
  * @returns {Object} - 광고별 기여도 데이터 { creative_name: { contributed_orders, attributed_revenue, total_revenue } }
  */
-async function calculateCreativeAttribution(creatives, startDate, endDate) {
+async function calculateCreativeAttribution(creatives, startDate, endDate, attributionWindowDays = DEFAULT_ATTRIBUTION_WINDOW_DAYS) {
   // 광고 소재를 unique key로 식별 (creative_name + utm_source + utm_medium + utm_campaign)
   const getCreativeKey = (creative) => {
     return `${creative.creative_name}||${creative.utm_source}||${creative.utm_medium}||${creative.utm_campaign}`;
@@ -253,17 +257,29 @@ async function calculateCreativeAttribution(creatives, startDate, endDate) {
     }
 
     const purchaseDate = new Date(purchase.timestamp);
-    const attributionWindowStart = new Date(purchaseDate);
-    attributionWindowStart.setDate(attributionWindowStart.getDate() - ATTRIBUTION_WINDOW_DAYS);
-
-    // 구매일 기준 30일 이내에 본 광고만 필터링
-    const filteredJourney = journey.filter(touch => {
-      const touchDate = new Date(touch.entry_timestamp);
-      return touchDate >= attributionWindowStart && touchDate <= purchaseDate;
-    });
+    
+    // FIX (2026-02-04): Attribution Window를 사용자가 선택할 수 있도록 변경
+    // attributionWindowDays가 null이면 전체 기간, 아니면 해당 일수 적용
+    let filteredJourney;
+    if (attributionWindowDays === null) {
+      // 전체 기간: 구매일 이전 모든 광고
+      filteredJourney = journey.filter(touch => {
+        const touchDate = new Date(touch.entry_timestamp);
+        return touchDate <= purchaseDate;
+      });
+    } else {
+      // 선택한 기간: 구매일 기준 N일 이내 광고만
+      const attributionWindowStart = new Date(purchaseDate);
+      attributionWindowStart.setDate(attributionWindowStart.getDate() - attributionWindowDays);
+      
+      filteredJourney = journey.filter(touch => {
+        const touchDate = new Date(touch.entry_timestamp);
+        return touchDate >= attributionWindowStart && touchDate <= purchaseDate;
+      });
+    }
 
     if (filteredJourney.length === 0) {
-      return; // 30일 이내 본 광고가 없으면 스킵
+      return; // 기간 내 본 광고가 없으면 스킵
     }
 
     // 막타 찾기 (필터링된 여정 중 sequence_order가 가장 큰 것)

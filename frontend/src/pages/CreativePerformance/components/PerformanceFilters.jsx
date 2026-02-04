@@ -4,10 +4,10 @@
 // ============================================================================
 
 import { useState, useEffect } from 'react';
-import { Card, Divider, DatePicker, InputNumber, Button } from 'antd';
+import { Card, Divider, DatePicker, InputNumber, Button, Select } from 'antd';
 import { 
   Search, X, RotateCcw, Calendar, Layers, AlertTriangle, Settings,
-  Clock, Eye, MousePointerClick, Filter
+  Clock, Eye, MousePointerClick, Filter, Target
 } from 'lucide-react';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ko';
@@ -181,7 +181,10 @@ function PerformanceFilters({
   onMinScrollChange,
   scoreSettings,
   onScoreSettingsClick,
-  quickFilterSources
+  quickFilterSources,
+  // FIX (2026-02-04): Attribution Window 선택
+  attributionWindow,
+  onAttributionWindowChange
 }) {
   const [searchTerm, setSearchTerm] = useState('');
   // 새로운 상태: 활성 그룹 (day, week, month, custom)
@@ -457,6 +460,35 @@ function PerformanceFilters({
             disabled={loading}
             placeholder="광고 소재 이름으로 검색..."
           />
+
+          {/* FIX (2026-02-04): 기여 기간 (Attribution Window) 선택 */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            height: '36px',
+            padding: '0 14px',
+            background: '#f0f7ff',
+            borderRadius: '8px',
+            border: '1px solid #91caff'
+          }}>
+            <Target size={16} style={{ color: '#1677ff', flexShrink: 0 }} />
+            <span style={{ fontSize: '13px', color: '#1677ff', fontWeight: 500 }}>기여 기간</span>
+            <Select
+              value={attributionWindow}
+              onChange={onAttributionWindowChange}
+              disabled={loading}
+              size="small"
+              style={{ width: 90 }}
+              bordered={false}
+              options={[
+                { value: '30', label: '30일' },
+                { value: '60', label: '60일' },
+                { value: '90', label: '90일' },
+                { value: 'all', label: '전체' }
+              ]}
+            />
+          </div>
 
           {/* 날짜 선택 */}
           <div style={{

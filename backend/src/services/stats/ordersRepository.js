@@ -358,9 +358,9 @@ async function getPreviousVisits(visitorId, purchaseTimestamp) {
 /**
  * UTM 히스토리 조회 (병합 적용)
  * 
- * FIX (2026-01-27): Attribution Window (구매일 기준 30일) 필터 추가
- *   - 기존: 기간 제한 없이 전체 UTM 히스토리 조회 → 광고 소재 상세 모달과 불일치
- *   - 수정: 구매일 기준 30일 이내 UTM 히스토리만 조회 → 일관성 유지
+ * FIX (2026-01-27): Attribution Window (구매일 기준) 필터 추가
+ * FIX (2026-02-04): Attribution Window를 사용자가 선택할 수 있도록 변경
+ *   - attributionWindowDays: 30, 60, 90, 또는 null(전체)
  * 
  * 인앱 브라우저 쿠키 문제 대응:
  * - 인앱 브라우저에서 쿠키가 저장되지 않으면 visitor_id가 중복 생성됨
@@ -370,11 +370,11 @@ async function getPreviousVisits(visitorId, purchaseTimestamp) {
  * @param {string} visitorId - conversions 테이블의 visitor_id
  * @param {string} sessionId - conversions 테이블의 session_id (optional, for fallback)
  * @param {Date|string} purchaseTimestamp - 구매일시 (Attribution Window 계산용)
- * @param {number} attributionWindowDays - Attribution Window 일수 (기본 30일)
+ * @param {number|null} attributionWindowDays - Attribution Window 일수 (30, 60, 90, null=전체)
  */
 async function getUtmHistory(visitorId, sessionId = null, purchaseTimestamp = null, attributionWindowDays = 30) {
-  // Attribution Window 적용 여부 결정
-  const hasAttributionFilter = purchaseTimestamp !== null;
+  // Attribution Window 적용 여부 결정 (null이면 전체 기간)
+  const hasAttributionFilter = purchaseTimestamp !== null && attributionWindowDays !== null;
   
   const query = `
     WITH 
@@ -405,10 +405,13 @@ async function getUtmHistory(visitorId, sessionId = null, purchaseTimestamp = nu
       FROM utm_sessions us
       WHERE us.visitor_id IN (SELECT visitor_id FROM target_visitors)
         ${hasAttributionFilter ? `
-        -- FIX (2026-01-27): Attribution Window 적용 (구매일 기준 30일 이내만)
+        -- Attribution Window 적용 (사용자 선택 기간)
         AND us.entry_timestamp >= ($3::timestamp - INTERVAL '${attributionWindowDays} days')
         AND us.entry_timestamp <= $3::timestamp
-        ` : ''}
+        ` : (purchaseTimestamp !== null ? `
+        -- 전체 기간: 구매일 이전만 필터
+        AND us.entry_timestamp <= $3::timestamp
+        ` : '')}
     ),
     with_gaps AS (
       SELECT
@@ -463,10 +466,12 @@ async function getUtmHistory(visitorId, sessionId = null, purchaseTimestamp = nu
     ORDER BY entry_timestamp ASC
   `;
 
-  const params = hasAttributionFilter 
+  // FIX (2026-02-04): purchaseTimestamp가 있으면 항상 params에 포함 (전체 기간일 때도 $3 참조)
+  const needsPurchaseTimestamp = purchaseTimestamp !== null;
+  const params = needsPurchaseTimestamp
     ? [visitorId, sessionId, purchaseTimestamp]
     : [visitorId, sessionId];
-    
+  
   const result = await db.query(query, params);
   return result.rows;
 }
@@ -567,16 +572,23 @@ async function getPreviousVisitsByIp(ipAddress, currentVisitorId, purchaseTimest
  * 
  * 동일 IP의 다른 visitor_id들의 UTM 세션 기록을 조회합니다.
  * 
+ * FIX (2026-02-04): Attribution Window를 사용자가 선택할 수 있도록 변경
+ * 
  * @param {string} ipAddress - IP 주소
  * @param {string} currentVisitorId - 현재 visitor_id (제외용)
- * @param {Date} purchaseTimestamp - 구매일시 (30일 이내 조회)
- * @param {number} attributionWindowDays - Attribution Window (기본 30일)
+ * @param {Date} purchaseTimestamp - 구매일시
+ * @param {number|null} attributionWindowDays - Attribution Window (30, 60, 90, null=전체)
  */
 async function getUtmHistoryByIp(ipAddress, currentVisitorId, purchaseTimestamp, attributionWindowDays = 30) {
   if (!ipAddress || ipAddress === 'unknown') {
     return [];
   }
 
+  // Attribution Window 적용 여부 결정 (null이면 전체 기간)
+  const hasAttributionFilter = attributionWindowDays !== null;
+
+  // FIX (2026-02-04): session_id로 그룹화하여 중복 제거
+  // 트래커가 페이지 이동마다 UTM 세션을 새로 기록하는 버그 대응
   const query = `
     WITH ip_visitors AS (
       -- 동일 IP의 다른 visitor_id들 찾기
@@ -585,21 +597,29 @@ async function getUtmHistoryByIp(ipAddress, currentVisitorId, purchaseTimestamp,
       WHERE v.ip_address = $1
         AND v.visitor_id != $2
         AND v.is_bot = false
+    ),
+    deduplicated_utm AS (
+      -- session_id + utm_content 조합으로 그룹화하여 첫 번째 entry만 선택
+      SELECT DISTINCT ON (us.session_id, us.utm_params->>'utm_content')
+        us.visitor_id,
+        us.session_id,
+        COALESCE(us.utm_source, us.utm_params->>'utm_source', 'direct') as utm_source,
+        COALESCE(us.utm_medium, us.utm_params->>'utm_medium') as utm_medium,
+        COALESCE(us.utm_campaign, us.utm_params->>'utm_campaign') as utm_campaign,
+        us.utm_params->>'utm_content' as utm_content,
+        us.entry_timestamp,
+        us.duration_seconds,
+        us.sequence_order
+      FROM utm_sessions us
+      WHERE us.visitor_id IN (SELECT visitor_id FROM ip_visitors)
+        ${hasAttributionFilter ? `
+        AND us.entry_timestamp >= ($3::timestamp - INTERVAL '${attributionWindowDays} days')
+        ` : ''}
+        AND us.entry_timestamp <= $3::timestamp
+      ORDER BY us.session_id, us.utm_params->>'utm_content', us.entry_timestamp ASC
     )
-    SELECT
-      us.visitor_id,
-      COALESCE(us.utm_source, us.utm_params->>'utm_source', 'direct') as utm_source,
-      COALESCE(us.utm_medium, us.utm_params->>'utm_medium') as utm_medium,
-      COALESCE(us.utm_campaign, us.utm_params->>'utm_campaign') as utm_campaign,
-      us.utm_params->>'utm_content' as utm_content,
-      us.entry_timestamp,
-      us.duration_seconds,
-      us.sequence_order
-    FROM utm_sessions us
-    WHERE us.visitor_id IN (SELECT visitor_id FROM ip_visitors)
-      AND us.entry_timestamp >= ($3::timestamp - INTERVAL '${attributionWindowDays} days')
-      AND us.entry_timestamp <= $3::timestamp
-    ORDER BY us.entry_timestamp ASC
+    SELECT * FROM deduplicated_utm
+    ORDER BY entry_timestamp ASC
   `;
 
   const result = await db.query(query, [ipAddress, currentVisitorId, purchaseTimestamp]);
@@ -670,16 +690,23 @@ async function getPreviousVisitsByMemberId(memberId, currentVisitorId, purchaseT
  * 
  * 동일 회원 ID를 가진 다른 주문의 visitor_id들의 UTM 세션 기록을 조회합니다.
  * 
+ * FIX (2026-02-04): Attribution Window를 사용자가 선택할 수 있도록 변경
+ * 
  * @param {string} memberId - Cafe24 회원 ID
  * @param {string} currentVisitorId - 현재 visitor_id (제외용)
- * @param {Date} purchaseTimestamp - 구매일시 (30일 이내 조회)
- * @param {number} attributionWindowDays - Attribution Window (기본 30일)
+ * @param {Date} purchaseTimestamp - 구매일시
+ * @param {number|null} attributionWindowDays - Attribution Window (30, 60, 90, null=전체)
  */
 async function getUtmHistoryByMemberId(memberId, currentVisitorId, purchaseTimestamp, attributionWindowDays = 30) {
   if (!memberId || memberId === '') {
     return [];
   }
 
+  // Attribution Window 적용 여부 결정 (null이면 전체 기간)
+  const hasAttributionFilter = attributionWindowDays !== null;
+
+  // FIX (2026-02-04): session_id로 그룹화하여 중복 제거
+  // 트래커가 페이지 이동마다 UTM 세션을 새로 기록하는 버그 대응
   const query = `
     WITH member_visitors AS (
       -- 동일 member_id를 가진 다른 주문의 visitor_id들 찾기
@@ -690,21 +717,29 @@ async function getUtmHistoryByMemberId(memberId, currentVisitorId, purchaseTimes
         AND c.visitor_id IS NOT NULL
         AND c.visitor_id != $2
         AND v.is_bot = false
+    ),
+    deduplicated_utm AS (
+      -- session_id + utm_content 조합으로 그룹화하여 첫 번째 entry만 선택
+      SELECT DISTINCT ON (us.session_id, us.utm_params->>'utm_content')
+        us.visitor_id,
+        us.session_id,
+        COALESCE(us.utm_source, us.utm_params->>'utm_source', 'direct') as utm_source,
+        COALESCE(us.utm_medium, us.utm_params->>'utm_medium') as utm_medium,
+        COALESCE(us.utm_campaign, us.utm_params->>'utm_campaign') as utm_campaign,
+        us.utm_params->>'utm_content' as utm_content,
+        us.entry_timestamp,
+        us.duration_seconds,
+        us.sequence_order
+      FROM utm_sessions us
+      WHERE us.visitor_id IN (SELECT visitor_id FROM member_visitors)
+        ${hasAttributionFilter ? `
+        AND us.entry_timestamp >= ($3::timestamp - INTERVAL '${attributionWindowDays} days')
+        ` : ''}
+        AND us.entry_timestamp <= $3::timestamp
+      ORDER BY us.session_id, us.utm_params->>'utm_content', us.entry_timestamp ASC
     )
-    SELECT
-      us.visitor_id,
-      COALESCE(us.utm_source, us.utm_params->>'utm_source', 'direct') as utm_source,
-      COALESCE(us.utm_medium, us.utm_params->>'utm_medium') as utm_medium,
-      COALESCE(us.utm_campaign, us.utm_params->>'utm_campaign') as utm_campaign,
-      us.utm_params->>'utm_content' as utm_content,
-      us.entry_timestamp,
-      us.duration_seconds,
-      us.sequence_order
-    FROM utm_sessions us
-    WHERE us.visitor_id IN (SELECT visitor_id FROM member_visitors)
-      AND us.entry_timestamp >= ($3::timestamp - INTERVAL '${attributionWindowDays} days')
-      AND us.entry_timestamp <= $3::timestamp
-    ORDER BY us.entry_timestamp ASC
+    SELECT * FROM deduplicated_utm
+    ORDER BY entry_timestamp ASC
   `;
 
   const result = await db.query(query, [memberId, currentVisitorId, purchaseTimestamp]);
@@ -749,6 +784,97 @@ async function getPastPurchases(visitorId, excludeOrderId) {
   return result.rows;
 }
 
+/**
+ * IP 기반 과거 구매 이력 조회 (쿠키 끊김 대응)
+ * FIX (2026-02-04): 다른 visitor_id로 구매한 경우도 조회
+ */
+async function getPastPurchasesByIp(ipAddress, currentVisitorId, excludeOrderId) {
+  if (!ipAddress || ipAddress === 'unknown') {
+    return [];
+  }
+
+  const query = `
+    SELECT
+      c.order_id,
+      c.timestamp,
+      c.final_payment,
+      c.product_count,
+      c.order_status,
+      c.paid,
+      c.visitor_id,
+      COALESCE(
+        c.product_name,
+        (
+          SELECT e.product_name
+          FROM events e
+          WHERE e.visitor_id = c.visitor_id
+            AND e.event_type = 'purchase'
+            AND e.timestamp <= c.timestamp
+          ORDER BY e.timestamp DESC
+          LIMIT 1
+        )
+      ) as product_name
+    FROM conversions c
+    JOIN visitors v ON c.visitor_id = v.visitor_id
+    WHERE v.ip_address = $1
+      AND c.visitor_id != $2
+      AND c.order_id != $3
+      AND c.paid = 'T'
+      AND (c.canceled = 'F' OR c.canceled IS NULL)
+      AND (c.order_status = 'confirmed' OR c.order_status IS NULL)
+    ORDER BY c.timestamp DESC
+    LIMIT 10
+  `;
+
+  const result = await db.query(query, [ipAddress, currentVisitorId, excludeOrderId]);
+  return result.rows;
+}
+
+/**
+ * member_id 기반 과거 구매 이력 조회 (회원 기반 연결)
+ * FIX (2026-02-04): 다른 visitor_id로 구매한 경우도 조회
+ */
+async function getPastPurchasesByMemberId(memberId, currentVisitorId, excludeOrderId) {
+  if (!memberId || memberId === '') {
+    return [];
+  }
+
+  const query = `
+    SELECT
+      c.order_id,
+      c.timestamp,
+      c.final_payment,
+      c.product_count,
+      c.order_status,
+      c.paid,
+      c.visitor_id,
+      COALESCE(
+        c.product_name,
+        (
+          SELECT e.product_name
+          FROM events e
+          WHERE e.visitor_id = c.visitor_id
+            AND e.event_type = 'purchase'
+            AND e.timestamp <= c.timestamp
+          ORDER BY e.timestamp DESC
+          LIMIT 1
+        )
+      ) as product_name
+    FROM conversions c
+    WHERE c.member_id = $1
+      AND c.visitor_id != $2
+      AND c.order_id != $3
+      AND c.paid = 'T'
+      AND (c.canceled = 'F' OR c.canceled IS NULL)
+      AND (c.order_status = 'confirmed' OR c.order_status IS NULL)
+    ORDER BY c.timestamp DESC
+    LIMIT 10
+  `;
+
+  const result = await db.query(query, [memberId, currentVisitorId, excludeOrderId]);
+  return result.rows;
+}
+
 module.exports = {
   getOrders,
   getOrdersCount,
@@ -762,6 +888,8 @@ module.exports = {
   getUtmHistoryByMemberId,
   getSameIpVisits,
   getPastPurchases,
+  getPastPurchasesByIp,
+  getPastPurchasesByMemberId,
   buildOrderFilters,
   SORT_FIELD_MAP
 };

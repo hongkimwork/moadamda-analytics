@@ -68,6 +68,7 @@ function CreativePerformance() {
     minDuration,
     minPv,
     minScroll,
+    attributionWindow, // FIX (2026-02-04): Attribution Window
     
     // 모달 상태
     ordersModalVisible,
@@ -84,6 +85,7 @@ function CreativePerformance() {
     setMinDuration,
     setMinPv,
     setMinScroll,
+    setAttributionWindow, // FIX (2026-02-04): Attribution Window
     setError,
     
     // 점수 설정
@@ -234,6 +236,8 @@ function CreativePerformance() {
         scoreSettings={scoreSettings}
         onScoreSettingsClick={() => setScoreSettingsModalVisible(true)}
         quickFilterSources={quickFilterSources}
+        attributionWindow={attributionWindow}
+        onAttributionWindowChange={setAttributionWindow}
       />
 
       {/* 에러 표시 */}
@@ -280,6 +284,7 @@ function CreativePerformance() {
           start: filters.dateRange[0],
           end: filters.dateRange[1]
         }}
+        attributionWindow={attributionWindow}
       />
 
       {/* 세션 상세 모달 (UV 클릭) */}

@@ -13,7 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **로컬 개발**:
   - 백엔드 API: http://localhost:3003
   - 프론트엔드 대시보드: http://localhost:3030
-- **현재 트래커 버전**: tracker-v051.js (최신 버전은 PROJECT_STATUS.md에서 확인)
+- **현재 트래커 버전**: v27.0 (tracker-v054) - 상세 변경 로그는 `tracker/build/VERSION.txt` 참조
 
 ## 시스템 아키텍처
 
@@ -21,7 +21,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 1. **트래커 (클라이언트 사이드 JavaScript)**
    - 소스: `tracker/src/tracker.js`
-   - 빌드: `tracker/build/tracker-v049.js` (배포 버전)
+   - 빌드: `tracker/build/tracker-v054.js` (배포 버전)
    - Cafe24 쇼핑몰에 배포되는 순수 JavaScript 추적 스크립트
    - 페이지뷰, 세션, 전자상거래 이벤트(view_product, add_to_cart, checkout, purchase) 추적
    - POST 요청을 통해 백엔드 API로 데이터 전송
@@ -275,6 +275,35 @@ SELECT * FROM step2;
 WHERE time_spent_seconds > 0
   AND time_spent_seconds <= 600  -- 10분 제한
 ```
+
+### Cafe24 호환 데이터 표준 (필수)
+
+**모든 방문자/세션/페이지뷰 관련 개발은 카페24 호환 뷰와 함수를 사용해야 합니다.**
+
+| 뷰 이름 | 용도 |
+|--------|------|
+| `v_sessions_cafe24` | 세션 조회 (봇 제외, 체류시간 0초 제외) |
+| `v_pageviews_cafe24` | 페이지뷰 조회 (봇/중복 제외) |
+| `v_visitors_cafe24` | 방문자 조회 (봇 제외) |
+
+| 함수 | 용도 |
+|------|------|
+| `get_daily_visits_cafe24(시작일, 종료일)` | 일별 방문 통계 |
+| `get_visit_summary_cafe24(시작일, 종료일)` | 기간 합계 통계 |
+
+```sql
+-- 좋음: 카페24 호환 뷰 사용
+SELECT COUNT(*) FROM v_sessions_cafe24 WHERE start_time >= '2026-01-01';
+
+-- 나쁨: 원본 테이블 직접 조회 (봇 + 체류시간 0초 포함됨)
+SELECT COUNT(*) FROM sessions WHERE start_time >= '2026-01-01';
+```
+
+원본 테이블(`sessions`, `pageviews`, `visitors`)을 직접 조회하면 봇 트래픽과 체류시간 0초 세션이 포함되어 카페24 통계와 수치가 달라집니다.
+
+**원본 테이블 사용이 필요한 경우** (봇 분석, 디버깅, 데이터 검증)에는 반드시 주석으로 이유를 명시하세요.
+
+자세한 내용: `.kiro/steering/cafe24-data-standard.md`
 
 ## 일반적인 문제와 해결책
 

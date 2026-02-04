@@ -41,10 +41,24 @@ router.get('/orders', async (req, res) => {
 });
 
 // GET /api/stats/order-detail/:orderId - Detailed customer journey for a specific order
+// FIX (2026-02-04): Attribution Window 쿼리 파라미터 추가
 router.get('/order-detail/:orderId', async (req, res) => {
   try {
     const { orderId } = req.params;
-    const result = await ordersService.getOrderDetail(orderId);
+    const { attribution_window } = req.query;
+    // Attribution Window 파싱: 30, 60, 90, 또는 'all' (null로 변환)
+    let attributionWindowDays = 30; // 기본값
+    if (attribution_window) {
+      if (attribution_window === 'all') {
+        attributionWindowDays = null;
+      } else {
+        const parsed = parseInt(attribution_window, 10);
+        if ([30, 60, 90].includes(parsed)) {
+          attributionWindowDays = parsed;
+        }
+      }
+    }
+    const result = await ordersService.getOrderDetail(orderId, attributionWindowDays);
     res.json(result);
 
   } catch (error) {

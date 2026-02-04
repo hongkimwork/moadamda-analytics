@@ -29,8 +29,21 @@ async function getCreativePerformance(params) {
     // 이하치 제외 필터 (기본값 0 = 필터 미적용)
     min_duration = 0,
     min_pv = 0,
-    min_scroll = 0
+    min_scroll = 0,
+    // FIX (2026-02-04): Attribution Window 선택 (30, 60, 90, 'all')
+    attribution_window = '30'
   } = params;
+  
+  // FIX (2026-02-04): Attribution Window 파싱
+  let attributionWindowDays = 30; // 기본값
+  if (attribution_window === 'all') {
+    attributionWindowDays = null;
+  } else {
+    const parsed = parseInt(attribution_window, 10);
+    if ([30, 60, 90].includes(parsed)) {
+      attributionWindowDays = parsed;
+    }
+  }
 
   // 1. 날짜 파라미터 검증
   if (!start || !end) {
@@ -269,7 +282,8 @@ async function getCreativePerformance(params) {
 
   // 10. 기여도 계산 (결제건 기여 포함 수, 결제건 기여 금액, 기여 결제건 총 결제금액)
   // FIX (2026-02-02): 검색 필터 적용된 데이터(filteredData) 사용
-  const attributionData = await calculateCreativeAttribution(filteredData, startDate, endDate);
+  // FIX (2026-02-04): Attribution Window를 사용자가 선택할 수 있도록 변경
+  const attributionData = await calculateCreativeAttribution(filteredData, startDate, endDate, attributionWindowDays);
 
   // 11. 기여도 데이터를 기본 데이터에 병합
   let finalData = filteredData.map(row => {
@@ -330,6 +344,7 @@ async function getCreativePerformance(params) {
       start: start,
       end: end
     },
+    attribution_window: attributionWindowDays, // FIX (2026-02-04): 사용자 선택 Attribution Window
     data: paginatedData,
     pagination: {
       page: pageNum,

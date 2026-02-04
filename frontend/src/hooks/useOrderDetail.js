@@ -1,6 +1,8 @@
 /**
  * 주문 상세 커스텀 훅
  * 주문 상세 정보 조회 및 상태 관리
+ * 
+ * FIX (2026-02-04): Attribution Window 선택 기능 추가
  */
 
 import { useState, useEffect } from 'react';
@@ -11,18 +13,21 @@ const API_URL = import.meta.env.VITE_API_URL || '';
 /**
  * useOrderDetail 훅
  * @param {string} orderId - 주문 ID
+ * @param {string} attributionWindow - Attribution Window (30, 60, 90, 'all')
  * @returns {object} 주문 상세 데이터 및 상태
  */
-export function useOrderDetail(orderId) {
+export function useOrderDetail(orderId, attributionWindow = '30') {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
 
-  const fetchOrderDetail = async () => {
+  const fetchOrderDetail = async (attrWindow = attributionWindow) => {
     try {
       setLoading(true);
       setError(null);
-      const response = await axios.get(`${API_URL}/api/stats/order-detail/${orderId}`);
+      const response = await axios.get(`${API_URL}/api/stats/order-detail/${orderId}`, {
+        params: { attribution_window: attrWindow }
+      });
       setData(response.data);
       setLoading(false);
     } catch (err) {
@@ -36,7 +41,7 @@ export function useOrderDetail(orderId) {
     if (orderId) {
       fetchOrderDetail();
     }
-  }, [orderId]);
+  }, [orderId, attributionWindow]);
 
   return {
     data,

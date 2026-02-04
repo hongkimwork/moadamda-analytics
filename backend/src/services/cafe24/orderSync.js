@@ -613,9 +613,10 @@ async function backfillFirstOrder() {
 
 /**
  * 기존 주문들의 member_id 일괄 업데이트
- * member_id가 NULL인 주문들 대상으로 Cafe24 API에서 member_id 조회하여 UPDATE
+ * member_id가 NULL 또는 빈 문자열인 주문들 대상으로 Cafe24 API에서 member_id 조회하여 UPDATE
  * 
  * FIX (2026-02-03): 쿠키 끊김 시 동일 사용자 연결용
+ * FIX (2026-02-04): LIMIT 제거 및 빈 문자열 조건 추가
  */
 async function backfillMemberIds() {
   const MEMBER_PREFIX = '[Cafe24 Member Backfill]';
@@ -623,14 +624,13 @@ async function backfillMemberIds() {
   try {
     console.log(`${MEMBER_PREFIX} Starting member_id backfill...`);
     
-    // member_id가 NULL이고 synced_at이 있는 주문들 조회 (Cafe24 동기화 주문만)
+    // member_id가 NULL 또는 빈 문자열이고 synced_at이 있는 주문들 조회 (Cafe24 동기화 주문만)
     const ordersResult = await db.query(
       `SELECT order_id 
        FROM conversions 
-       WHERE member_id IS NULL
+       WHERE (member_id IS NULL OR member_id = '')
          AND synced_at IS NOT NULL
-       ORDER BY timestamp DESC
-       LIMIT 1000`
+       ORDER BY timestamp DESC`
     );
     
     if (ordersResult.rows.length === 0) {

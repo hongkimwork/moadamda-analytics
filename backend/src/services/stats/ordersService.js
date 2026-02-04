@@ -284,8 +284,13 @@ function mergeVisitsByDate(visitorVisits, ipVisits) {
 
 /**
  * 주문 상세 조회
+ * 
+ * FIX (2026-02-04): Attribution Window를 사용자가 선택할 수 있도록 변경
+ * 
+ * @param {string} orderId - 주문 ID
+ * @param {number|null} attributionWindowDays - Attribution Window 일수 (30, 60, 90, null=전체)
  */
-async function getOrderDetail(orderId) {
+async function getOrderDetail(orderId, attributionWindowDays = 30) {
   // 1. 주문 기본 정보 조회
   const order = await repository.getOrderBasicInfo(orderId);
 
@@ -311,9 +316,10 @@ async function getOrderDetail(orderId) {
 
   // 3. 병렬로 여정 데이터 조회
   // getUtmHistory: session_id를 추가로 전달 (인앱 브라우저 쿠키 문제 대응)
-  // FIX (2026-01-27): 구매일(order.timestamp) 전달하여 Attribution Window (30일) 적용
+  // FIX (2026-01-27): 구매일(order.timestamp) 전달하여 Attribution Window 적용
   // FIX (2026-01-27): 타임존 문제 - DB timestamp는 KST로 저장되어 있으므로 로컬 시간 문자열로 변환
   // FIX (2026-02-03): IP 기반 과거 방문 기록 추가 (쿠키 끊김 대응)
+  // FIX (2026-02-04): Attribution Window를 사용자가 선택할 수 있도록 변경
   const d = new Date(order.timestamp);
   const localTimestamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}.${String(d.getMilliseconds()).padStart(3, '0')}`;
   
@@ -329,7 +335,9 @@ async function getOrderDetail(orderId) {
     utmHistoryByIpRows,
     utmHistoryByMemberIdRows,
     sameIpVisits,
-    pastPurchases
+    pastPurchasesRows,
+    pastPurchasesByIpRows,
+    pastPurchasesByMemberIdRows
   ] = await Promise.all([
     repository.getPurchaseJourney(order.visitor_id, order.timestamp),
     repository.getPreviousVisits(order.visitor_id, order.timestamp),
@@ -341,19 +349,26 @@ async function getOrderDetail(orderId) {
     hasValidMemberId
       ? repository.getPreviousVisitsByMemberId(order.member_id, order.visitor_id, order.timestamp)
       : Promise.resolve([]),
-    repository.getUtmHistory(order.visitor_id, order.session_id, localTimestamp),
+    repository.getUtmHistory(order.visitor_id, order.session_id, localTimestamp, attributionWindowDays),
     // IP 기반 UTM 히스토리 조회 (쿠키 끊김 대응)
     hasValidIp
-      ? repository.getUtmHistoryByIp(order.ip_address, order.visitor_id, localTimestamp)
+      ? repository.getUtmHistoryByIp(order.ip_address, order.visitor_id, localTimestamp, attributionWindowDays)
       : Promise.resolve([]),
     // FIX (2026-02-03): member_id 기반 UTM 히스토리 조회 (회원 기반 연결)
     hasValidMemberId
-      ? repository.getUtmHistoryByMemberId(order.member_id, order.visitor_id, localTimestamp)
+      ? repository.getUtmHistoryByMemberId(order.member_id, order.visitor_id, localTimestamp, attributionWindowDays)
       : Promise.resolve([]),
     hasValidIp
       ? repository.getSameIpVisits(order.ip_address, order.session_id)
       : Promise.resolve([]),
-    repository.getPastPurchases(order.visitor_id, orderId)
+    repository.getPastPurchases(order.visitor_id, orderId),
+    // FIX (2026-02-04): IP/member_id 기반 과거 구매 조회 추가
+    hasValidIp
+      ? repository.getPastPurchasesByIp(order.ip_address, order.visitor_id, orderId)
+      : Promise.resolve([]),
+    hasValidMemberId
+      ? repository.getPastPurchasesByMemberId(order.member_id, order.visitor_id, orderId)
+      : Promise.resolve([])
   ]);
 
   // 4. 데이터 가공
@@ -446,6 +461,32 @@ async function getOrderDetail(orderId) {
     device_type: row.device_type || 'unknown',
     has_purchase: row.has_purchase
   }));
+
+  // FIX (2026-02-04): 과거 구매 데이터 병합 (visitor_id + IP + member_id)
+  // 중복 제거: order_id 기준
+  const pastPurchasesMap = new Map();
+  
+  // visitor_id 기반 구매
+  pastPurchasesRows.forEach(row => {
+    pastPurchasesMap.set(row.order_id, { ...row, source: 'visitor_id' });
+  });
+  
+  // IP 기반 구매 (중복 시 기존 데이터 유지)
+  pastPurchasesByIpRows.forEach(row => {
+    if (!pastPurchasesMap.has(row.order_id)) {
+      pastPurchasesMap.set(row.order_id, { ...row, source: 'ip_address' });
+    }
+  });
+  
+  // member_id 기반 구매 (중복 시 기존 데이터 유지)
+  pastPurchasesByMemberIdRows.forEach(row => {
+    if (!pastPurchasesMap.has(row.order_id)) {
+      pastPurchasesMap.set(row.order_id, { ...row, source: 'member_id' });
+    }
+  });
+  
+  const pastPurchases = Array.from(pastPurchasesMap.values())
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
   // 과거 구매 내역에 Cafe24 상세 정보 추가 (병렬 처리)
   const pastPurchasesMapped = await Promise.all(

@@ -1,3 +1,6 @@
+| 2026-02-04 | 전체기여기간쿼리수정 | detailRepository.js |
+| 2026-02-04 | UTM중복기록버그수정 | utmService.js |
+| 2026-02-04 | 기여기간선택기능추가 | ordersRepository.js |
 | 2026-02-03 | 상세모달IP/memberID연결 | detailService.js |
 | 2026-02-03 | member_id기반UTM연결추가 | creativeAttribution.js |
 | 2026-02-03 | IP기반 과거여정연결추가 | ordersRepository.js |
@@ -12,5 +15,3 @@
 | 2026-02-02 | 검색창 너비 축소 | OrderFilterBar.jsx |
 | 2026-02-02 | 빈utm_content복구+트래커v054 | tracker.js |
 | 2026-02-02 | 날짜필터 네비게이션 개선 | PerformanceFilters.jsx |
-| 2026-02-02 | 광고DB자동동기화+토큰갱신 | metaAdNameMapping.js |
-| 2026-02-02 | 모달URL인코딩변형수정 | detailService.js |
