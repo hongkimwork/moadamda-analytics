@@ -1,3 +1,4 @@
+| 2026-02-04 | 여정전체기간조회로변경 | ordersRepository.js |
 | 2026-02-04 | 전체기여기간쿼리수정 | detailRepository.js |
 | 2026-02-04 | UTM중복기록버그수정 | utmService.js |
 | 2026-02-04 | 기여기간선택기능추가 | ordersRepository.js |
@@ -12,6 +13,3 @@
 | 2026-02-02 | 한글 검색 개선 | creativeService.js |
 | 2026-02-02 | 이상치 필터 텍스트 변경 | PerformanceFilters.jsx |
 | 2026-02-02 | 이상치필터 대체방식변경 | creativeRepository.js |
-| 2026-02-02 | 검색창 너비 축소 | OrderFilterBar.jsx |
-| 2026-02-02 | 빈utm_content복구+트래커v054 | tracker.js |
-| 2026-02-02 | 날짜필터 네비게이션 개선 | PerformanceFilters.jsx |

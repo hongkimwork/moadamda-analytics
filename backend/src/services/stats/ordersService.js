@@ -340,14 +340,17 @@ async function getOrderDetail(orderId, attributionWindowDays = 30) {
     pastPurchasesByMemberIdRows
   ] = await Promise.all([
     repository.getPurchaseJourney(order.visitor_id, order.timestamp),
-    repository.getPreviousVisits(order.visitor_id, order.timestamp),
+    // FIX (2026-02-04): 전체 방문 기록 조회 (구매일 제한 제거)
+    repository.getPreviousVisits(order.visitor_id),
     // IP 기반 과거 방문 조회 (쿠키 끊김 대응)
+    // FIX (2026-02-04): 전체 방문 기록 조회 (구매일 제한 제거)
     hasValidIp
-      ? repository.getPreviousVisitsByIp(order.ip_address, order.visitor_id, order.timestamp)
+      ? repository.getPreviousVisitsByIp(order.ip_address, order.visitor_id)
       : Promise.resolve([]),
     // FIX (2026-02-03): member_id 기반 과거 방문 조회 (회원 기반 연결)
+    // FIX (2026-02-04): 전체 방문 기록 조회 (구매일 제한 제거)
     hasValidMemberId
-      ? repository.getPreviousVisitsByMemberId(order.member_id, order.visitor_id, order.timestamp)
+      ? repository.getPreviousVisitsByMemberId(order.member_id, order.visitor_id)
       : Promise.resolve([]),
     repository.getUtmHistory(order.visitor_id, order.session_id, localTimestamp, attributionWindowDays),
     // IP 기반 UTM 히스토리 조회 (쿠키 끊김 대응)
@@ -367,7 +370,7 @@ async function getOrderDetail(orderId, attributionWindowDays = 30) {
       ? repository.getPastPurchasesByIp(order.ip_address, order.visitor_id, orderId)
       : Promise.resolve([]),
     hasValidMemberId
-      ? repository.getPastPurchasesByMemberId(order.member_id, order.visitor_id, orderId)
+      ? repository.getPastPurchasesByMemberId(order.member_id, orderId)
       : Promise.resolve([])
   ]);
 

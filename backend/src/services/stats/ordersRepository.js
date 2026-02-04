@@ -322,8 +322,9 @@ async function getPurchaseJourney(visitorId, purchaseTimestamp) {
  * 과거 방문 이력 조회 (구매 당일 이전)
  */
 async function getPreviousVisits(visitorId, purchaseTimestamp) {
+  // FIX (2026-02-04): 구매일 이전 제한 제거 - 전체 방문 기록 조회
   const query = `
-    WITH previous_pageviews AS (
+    WITH all_pageviews AS (
       SELECT
         p.page_url,
         p.page_title,
@@ -332,7 +333,6 @@ async function getPreviousVisits(visitorId, purchaseTimestamp) {
         LEAD(p.timestamp) OVER (PARTITION BY DATE(p.timestamp) ORDER BY p.timestamp) as next_timestamp
       FROM pageviews p
       WHERE p.visitor_id = $1
-        AND DATE(p.timestamp) < DATE(($2::timestamptz) AT TIME ZONE 'Asia/Seoul')
     )
     SELECT
       visit_date,
@@ -347,11 +347,11 @@ async function getPreviousVisits(visitorId, purchaseTimestamp) {
           )
         ELSE 0
       END as time_spent_seconds
-    FROM previous_pageviews
+    FROM all_pageviews
     ORDER BY timestamp ASC
   `;
 
-  const result = await db.query(query, [visitorId, purchaseTimestamp]);
+  const result = await db.query(query, [visitorId]);
   return result.rows;
 }
 
@@ -515,11 +515,12 @@ async function getSameIpVisits(ipAddress, excludeSessionId) {
  * 쿠키가 끊어져서 visitor_id가 달라진 경우에도
  * 동일 IP로 과거 방문 기록을 연결합니다.
  * 
+ * FIX (2026-02-04): 구매일 이전 제한 제거 - 전체 방문 기록 조회
+ * 
  * @param {string} ipAddress - IP 주소
  * @param {string} currentVisitorId - 현재 visitor_id (제외용)
- * @param {Date} purchaseTimestamp - 구매일시 (이전 기록만 조회)
  */
-async function getPreviousVisitsByIp(ipAddress, currentVisitorId, purchaseTimestamp) {
+async function getPreviousVisitsByIp(ipAddress, currentVisitorId) {
   if (!ipAddress || ipAddress === 'unknown') {
     return [];
   }
@@ -538,12 +539,11 @@ async function getPreviousVisitsByIp(ipAddress, currentVisitorId, purchaseTimest
         p.page_url,
         p.page_title,
         p.timestamp,
-        DATE(p.timestamp AT TIME ZONE 'Asia/Seoul') as visit_date,
+        DATE(p.timestamp) as visit_date,
         p.visitor_id,
-        LEAD(p.timestamp) OVER (PARTITION BY DATE(p.timestamp AT TIME ZONE 'Asia/Seoul') ORDER BY p.timestamp) as next_timestamp
+        LEAD(p.timestamp) OVER (PARTITION BY DATE(p.timestamp) ORDER BY p.timestamp) as next_timestamp
       FROM pageviews p
       WHERE p.visitor_id IN (SELECT visitor_id FROM ip_visitors)
-        AND p.timestamp < ($3::timestamptz AT TIME ZONE 'Asia/Seoul')
     )
     SELECT
       visit_date,
@@ -563,7 +563,7 @@ async function getPreviousVisitsByIp(ipAddress, currentVisitorId, purchaseTimest
     ORDER BY timestamp ASC
   `;
 
-  const result = await db.query(query, [ipAddress, currentVisitorId, purchaseTimestamp]);
+  const result = await db.query(query, [ipAddress, currentVisitorId]);
   return result.rows;
 }
 
@@ -631,11 +631,12 @@ async function getUtmHistoryByIp(ipAddress, currentVisitorId, purchaseTimestamp,
  * 
  * 동일 회원 ID를 가진 다른 주문의 visitor_id들의 과거 방문 기록을 연결합니다.
  * 
+ * FIX (2026-02-04): 구매일 이전 제한 제거 - 전체 방문 기록 조회
+ * 
  * @param {string} memberId - Cafe24 회원 ID
  * @param {string} currentVisitorId - 현재 visitor_id (제외용)
- * @param {Date} purchaseTimestamp - 구매일시 (이전 기록만 조회)
  */
-async function getPreviousVisitsByMemberId(memberId, currentVisitorId, purchaseTimestamp) {
+async function getPreviousVisitsByMemberId(memberId, currentVisitorId) {
   if (!memberId || memberId === '') {
     return [];
   }
@@ -656,12 +657,11 @@ async function getPreviousVisitsByMemberId(memberId, currentVisitorId, purchaseT
         p.page_url,
         p.page_title,
         p.timestamp,
-        DATE(p.timestamp AT TIME ZONE 'Asia/Seoul') as visit_date,
+        DATE(p.timestamp) as visit_date,
         p.visitor_id,
-        LEAD(p.timestamp) OVER (PARTITION BY DATE(p.timestamp AT TIME ZONE 'Asia/Seoul') ORDER BY p.timestamp) as next_timestamp
+        LEAD(p.timestamp) OVER (PARTITION BY DATE(p.timestamp) ORDER BY p.timestamp) as next_timestamp
       FROM pageviews p
       WHERE p.visitor_id IN (SELECT visitor_id FROM member_visitors)
-        AND p.timestamp < ($3::timestamptz AT TIME ZONE 'Asia/Seoul')
     )
     SELECT
       visit_date,
@@ -681,7 +681,7 @@ async function getPreviousVisitsByMemberId(memberId, currentVisitorId, purchaseT
     ORDER BY timestamp ASC
   `;
 
-  const result = await db.query(query, [memberId, currentVisitorId, purchaseTimestamp]);
+  const result = await db.query(query, [memberId, currentVisitorId]);
   return result.rows;
 }
 
@@ -750,6 +750,7 @@ async function getUtmHistoryByMemberId(memberId, currentVisitorId, purchaseTimes
  * 과거 구매 이력 조회
  */
 async function getPastPurchases(visitorId, excludeOrderId) {
+  // FIX (2026-02-04): 취소 필터 제거 - 구매 시도 여부가 중요하므로 모든 주문 표시
   const query = `
     SELECT
       c.order_id,
@@ -758,6 +759,7 @@ async function getPastPurchases(visitorId, excludeOrderId) {
       c.product_count,
       c.order_status,
       c.paid,
+      c.canceled,
       COALESCE(
         c.product_name,
         (
@@ -773,11 +775,8 @@ async function getPastPurchases(visitorId, excludeOrderId) {
     FROM conversions c
     WHERE c.visitor_id = $1
       AND c.order_id != $2
-      AND c.paid = 'T'
-      AND (c.canceled = 'F' OR c.canceled IS NULL)
-      AND (c.order_status = 'confirmed' OR c.order_status IS NULL)
     ORDER BY c.timestamp DESC
-    LIMIT 10
+    LIMIT 20
   `;
 
   const result = await db.query(query, [visitorId, excludeOrderId]);
@@ -793,6 +792,7 @@ async function getPastPurchasesByIp(ipAddress, currentVisitorId, excludeOrderId)
     return [];
   }
 
+  // FIX (2026-02-04): 취소 필터 제거 - 구매 시도 여부가 중요하므로 모든 주문 표시
   const query = `
     SELECT
       c.order_id,
@@ -801,6 +801,7 @@ async function getPastPurchasesByIp(ipAddress, currentVisitorId, excludeOrderId)
       c.product_count,
       c.order_status,
       c.paid,
+      c.canceled,
       c.visitor_id,
       COALESCE(
         c.product_name,
@@ -819,11 +820,8 @@ async function getPastPurchasesByIp(ipAddress, currentVisitorId, excludeOrderId)
     WHERE v.ip_address = $1
       AND c.visitor_id != $2
       AND c.order_id != $3
-      AND c.paid = 'T'
-      AND (c.canceled = 'F' OR c.canceled IS NULL)
-      AND (c.order_status = 'confirmed' OR c.order_status IS NULL)
     ORDER BY c.timestamp DESC
-    LIMIT 10
+    LIMIT 20
   `;
 
   const result = await db.query(query, [ipAddress, currentVisitorId, excludeOrderId]);
@@ -834,11 +832,12 @@ async function getPastPurchasesByIp(ipAddress, currentVisitorId, excludeOrderId)
  * member_id 기반 과거 구매 이력 조회 (회원 기반 연결)
  * FIX (2026-02-04): 다른 visitor_id로 구매한 경우도 조회
  */
-async function getPastPurchasesByMemberId(memberId, currentVisitorId, excludeOrderId) {
+async function getPastPurchasesByMemberId(memberId, excludeOrderId) {
   if (!memberId || memberId === '') {
     return [];
   }
 
+  // FIX (2026-02-04): 취소 필터 제거, visitor_id 조건 완화 - 모든 구매 기록 표시
   const query = `
     SELECT
       c.order_id,
@@ -847,6 +846,7 @@ async function getPastPurchasesByMemberId(memberId, currentVisitorId, excludeOrd
       c.product_count,
       c.order_status,
       c.paid,
+      c.canceled,
       c.visitor_id,
       COALESCE(
         c.product_name,
@@ -862,16 +862,12 @@ async function getPastPurchasesByMemberId(memberId, currentVisitorId, excludeOrd
       ) as product_name
     FROM conversions c
     WHERE c.member_id = $1
-      AND c.visitor_id != $2
-      AND c.order_id != $3
-      AND c.paid = 'T'
-      AND (c.canceled = 'F' OR c.canceled IS NULL)
-      AND (c.order_status = 'confirmed' OR c.order_status IS NULL)
+      AND c.order_id != $2
     ORDER BY c.timestamp DESC
-    LIMIT 10
+    LIMIT 30
   `;
 
-  const result = await db.query(query, [memberId, currentVisitorId, excludeOrderId]);
+  const result = await db.query(query, [memberId, excludeOrderId]);
   return result.rows;
 }
 

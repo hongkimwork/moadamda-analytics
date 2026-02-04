@@ -5,9 +5,9 @@
 
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Card, DatePicker, Button, Spin, Alert, message, Select } from 'antd';
+import { Card, DatePicker, Button, Spin, Alert, message } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
-import { TrendingUp, Target } from 'lucide-react';
+import { TrendingUp } from 'lucide-react';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { useOrderDetail } from '../../hooks/useOrderDetail';
@@ -27,8 +27,8 @@ const { RangePicker } = DatePicker;
  * 모달과 페이지에서 공통 사용
  */
 export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = null }) {
-  // FIX (2026-02-04): Attribution Window 선택 기능 추가
-  const [attributionWindow, setAttributionWindow] = useState('30');
+  // FIX (2026-02-04): 기본값을 '전체'로 변경, UI 제거
+  const [attributionWindow] = useState('all');
   const { data, loading, error } = useOrderDetail(orderId, attributionWindow);
   const { expandedJourneys, toggleJourney } = useJourneyExpansion(['purchase']);
   const [selectedDateRange, setSelectedDateRange] = useState(null);
@@ -144,46 +144,12 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
                     boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
                   }}
                   onChange={(dates) => setSelectedDateRange(dates)}
-                  disabledDate={(current) => {
-                    if (!current) return false;
-                    const purchaseDateObj = dayjs(order.timestamp);
-                    // 구매일 이후는 선택 불가
-                    return current.isAfter(purchaseDateObj, 'day');
-                  }}
                   value={selectedDateRange}
                   allowClear
                   format="YYYY-MM-DD"
                 />
               </div>
               
-              {/* FIX (2026-02-04): 기여 기간 (Attribution Window) 선택 */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '4px 12px',
-                background: '#f0f7ff',
-                borderRadius: '8px',
-                border: '1px solid #91caff'
-              }}>
-                <Target size={16} style={{ color: '#1677ff' }} />
-                <span style={{ fontSize: '13px', color: '#1677ff', fontWeight: '600' }}>
-                  광고 기여 기간 :
-                </span>
-                <Select
-                  value={attributionWindow}
-                  onChange={setAttributionWindow}
-                  size="small"
-                  style={{ width: 90 }}
-                  bordered={false}
-                  options={[
-                    { value: '30', label: '30일' },
-                    { value: '60', label: '60일' },
-                    { value: '90', label: '90일' },
-                    { value: 'all', label: '전체' }
-                  ]}
-                />
-              </div>
             </div>
           </div>
 

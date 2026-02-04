@@ -122,9 +122,9 @@ export function buildAllJourneys(filteredPreviousVisits, validJourneyPages, purc
       const pagesWithAdEntry = markAdEntryPoints(deduplicatedPages, utmHistory);
       const totalDuration = pagesWithAdEntry.reduce((sum, p) => sum + (p.time_spent_seconds || 0), 0);
 
-      // 이전 방문에서 구매가 발생했는지 확인
-      const hadPurchase = hasPurchaseInVisit(pagesWithAdEntry);
-      const matchingPurchase = hadPurchase ? findPurchaseForDate(visit.date, pastPurchases) : null;
+      // FIX (2026-02-04): 해당 날짜에 구매가 있었는지 확인 (페이지 내용과 관계없이)
+      // past_purchases에서 해당 날짜의 구매 기록 찾기
+      const matchingPurchase = findPurchaseForDate(visit.date, pastPurchases);
 
       return {
         id: `visit-${visit.date}`,
@@ -249,15 +249,9 @@ export function filterPreviousVisits(previousVisits, orderTimestamp, selectedDat
     return [];
   }
 
-  const purchaseDateObj = dayjs(orderTimestamp);
-
+  // FIX (2026-02-04): 구매일 이후 방문도 포함 - 전체 여정 표시
   return previousVisits.filter(visit => {
     const visitDate = dayjs(visit.date);
-
-    // 구매일 이후 방문은 제외 (데이터 무결성 체크)
-    if (visitDate.isAfter(purchaseDateObj, 'day') || visitDate.isSame(purchaseDateObj, 'day')) {
-      return false;
-    }
 
     if (selectedDateRange && selectedDateRange[0] && selectedDateRange[1]) {
       // RangePicker 선택 시: 해당 기간 내 방문만 필터링
@@ -267,7 +261,7 @@ export function filterPreviousVisits(previousVisits, orderTimestamp, selectedDat
              (visitDate.isBefore(endDate, 'day') || visitDate.isSame(endDate, 'day'));
     }
 
-    // 기본: 모든 방문 포함
+    // 기본: 모든 방문 포함 (구매일 이후도 포함)
     return true;
   });
 }
