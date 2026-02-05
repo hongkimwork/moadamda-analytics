@@ -113,9 +113,16 @@ function findPurchaseForDate(visitDate, pastPurchases) {
  * @returns {Array} 통합된 여정 배열
  */
 export function buildAllJourneys(filteredPreviousVisits, validJourneyPages, purchaseDate, utmHistory = [], pastPurchases = []) {
+  // FIX (2026-02-05): 구매일과 동일한 날짜의 방문은 제외 (중복 카드 방지)
+  // - previous_visits에 구매일 데이터가 포함되면 purchase 카드와 중복됨
+  // - IP/member_id 병합으로 같은 날짜에 다른 visitor 방문이 포함될 수 있음
+  const visitsExcludingPurchaseDay = filteredPreviousVisits.filter(
+    visit => visit.date !== purchaseDate
+  );
+
   const journeys = [
-    // 필터링된 이전 방문들 (연속 중복 제거 적용)
-    ...filteredPreviousVisits.map((visit) => {
+    // 필터링된 이전 방문들 (구매일 제외, 연속 중복 제거 적용)
+    ...visitsExcludingPurchaseDay.map((visit) => {
       const deduplicatedPages = removeConcecutiveDuplicates(visit.pages || []);
       // 이전 방문에도 광고 유입 시점 표시 적용
       const pagesWithAdEntry = markAdEntryPoints(deduplicatedPages, utmHistory);
