@@ -50,8 +50,13 @@ async function upsertVisitor({
 
 /**
  * Upsert session (create or update)
+ * FIX (2026-02-05): 서버 사이드 세션 타임아웃 검증 추가
+ * - 마지막 활동으로부터 2시간 초과 시 세션 리셋 (start_time 갱신)
+ * - Android Chrome에서 쿠키 만료가 작동하지 않는 문제 대응
  * @param {Object} params - Session parameters
  */
+const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2시간 (밀리초)
+
 async function upsertSession({
   session_id,
   visitor_id,
@@ -60,6 +65,41 @@ async function upsertSession({
   clientIp,
   utm_params
 }) {
+  // 기존 세션 확인 (타임아웃 검증용)
+  const existingSession = await db.query(`
+    SELECT session_id, end_time, start_time 
+    FROM sessions 
+    WHERE session_id = $1
+  `, [session_id]);
+
+  if (existingSession.rows.length > 0) {
+    const lastActivity = existingSession.rows[0].end_time || existingSession.rows[0].start_time;
+    const visitDate = new Date(visitTime);
+    const lastDate = new Date(lastActivity);
+    const timeDiff = visitDate - lastDate;
+
+    // 2시간 초과 시 세션 리셋 (새 세션처럼 처리)
+    if (timeDiff > SESSION_TIMEOUT_MS) {
+      console.warn(`[Track] Session timeout detected: session=${session_id.substring(0, 8)}... | last_activity=${lastDate.toISOString()} | current=${visitDate.toISOString()} | gap=${Math.round(timeDiff / 1000 / 60)}min`);
+      
+      // 세션 리셋: start_time을 현재 시간으로 갱신, pageview_count 리셋
+      await db.query(`
+        UPDATE sessions SET
+          start_time = $2,
+          end_time = $2,
+          entry_url = $3,
+          exit_url = $3,
+          pageview_count = 1,
+          duration_seconds = 0,
+          ip_address = $4,
+          utm_params = $5
+        WHERE session_id = $1
+      `, [session_id, visitTime, url, clientIp, utm_params ? JSON.stringify(utm_params) : null]);
+      return;
+    }
+  }
+
+  // 일반적인 upsert (새 세션 생성 또는 기존 세션 업데이트)
   await db.query(`
     INSERT INTO sessions (
       session_id, visitor_id, start_time, entry_url, pageview_count, ip_address, utm_params

@@ -129,8 +129,10 @@ function CreativePerformance() {
   };
 
   // 세션 상세 보기 핸들러 (UV 클릭)
+  // FIX (2026-02-05): ad_id 추가 (메인 테이블과 동일한 기준으로 조회)
   const handleViewSessions = (record) => {
     setSessionsCreative({
+      ad_id: record.ad_id,
       creative_name: record.creative_name,
       utm_source: record.utm_source,
       utm_medium: record.utm_medium,
@@ -140,8 +142,10 @@ function CreativePerformance() {
   };
 
   // 진입 목록 보기 핸들러 (View 클릭)
+  // FIX (2026-02-05): ad_id 추가 (메인 테이블과 동일한 기준으로 조회)
   const handleViewEntries = (record) => {
     setEntriesCreative({
+      ad_id: record.ad_id,
       creative_name: record.creative_name,
       utm_source: record.utm_source,
       utm_medium: record.utm_medium,

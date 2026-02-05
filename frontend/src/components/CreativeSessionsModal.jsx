@@ -25,11 +25,13 @@ function CreativeSessionsModal({ visible, onClose, creative, dateRange }) {
     }
   }, [visible, creative, dateRange]);
 
+  // FIX (2026-02-05): ad_id 추가 (메인 테이블과 동일한 기준으로 조회)
   const fetchSessions = async (page = 1) => {
     if (!creative || !dateRange) return;
     setLoading(true);
     try {
       const response = await axios.post(`${API_URL}/api/creative-performance/sessions`, {
+        ad_id: creative.ad_id,
         creative_name: creative.creative_name,
         utm_source: creative.utm_source,
         utm_medium: creative.utm_medium,

@@ -1,3 +1,11 @@
+| 2026-02-05 | 세션타임아웃서버검증 | repository.js |
+| 2026-02-05 | 세션쿠키만료안정성개선 | tracker-v055.js |
+| 2026-02-05 | 스크롤날짜필터버그수정 | creativeRepository.js |
+| 2026-02-05 | 모달데이터ad_id기반조회 | detailRepository.js |
+| 2026-02-05 | 기여도키ad_id기반수정 | creativeAttribution.js |
+| 2026-02-05 | 비정상utm_id데이터제외 | creativeRepository.js |
+| 2026-02-05 | ad_id기반병합로직전환 | creativeRepository.js |
+| 2026-02-05 | 미매핑광고배경색표시 | PerformanceTable.jsx |
 | 2026-02-04 | 광고명매핑양방향비교추가 | metaAdNameMapping.js |
 | 2026-02-04 | +기호키매칭버그수정 | detailRepository.js |
 | 2026-02-04 | 과거데이터타임존수정 | pageviews테이블(DB) |
@@ -5,11 +13,3 @@
 | 2026-02-04 | 광고클릭만있는방문표시 | journeyCalculations.js |
 | 2026-02-04 | 여정전체기간조회로변경 | ordersRepository.js |
 | 2026-02-04 | 전체기여기간쿼리수정 | detailRepository.js |
-| 2026-02-04 | UTM중복기록버그수정 | utmService.js |
-| 2026-02-04 | 기여기간선택기능추가 | ordersRepository.js |
-| 2026-02-03 | 상세모달IP/memberID연결 | detailService.js |
-| 2026-02-03 | member_id기반UTM연결추가 | creativeAttribution.js |
-| 2026-02-03 | IP기반 과거여정연결추가 | ordersRepository.js |
-| 2026-02-03 | 파라미터 문법 오류 수정 | creativeRepository.js |
-| 2026-02-03 | 이하치필터 병합로직 수정 | creativeService.js |
-| 2026-02-03 | 이하치 값 제외 필터 추가 | PerformanceFilters.jsx |

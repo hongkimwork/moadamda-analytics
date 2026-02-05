@@ -141,11 +141,21 @@
     return match ? match[2] : null;
   }
   
+  // FIX (2026-02-05): 쿠키 설정 개선 - Android Chrome 세션 만료 문제 대응
+  // - max-age 속성 추가 (expires보다 신뢰성 높음)
+  // - Secure 플래그 추가 (HTTPS 환경)
   function setCookie(name, value, days) {
     const date = new Date();
     date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+    const maxAgeSeconds = Math.floor(days * 24 * 60 * 60);
+    
+    // expires와 max-age 모두 설정 (브라우저 호환성)
+    // Secure 플래그는 HTTPS에서만 쿠키 전송 (보안 강화)
     const expires = days ? `; expires=${date.toUTCString()}` : '';
-    document.cookie = `${name}=${value}${expires}; path=/; SameSite=Lax`;
+    const maxAge = days ? `; max-age=${maxAgeSeconds}` : '';
+    const secure = location.protocol === 'https:' ? '; Secure' : '';
+    
+    document.cookie = `${name}=${value}${expires}${maxAge}; path=/; SameSite=Lax${secure}`;
   }
   
   // Get or create visitor ID

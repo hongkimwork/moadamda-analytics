@@ -1379,26 +1379,33 @@ async function getRawAttributionData(params) {
 /**
  * 특정 광고 소재를 통해 유입된 세션 상세 목록 조회
  * 카페24 호환: visitors.is_bot = false 필터 적용
+ * 
+ * FIX (2026-02-05): ad_id 기반 조회 지원
+ * - ad_id가 있으면 ad_id로 조회 (메인 테이블과 일치)
+ * - ad_id가 없으면 기존 creative_name으로 조회 (fallback)
  */
 async function getCreativeSessions(params) {
-  const { creative_name, utm_source, utm_medium, utm_campaign, start, end, page = 1, limit = 50 } = params;
+  const { ad_id, creative_name, utm_source, utm_medium, utm_campaign, start, end, page = 1, limit = 50 } = params;
   
   // 파라미터 검증
   validateCreativeParams(params);
   
   const { startDate, endDate } = parseDates(start, end);
   
-  // 광고명 변형들 찾기
-  const creativeVariants = await getCreativeVariants(creative_name, startDate, endDate);
+  // ad_id가 있으면 ad_id 기반 조회, 없으면 광고명 변형 찾아서 조회
+  const useAdId = ad_id && ad_id !== '' && !ad_id.startsWith('{{');
   
-  // 세션 목록 및 총 개수/UV 조회 (변형들 모두 포함)
+  // 광고명 변형들 찾기 (ad_id 없을 때 fallback용)
+  const creativeVariants = useAdId ? [creative_name] : await getCreativeVariants(creative_name, startDate, endDate);
+  
+  // 세션 목록 및 총 개수/UV 조회
   const [sessions, countResult] = await Promise.all([
     repository.getCreativeSessions({
-      creative_name: creativeVariants, utm_source, utm_medium, utm_campaign,
+      ad_id, creative_name: creativeVariants, utm_source, utm_medium, utm_campaign,
       startDate, endDate, page, limit
     }),
     repository.getCreativeSessionsCount({
-      creative_name: creativeVariants, utm_source, utm_medium, utm_campaign,
+      ad_id, creative_name: creativeVariants, utm_source, utm_medium, utm_campaign,
       startDate, endDate
     })
   ]);
@@ -1460,26 +1467,33 @@ async function getCreativeSessions(params) {
 /**
  * 특정 광고 소재의 진입 목록 조회 (View 상세)
  * 각 진입 기록을 시간순으로 표시하며, 이전 진입과의 간격도 계산
+ * 
+ * FIX (2026-02-05): ad_id 기반 조회 지원
+ * - ad_id가 있으면 ad_id로 조회 (메인 테이블과 일치)
+ * - ad_id가 없으면 기존 creative_name으로 조회 (fallback)
  */
 async function getCreativeEntries(params) {
-  const { creative_name, utm_source, utm_medium, utm_campaign, start, end, page = 1, limit = 50 } = params;
+  const { ad_id, creative_name, utm_source, utm_medium, utm_campaign, start, end, page = 1, limit = 50 } = params;
   
   // 파라미터 검증
   validateCreativeParams(params);
   
   const { startDate, endDate } = parseDates(start, end);
   
-  // 광고명 변형들 찾기
-  const creativeVariants = await getCreativeVariants(creative_name, startDate, endDate);
+  // ad_id가 있으면 ad_id 기반 조회, 없으면 광고명 변형 찾아서 조회
+  const useAdId = ad_id && ad_id !== '' && !ad_id.startsWith('{{');
+  
+  // 광고명 변형들 찾기 (ad_id 없을 때 fallback용)
+  const creativeVariants = useAdId ? [creative_name] : await getCreativeVariants(creative_name, startDate, endDate);
   
   // 진입 목록 및 총 개수 조회
   const [entries, totalCount] = await Promise.all([
     repository.getCreativeEntries({
-      creative_name: creativeVariants, utm_source, utm_medium, utm_campaign,
+      ad_id, creative_name: creativeVariants, utm_source, utm_medium, utm_campaign,
       startDate, endDate, page, limit
     }),
     repository.getCreativeEntriesCount({
-      creative_name: creativeVariants, utm_source, utm_medium, utm_campaign,
+      ad_id, creative_name: creativeVariants, utm_source, utm_medium, utm_campaign,
       startDate, endDate
     })
   ]);

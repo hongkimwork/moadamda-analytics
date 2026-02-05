@@ -1,9 +1,16 @@
-v27.0 (v054)
-Updated: 2026-02-03
+v28.0 (v055)
+Updated: 2026-02-05
 
-🔧 스크롤 뎁스 0px 수집 문제 해결 (iOS Safari/인앱 브라우저 대응)
+🔧 세션 쿠키 만료 안정성 개선 (Android Chrome 비정상 세션 방지)
 
-NEW IN v27.0 (v054):
+NEW IN v28.0 (v055):
+✅ setCookie() 함수 개선
+  - max-age 속성 추가 (expires보다 신뢰성 높음, 일부 모바일 브라우저 호환성 개선)
+  - Secure 플래그 추가 (HTTPS 환경에서 보안 강화)
+  - 발견된 문제: Android Chrome에서 0.07% 세션이 2시간 후 만료되지 않고 수개월 유지됨
+  - 해결: expires + max-age 이중 설정으로 브라우저 호환성 극대화
+
+PREVIOUS v27.0 (v054):
 ✅ 스크롤 뎁스 추적 개선 (모바일/PC 모든 환경 대응)
   - requestAnimationFrame 폴링 추가 (모멘텀 스크롤 중에도 위치 추적)
   - touchmove 이벤트 추가 (터치 스크롤 감지)

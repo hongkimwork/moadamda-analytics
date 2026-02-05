@@ -13,37 +13,43 @@ const DEFAULT_ATTRIBUTION_WINDOW_DAYS = 30;
  * - 같은 광고를 여러 번 봤어도 1개로 카운트 (고유 조합 기준)
  * 
  * FIX (2026-02-03): IP 기반 UTM 연결 추가 (쿠키 끊김 대응)
- * - visitor_id 기반 여정이 없거나 부족한 경우
- * - 동일 IP의 다른 visitor_id들의 UTM 여정도 조회하여 병합
- * - 이를 통해 쿠키가 끊어져도 과거 광고 노출 기여도 인정
- * 
  * FIX (2026-02-04): Attribution Window를 사용자가 선택할 수 있도록 변경
- * - attributionWindowDays: 30, 60, 90, 또는 null(전체)
+ * FIX (2026-02-05): ad_id 기반 기여도 계산으로 변경
+ * - 기존: utm_content(광고명) 기준 → 광고명 변경 시 매칭 실패
+ * - 변경: utm_id(ad_id) 기준 → 광고명 변경해도 정확한 기여도 계산
  * 
- * @param {Array} creatives - 광고 소재 목록 [{ creative_name, utm_source, utm_medium, utm_campaign, ... }]
+ * @param {Array} creatives - 광고 소재 목록 [{ ad_id, creative_name, utm_source, utm_medium, utm_campaign, _variant_names, ... }]
  * @param {String} startDate - 시작일
  * @param {String} endDate - 종료일
  * @param {number|null} attributionWindowDays - Attribution Window 일수 (30, 60, 90, null=전체)
  * @returns {Object} - 광고별 기여도 데이터 { creative_name: { contributed_orders, attributed_revenue, total_revenue } }
  */
 async function calculateCreativeAttribution(creatives, startDate, endDate, attributionWindowDays = DEFAULT_ATTRIBUTION_WINDOW_DAYS) {
-  // 광고 소재를 unique key로 식별 (creative_name + utm_source + utm_medium + utm_campaign)
+  // FIX (2026-02-05): ad_id 기반 unique key 생성
+  // 같은 creative_name이라도 ad_id가 다르면 별도로 기여도 계산
   const getCreativeKey = (creative) => {
-    return `${creative.creative_name}||${creative.utm_source}||${creative.utm_medium}||${creative.utm_campaign}`;
+    return `${creative.ad_id}||${creative.utm_medium}||${creative.utm_campaign}`;
   };
+  
   const result = {};
   
-  // 각 광고별로 초기화 (unique key 사용)
+  // ad_id 기반 키 → creative 인덱스 매핑 (여정에서 찾기용)
+  const adIdToCreativeKey = new Map();
+  
+  // 각 광고별로 초기화 (ad_id 기반 unique key 사용)
   creatives.forEach(creative => {
     const key = getCreativeKey(creative);
     result[key] = {
-      contributed_orders_count: 0,      // 결제건 기여 포함 수
-      attributed_revenue: 0,             // 결제건 기여 금액
-      total_contributed_revenue: 0,      // 기여 결제건 총 결제금액
-      single_touch_count: 0,             // 순수전환 횟수 (이 광고만 보고 구매한 횟수)
-      last_touch_count: 0,               // 막타 횟수 (마지막으로 본 광고로서 구매한 횟수)
-      last_touch_revenue: 0              // 막타 결제액 (마지막으로 본 광고로서 구매한 결제금액)
+      contributed_orders_count: 0,
+      attributed_revenue: 0,
+      total_contributed_revenue: 0,
+      single_touch_count: 0,
+      last_touch_count: 0,
+      last_touch_revenue: 0
     };
+    
+    // ad_id 기반 매핑
+    adIdToCreativeKey.set(key, key);
   });
 
   // [수정] 구매 기준 접근: 선택 기간 내 구매한 사람을 먼저 찾고, 각 구매의 30일 이내 여정을 분석
@@ -102,13 +108,11 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
   )];
 
   // 3단계: 구매한 visitor들의 전체 UTM 여정 조회 (30일 필터링은 각 구매별로 적용)
-  // 카페24 호환: visitors 테이블과 조인하여 봇 트래픽 제외
-  // FIX (2026-02-04): REPLACE 제거 - View/UV 계산과 동일하게 원본 값 사용
-  // - 기존: REPLACE('+', ' ')로 인해 '1+1끝나요'가 '1 1끝나요'로 변환되어 키 매칭 실패
-  // - 수정: 원본 값 그대로 사용하여 View/UV 키와 일치하도록 변경
+  // FIX (2026-02-05): utm_id(ad_id) 기반 - 정상 utm_id만 포함
   const journeyQuery = `
     SELECT 
       us.visitor_id,
+      us.utm_params->>'utm_id' as ad_id,
       us.utm_params->>'utm_content' as utm_content,
       COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') as utm_source,
       COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') as utm_medium,
@@ -120,6 +124,9 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
     WHERE us.visitor_id = ANY($1)
       AND us.utm_params->>'utm_content' IS NOT NULL
       AND v.is_bot = false
+      -- 정상 utm_id만 포함 (빈 값, {{ad.id}} 등 제외)
+      AND NULLIF(us.utm_params->>'utm_id', '') IS NOT NULL
+      AND us.utm_params->>'utm_id' NOT LIKE '{{%'
     ORDER BY us.visitor_id, us.sequence_order
   `;
 
@@ -135,12 +142,12 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
   });
   
   // FIX (2026-02-03): IP 기반 UTM 여정 조회 (쿠키 끊김 대응)
-  // 동일 IP의 다른 visitor_id들의 UTM 세션도 조회
-  // FIX (2026-02-04): REPLACE 제거 - View/UV 계산과 동일하게 원본 값 사용
+  // FIX (2026-02-05): utm_id(ad_id) 기반 - 정상 utm_id만 포함
   const ipJourneyQuery = `
     SELECT 
       v.ip_address,
       us.visitor_id,
+      us.utm_params->>'utm_id' as ad_id,
       us.utm_params->>'utm_content' as utm_content,
       COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') as utm_source,
       COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') as utm_medium,
@@ -153,6 +160,9 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
       AND us.visitor_id != ALL($2)
       AND us.utm_params->>'utm_content' IS NOT NULL
       AND v.is_bot = false
+      -- 정상 utm_id만 포함
+      AND NULLIF(us.utm_params->>'utm_id', '') IS NOT NULL
+      AND us.utm_params->>'utm_id' NOT LIKE '{{%'
     ORDER BY v.ip_address, us.entry_timestamp
   `;
   
@@ -170,12 +180,12 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
   });
   
   // FIX (2026-02-03): member_id 기반 UTM 여정 조회 (회원 기반 연결)
-  // 동일 member_id의 다른 visitor_id들의 UTM 세션도 조회
-  // FIX (2026-02-04): REPLACE 제거 - View/UV 계산과 동일하게 원본 값 사용
+  // FIX (2026-02-05): utm_id(ad_id) 기반 - 정상 utm_id만 포함
   const memberJourneyQuery = `
     SELECT 
       c2.member_id,
       us.visitor_id,
+      us.utm_params->>'utm_id' as ad_id,
       us.utm_params->>'utm_content' as utm_content,
       COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') as utm_source,
       COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') as utm_medium,
@@ -189,6 +199,9 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
       AND us.visitor_id != ALL($2)
       AND us.utm_params->>'utm_content' IS NOT NULL
       AND v.is_bot = false
+      -- 정상 utm_id만 포함
+      AND NULLIF(us.utm_params->>'utm_id', '') IS NOT NULL
+      AND us.utm_params->>'utm_id' NOT LIKE '{{%'
     ORDER BY c2.member_id, us.entry_timestamp
   `;
   
@@ -294,25 +307,27 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
 
     const finalPayment = parseFloat(purchase.final_payment) || 0;
 
+    // FIX (2026-02-05): ad_id 기반으로 고유 광고 수집
     // 여정에 있는 고유한 광고 조합 수집 (같은 광고를 여러 번 봤어도 1개로 카운트)
-    const uniqueCreativesMap = new Map(); // key -> touch 정보
+    const uniqueCreativesMap = new Map(); // ad_id 기반 key -> touch 정보
     filteredJourney.forEach(touch => {
-      const touchKey = `${touch.utm_content}||${touch.utm_source}||${touch.utm_medium}||${touch.utm_campaign}`;
+      // ad_id 기반 키 (utm_medium, utm_campaign 포함)
+      const adIdKey = `${touch.ad_id}||${touch.utm_medium}||${touch.utm_campaign}`;
       // 가장 마지막 sequence_order를 저장 (막타 판별용)
-      if (!uniqueCreativesMap.has(touchKey) || touch.sequence_order > uniqueCreativesMap.get(touchKey).sequence_order) {
-        uniqueCreativesMap.set(touchKey, touch);
+      if (!uniqueCreativesMap.has(adIdKey) || touch.sequence_order > uniqueCreativesMap.get(adIdKey).sequence_order) {
+        uniqueCreativesMap.set(adIdKey, touch);
       }
     });
     
-    const uniqueCreativeKeys = Array.from(uniqueCreativesMap.keys());
-    const isSingleTouch = uniqueCreativeKeys.length === 1; // 하나의 광고 조합만 봤는지
+    const uniqueAdIdKeys = Array.from(uniqueCreativesMap.keys());
+    const isSingleTouch = uniqueAdIdKeys.length === 1; // 하나의 광고만 봤는지
 
-    // 막타 키 생성
-    const lastTouchKey = `${lastTouch.utm_content}||${lastTouch.utm_source}||${lastTouch.utm_medium}||${lastTouch.utm_campaign}`;
+    // 막타 ad_id 키 생성
+    const lastTouchAdIdKey = `${lastTouch.ad_id}||${lastTouch.utm_medium}||${lastTouch.utm_campaign}`;
 
-    // 막타 제외한 고유 광고 조합 목록 (어시 광고들)
-    const assistCreativeKeys = uniqueCreativeKeys.filter(key => key !== lastTouchKey);
-    const assistCount = assistCreativeKeys.length;
+    // 막타 제외한 고유 광고 목록 (어시 광고들)
+    const assistAdIdKeys = uniqueAdIdKeys.filter(key => key !== lastTouchAdIdKey);
+    const assistCount = assistAdIdKeys.length;
 
     // 막타 광고 기여도 계산
     let lastTouchAttributedAmount;
@@ -325,40 +340,47 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
       lastTouchAttributedAmount = finalPayment * 0.5; // 막타 고정 50%
     }
 
-    // 막타 광고 기여도 누적 (정확한 조합에만 누적)
-    const contributedKeys = new Set(); // 이 구매에서 이미 기여도 받은 조합들
+    // FIX (2026-02-05): ad_id 기반 키로 직접 찾기
+    // 키 형식: ad_id||utm_medium||utm_campaign
+    const findCreativeKey = (adIdKey) => {
+      if (result[adIdKey]) {
+        return adIdKey;
+      }
+      return null;
+    };
+
+    // 막타 광고 기여도 누적
+    const lastTouchCreativeKey = findCreativeKey(lastTouchAdIdKey);
     
-    if (result[lastTouchKey]) {
-      result[lastTouchKey].contributed_orders_count += 1;
-      result[lastTouchKey].attributed_revenue += lastTouchAttributedAmount;
-      result[lastTouchKey].total_contributed_revenue += finalPayment;
+    if (lastTouchCreativeKey && result[lastTouchCreativeKey]) {
+      result[lastTouchCreativeKey].contributed_orders_count += 1;
+      result[lastTouchCreativeKey].attributed_revenue += lastTouchAttributedAmount;
+      result[lastTouchCreativeKey].total_contributed_revenue += finalPayment;
       
       // 막타(Last Touch): 마지막으로 본 광고에 항상 카운트
-      result[lastTouchKey].last_touch_count += 1;
-      result[lastTouchKey].last_touch_revenue += finalPayment;
+      result[lastTouchCreativeKey].last_touch_count += 1;
+      result[lastTouchCreativeKey].last_touch_revenue += finalPayment;
       
       // 순수 전환: 이 광고만 보고 구매한 경우에만 카운트
       if (isSingleTouch) {
-        result[lastTouchKey].single_touch_count += 1;
+        result[lastTouchCreativeKey].single_touch_count += 1;
       }
-      
-      contributedKeys.add(lastTouchKey); // 막타는 이미 처리했음을 표시
     }
 
     // 어시 광고들의 기여도 계산 (균등 분배)
-    // 50%를 어시 광고 수로 나눔
     const assistAttributedAmount = assistCount > 0 ? (finalPayment * 0.5) / assistCount : 0;
     
-    assistCreativeKeys.forEach(assistKey => {
-      // 이 조합이 result에 있는지 확인
-      if (!result[assistKey]) {
+    assistAdIdKeys.forEach(assistAdIdKey => {
+      const assistCreativeKey = findCreativeKey(assistAdIdKey);
+      
+      if (!assistCreativeKey || !result[assistCreativeKey]) {
         return;
       }
 
       // 기여도 누적 (균등 분배)
-      result[assistKey].contributed_orders_count += 1;
-      result[assistKey].attributed_revenue += assistAttributedAmount;
-      result[assistKey].total_contributed_revenue += finalPayment;
+      result[assistCreativeKey].contributed_orders_count += 1;
+      result[assistCreativeKey].attributed_revenue += assistAttributedAmount;
+      result[assistCreativeKey].total_contributed_revenue += finalPayment;
     });
   });
 

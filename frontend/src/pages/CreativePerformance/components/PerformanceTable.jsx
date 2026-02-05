@@ -772,7 +772,10 @@ function PerformanceTable({
         }}
         size="middle"
         rowClassName={(record, index) => {
-          return index % 2 === 0 ? 'table-row-even' : 'table-row-odd';
+          // FIX (2026-02-05): 메타 광고명과 매핑되지 않은 행에 연한 토마토색 배경
+          const baseClass = index % 2 === 0 ? 'table-row-even' : 'table-row-odd';
+          const unmatchedClass = record.is_meta_matched === false ? 'table-row-unmatched' : '';
+          return `${baseClass} ${unmatchedClass}`.trim();
         }}
         style={{
           borderRadius: '8px',
@@ -832,6 +835,21 @@ function PerformanceTable({
         /* 행 구분선 */
         .creative-performance-table .ant-table-tbody > tr > td {
           border-bottom: 1px solid #f0f0f0 !important;
+        }
+        /* FIX (2026-02-05): 메타 광고명과 매핑되지 않은 행 - 연한 토마토색 배경 */
+        .creative-performance-table .table-row-unmatched td {
+          background-color: #fff1f0 !important;
+        }
+        .creative-performance-table .table-row-unmatched td.ant-table-cell-fix-left,
+        .creative-performance-table .table-row-unmatched td.ant-table-cell-fix-right {
+          background-color: #fff1f0 !important;
+        }
+        .creative-performance-table .table-row-unmatched:hover td {
+          background-color: #ffccc7 !important;
+        }
+        .creative-performance-table .table-row-unmatched:hover td.ant-table-cell-fix-left,
+        .creative-performance-table .table-row-unmatched:hover td.ant-table-cell-fix-right {
+          background-color: #ffccc7 !important;
         }
       `}</style>
     </Card>
