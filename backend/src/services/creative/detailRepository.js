@@ -903,30 +903,61 @@ async function getRawTrafficSummary({ creative_name, utm_source, utm_medium, utm
  * - 기존: 기간 제한 없이 모든 세션 집계 → 과거 세션까지 합산되어 비정상적으로 큰 값
  * - 수정: 조회 기간 내 세션만 집계
  * 
+ * FIX (2026-02-05): ad_id 기반 조회 지원 추가
+ * - ad_id가 있으면 utm_id로 필터링 (메인 테이블과 동일한 기준)
+ * - ad_id가 없으면 기존 creative_name(utm_content) 기반 (fallback)
+ * 
  * 카페24 호환: visitors 테이블과 조인하여 봇 트래픽 제외
  */
-async function getVisitorSessionInfoForCreative({ visitorIds, creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate, maxDurationSeconds = 600 }) {
+async function getVisitorSessionInfoForCreative({ visitorIds, ad_id, creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate, maxDurationSeconds = 600 }) {
   if (visitorIds.length === 0) return {};
+  
+  // FIX (2026-02-05): ad_id 기반 모드 판별 (메인 테이블과 동일한 기준)
+  const useAdId = ad_id && ad_id !== '' && !ad_id.startsWith('{{');
   
   // 1단계: 해당 광고로 유입된 UTM 세션의 session_id 목록 조회 (조회 기간 내, 세션 중복 제거, 봇 제외)
   // FIX (2026-01-23): 같은 세션에서 광고를 여러 번 클릭한 경우 중복 제거
-  const sessionQuery = `
-    SELECT DISTINCT us.visitor_id, us.session_id, MIN(us.entry_timestamp) as entry_timestamp
-    FROM utm_sessions us
-    JOIN visitors v ON us.visitor_id = v.visitor_id
-    WHERE us.visitor_id = ANY($1)
-      AND us.utm_params->>'utm_content' = $2
-      AND COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $3
-      AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $4
-      AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $5
-      AND us.entry_timestamp >= $6
-      AND us.entry_timestamp <= $7
-      AND v.is_bot = false
-    GROUP BY us.visitor_id, us.session_id
-    ORDER BY us.visitor_id, MIN(us.entry_timestamp) DESC
-  `;
+  let sessionQuery;
+  let sessionQueryParams;
   
-  const sessionResult = await db.query(sessionQuery, [visitorIds, creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate]);
+  if (useAdId) {
+    // ad_id 기반 조회 (메인 테이블과 동일한 기준)
+    sessionQuery = `
+      SELECT DISTINCT us.visitor_id, us.session_id, MIN(us.entry_timestamp) as entry_timestamp
+      FROM utm_sessions us
+      JOIN visitors v ON us.visitor_id = v.visitor_id
+      WHERE us.visitor_id = ANY($1)
+        AND us.utm_params->>'utm_id' = $2
+        AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
+        AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
+        AND us.entry_timestamp >= $5
+        AND us.entry_timestamp <= $6
+        AND v.is_bot = false
+      GROUP BY us.visitor_id, us.session_id
+      ORDER BY us.visitor_id, MIN(us.entry_timestamp) DESC
+    `;
+    sessionQueryParams = [visitorIds, ad_id, utm_medium, utm_campaign, startDate, endDate];
+  } else {
+    // creative_name 기반 조회 (fallback)
+    sessionQuery = `
+      SELECT DISTINCT us.visitor_id, us.session_id, MIN(us.entry_timestamp) as entry_timestamp
+      FROM utm_sessions us
+      JOIN visitors v ON us.visitor_id = v.visitor_id
+      WHERE us.visitor_id = ANY($1)
+        AND us.utm_params->>'utm_content' = $2
+        AND COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $3
+        AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $4
+        AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $5
+        AND us.entry_timestamp >= $6
+        AND us.entry_timestamp <= $7
+        AND v.is_bot = false
+      GROUP BY us.visitor_id, us.session_id
+      ORDER BY us.visitor_id, MIN(us.entry_timestamp) DESC
+    `;
+    sessionQueryParams = [visitorIds, creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate];
+  }
+  
+  const sessionResult = await db.query(sessionQuery, sessionQueryParams);
   
   if (sessionResult.rows.length === 0) {
     return {};
@@ -1031,18 +1062,25 @@ async function getVisitorSessionInfoForCreative({ visitorIds, creative_name, utm
  * FIX (2026-01-27): Attribution Window (구매일 기준 30일) 적용으로 변경
  *   - 기존: 조회 기간 내 세션만 집계 → 여정 컬럼과 불일치 발생
  *   - 수정: 각 구매자의 구매일 기준 30일 이내 세션 집계 → 여정과 일관성 유지
+ * FIX (2026-02-05): ad_id 기반 조회 지원 추가
+ *   - ad_id가 있으면 utm_id로 필터링 (메인 테이블과 동일한 기준)
+ *   - ad_id가 없으면 기존 creative_name(utm_content) 기반 (fallback)
  * 카페24 호환: visitors 테이블과 조인하여 봇 트래픽 제외
  * 
  * @param {Object} params
  * @param {Array} params.purchaserOrders - [{visitor_id, order_date}] 구매자별 구매일 정보
- * @param {string} params.creative_name - 광고 소재 이름
+ * @param {string} params.ad_id - 광고 ID (utm_id) - 메인 테이블과 동일한 기준
+ * @param {string} params.creative_name - 광고 소재 이름 (fallback용)
  * @param {string} params.utm_source - UTM Source
  * @param {string} params.utm_medium - UTM Medium
  * @param {string} params.utm_campaign - UTM Campaign
  * @param {number} params.attributionWindowDays - Attribution Window 일수 (기본 30일)
  */
-async function getCreativeTouchCounts({ purchaserOrders, creative_name, utm_source, utm_medium, utm_campaign, attributionWindowDays = 30 }) {
+async function getCreativeTouchCounts({ purchaserOrders, ad_id, creative_name, utm_source, utm_medium, utm_campaign, attributionWindowDays = 30 }) {
   if (!purchaserOrders || purchaserOrders.length === 0) return {};
+  
+  // FIX (2026-02-05): ad_id 기반 모드 판별 (메인 테이블과 동일한 기준)
+  const useAdId = ad_id && ad_id !== '' && !ad_id.startsWith('{{');
   
   // FIX (2026-01-27): toISOString()은 UTC로 변환되어 타임존 문제 발생
   // DB의 entry_timestamp는 KST로 저장되어 있으므로, 로컬 시간 형식으로 변환해야 함
@@ -1060,27 +1098,55 @@ async function getCreativeTouchCounts({ purchaserOrders, creative_name, utm_sour
     ? `AND us.entry_timestamp >= pd.order_date - INTERVAL '${attributionWindowDays} days'`
     : '';
   
-  const query = `
-    WITH purchaser_dates AS (
-      SELECT * FROM (VALUES ${orderPairs}) AS t(visitor_id, order_date)
-    )
-    SELECT 
-      us.visitor_id,
-      COUNT(DISTINCT us.session_id) as touch_count
-    FROM utm_sessions us
-    JOIN visitors v ON us.visitor_id = v.visitor_id
-    JOIN purchaser_dates pd ON us.visitor_id = pd.visitor_id
-    WHERE us.utm_params->>'utm_content' = $1
-      AND COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2
-      AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
-      AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
-      ${attributionFilter}
-      AND us.entry_timestamp <= pd.order_date
-      AND v.is_bot = false
-    GROUP BY us.visitor_id
-  `;
+  let query;
+  let queryParams;
   
-  const result = await db.query(query, [creative_name, utm_source, utm_medium, utm_campaign]);
+  if (useAdId) {
+    // ad_id 기반 조회 (메인 테이블과 동일한 기준)
+    query = `
+      WITH purchaser_dates AS (
+        SELECT * FROM (VALUES ${orderPairs}) AS t(visitor_id, order_date)
+      )
+      SELECT 
+        us.visitor_id,
+        COUNT(DISTINCT us.session_id) as touch_count
+      FROM utm_sessions us
+      JOIN visitors v ON us.visitor_id = v.visitor_id
+      JOIN purchaser_dates pd ON us.visitor_id = pd.visitor_id
+      WHERE us.utm_params->>'utm_id' = $1
+        AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $2
+        AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $3
+        ${attributionFilter}
+        AND us.entry_timestamp <= pd.order_date
+        AND v.is_bot = false
+      GROUP BY us.visitor_id
+    `;
+    queryParams = [ad_id, utm_medium, utm_campaign];
+  } else {
+    // creative_name 기반 조회 (fallback)
+    query = `
+      WITH purchaser_dates AS (
+        SELECT * FROM (VALUES ${orderPairs}) AS t(visitor_id, order_date)
+      )
+      SELECT 
+        us.visitor_id,
+        COUNT(DISTINCT us.session_id) as touch_count
+      FROM utm_sessions us
+      JOIN visitors v ON us.visitor_id = v.visitor_id
+      JOIN purchaser_dates pd ON us.visitor_id = pd.visitor_id
+      WHERE us.utm_params->>'utm_content' = $1
+        AND COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2
+        AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
+        AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
+        ${attributionFilter}
+        AND us.entry_timestamp <= pd.order_date
+        AND v.is_bot = false
+      GROUP BY us.visitor_id
+    `;
+    queryParams = [creative_name, utm_source, utm_medium, utm_campaign];
+  }
+  
+  const result = await db.query(query, queryParams);
   
   const touchCountMap = {};
   result.rows.forEach(row => {

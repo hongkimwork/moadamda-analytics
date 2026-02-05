@@ -464,9 +464,11 @@ async function getCreativeOrders(params) {
     order_date: order.order_date
   }));
   
+  // FIX (2026-02-05): ad_id 기반 조회 지원 - 기여도 계산과 동일한 기준으로 세션/접촉 횟수 조회
   const [sessionInfoMap, touchCountMap, visitCountMap] = await Promise.all([
     repository.getVisitorSessionInfoForCreative({
       visitorIds: contributedVisitorArray,
+      ad_id,
       creative_name,
       utm_source,
       utm_medium,
@@ -477,6 +479,7 @@ async function getCreativeOrders(params) {
     }),
     repository.getCreativeTouchCounts({
       purchaserOrders,
+      ad_id,
       creative_name,
       utm_source,
       utm_medium,
