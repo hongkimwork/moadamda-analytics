@@ -1,4 +1,4 @@
-| 2026-02-05 | 광고접촉여정기반계산 | detailService.js |
+| 2026-02-05 | 광고접촉visitor기반수정 | detailService.js |
 | 2026-02-05 | 주문상세모달ad_id기반변경 | detailService.js |
 | 2026-02-05 | 세션타임아웃서버검증 | repository.js |
 | 2026-02-05 | 세션쿠키만료안정성개선 | tracker-v055.js |

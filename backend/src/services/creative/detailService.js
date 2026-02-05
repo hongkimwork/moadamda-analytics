@@ -442,9 +442,15 @@ async function getCreativeOrders(params) {
       });
     });
     
-    // FIX (2026-02-05): 광고 접촉 횟수를 여정에서 직접 계산 (IP/member_id 병합된 데이터 사용)
-    // 별도 DB 조회는 visitor_id만 사용하므로 IP/member_id로 연결된 세션이 누락됨
-    const adTouchCount = journey.filter(touch => {
+    // FIX (2026-02-05): 광고 접촉 횟수는 visitor_id 기반 여정에서만 계산
+    // - IP/member_id 병합 여정(journey)을 사용하면 여정 분석 모달과 불일치
+    // - 여정 분석 모달은 visitor_id 기반 여정만 표시하므로 동일한 기준 적용
+    // - 기여도 계산은 병합 여정 사용, 접촉 횟수는 visitor_id 기반만 사용
+    const visitorOnlyJourney = visitorJourneys[order.visitor_id] || [];
+    const filteredVisitorJourney = filterJourneyByAttributionWindow(
+      visitorOnlyJourney, order.order_date, attributionWindowDays
+    );
+    const adTouchCount = filteredVisitorJourney.filter(touch => {
       const touchKey = useAdId
         ? `${touch.ad_id}||${touch.utm_medium}||${touch.utm_campaign}`
         : `${touch.utm_content}||${touch.utm_source}||${touch.utm_medium}||${touch.utm_campaign}`;
