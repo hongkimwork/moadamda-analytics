@@ -110,20 +110,22 @@ kill -9 <PID>
 
 SSH를 통해 프로덕션 PostgreSQL에 연결:
 
+> ⚠️ **SSH 포트**: 기본 22번이 아닌 **2222번 포트** 사용 필수 (`-p 2222`)
+
 ```bash
 # 데이터베이스 연결
-ssh root@49.50.139.223 'docker exec -i ma-postgres psql -U moadamda -d analytics'
+ssh -p 2222 root@49.50.139.223 'docker exec -i ma-postgres psql -U moadamda -d analytics'
 
 # 일반적인 쿼리
-ssh root@49.50.139.223 'docker exec -i ma-postgres psql -U moadamda -d analytics -c "
+ssh -p 2222 root@49.50.139.223 'docker exec -i ma-postgres psql -U moadamda -d analytics -c "
   SELECT COUNT(*) FROM visitors;
 "'
 
-ssh root@49.50.139.223 'docker exec -i ma-postgres psql -U moadamda -d analytics -c "
+ssh -p 2222 root@49.50.139.223 'docker exec -i ma-postgres psql -U moadamda -d analytics -c "
   SELECT COUNT(*) FROM pageviews WHERE timestamp >= CURRENT_DATE;
 "'
 
-ssh root@49.50.139.223 'docker exec -i ma-postgres psql -U moadamda -d analytics -c "
+ssh -p 2222 root@49.50.139.223 'docker exec -i ma-postgres psql -U moadamda -d analytics -c "
   SELECT * FROM conversions ORDER BY timestamp DESC LIMIT 10;
 "'
 ```
@@ -155,7 +157,7 @@ git commit -m "변경사항 설명"
 git push origin main  # 또는 feature 브랜치
 
 # 2. 서버: 단일 SSH 명령으로 배포 (1-2분 소요)
-ssh root@49.50.139.223 '
+ssh -p 2222 root@49.50.139.223 '
   cd /root/moadamda-analytics &&
   git checkout main &&
   git pull origin main &&
@@ -167,7 +169,7 @@ ssh root@49.50.139.223 '
 **특정 브랜치 배포:**
 
 ```bash
-ssh root@49.50.139.223 '
+ssh -p 2222 root@49.50.139.223 '
   cd /root/moadamda-analytics &&
   git checkout feature/my-branch &&
   git pull origin feature/my-branch &&
@@ -180,7 +182,7 @@ ssh root@49.50.139.223 '
 
 ```bash
 # 로그 확인
-ssh root@49.50.139.223 'cd /root/moadamda-analytics && docker-compose -f docker-compose.prod.yml logs backend --tail 50'
+ssh -p 2222 root@49.50.139.223 'cd /root/moadamda-analytics && docker-compose -f docker-compose.prod.yml logs backend --tail 50'
 
 # API 상태 테스트
 curl https://moadamda-analytics.co.kr/health
@@ -228,13 +230,11 @@ curl https://moadamda-analytics.co.kr/health
 - 금액 > 0: 굵게, 파란색/초록색
 - 금액 = 0: 회색 (#999)
 
-### 3. 프로젝트 상태 추적
+### 3. 프로젝트 참고 문서
 
-**매 세션 시작 시 PROJECT_STATUS.md를 먼저 읽어** 현재 단계와 진행 상황을 파악하세요.
-
-- 시스템 버전, 트래커 버전, 최근 작업 로그는 `PROJECT_STATUS.md`에서 확인
 - 다음 개발 계획: `CHANNEL_FUNNEL_PRD.md` (채널별 전환 퍼널 위젯)
 - DB 구조: `docs/database-structure.md`
+- 현재 트래커 버전: `tracker/build/VERSION.txt` 참조
 
 ## 주요 기술 패턴
 
@@ -408,13 +408,12 @@ CAFE24_API_VERSION=2025-09-01
 ## 프로젝트 문서
 
 - `README.md` - 빠른 시작 가이드 및 단계별 로드맵
-- `PROJECT_STATUS.md` - **매 세션마다 먼저 읽으세요** - 현재 개발 상태, 최근 작업 로그
 - `CHANNEL_FUNNEL_PRD.md` - 채널별 전환 퍼널 위젯 개발 명세서 (다음 개발)
 - `docs/database-structure.md` - DB 스키마 상세
 - `.cursor/rules/` - 개발 규칙 및 가이드라인:
   - `dev.mdc` - 로컬 개발 환경 설정
   - `deploy.mdc` - 서버 배포 절차
-  - `data-validation.mdc` - 데이터 품질 검증 규칙 (중요)
+  - `data-validation.mdc` - 데이터 품질 검증 규칙 (중요, 항상 적용)
   - `tracker-versioning.mdc` - 트래커 버전 관리
 
 **주의**: `moadamda-access-log/` 폴더는 다른 개발자가 만든 레퍼런스 프로젝트이며, 현재 프로젝트와 연동되지 않음

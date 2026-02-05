@@ -442,16 +442,6 @@ async function getCreativeOrders(params) {
       });
     });
     
-    // FIX (2026-02-05): 광고 접촉 횟수는 IP/member_id 병합 여정(journey) 사용
-    // - 고객 여정 분석 모달과 동일한 기준 (visitor_id + IP + member_id 병합)
-    // - journey는 이미 Attribution Window 필터링 완료 (353줄)
-    const adTouchCount = journey.filter(touch => {
-      const touchKey = useAdId
-        ? `${touch.ad_id}||${touch.utm_medium}||${touch.utm_campaign}`
-        : `${touch.utm_content}||${touch.utm_source}||${touch.utm_medium}||${touch.utm_campaign}`;
-      return touchKey === targetCreativeKey;
-    }).length;
-    
     contributedOrders.push({
       ...order,
       is_last_touch: isLastTouch,
@@ -460,8 +450,7 @@ async function getCreativeOrders(params) {
       journey_creative_count: journeyCreativeCount,
       contribution_rate: contributionRate,
       attributed_amount: Math.round(attributedAmount),
-      journey: journeyInfo,
-      ad_touch_count: adTouchCount  // FIX (2026-02-05): 여정에서 직접 계산한 접촉 횟수
+      journey: journeyInfo
     });
   });
   
@@ -528,8 +517,6 @@ async function getCreativeOrders(params) {
       session_duration: sessionInfo.duration_seconds,
       last_touch_duration: sessionInfo.last_touch_duration,
       last_touch_pageviews: sessionInfo.last_touch_pageviews,
-      // FIX (2026-02-05): 여정에서 직접 계산한 접촉 횟수 사용 (IP/member_id 병합 반영)
-      ad_touch_count: order.ad_touch_count,
       ad_visit_count: sessionInfo.visit_count,
       total_visits: totalVisits
     };

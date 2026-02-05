@@ -209,22 +209,7 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange, attributio
       sortOrder: sortedInfo.columnKey === 'final_payment' ? sortedInfo.order : null,
       render: (amount) => <Text strong style={{ fontSize: 13 }}>{formatCurrency(amount)}</Text>
     },
-    {
-      title: (
-        <Tooltip title="구매자가 이 광고를 총 몇 번 봤는지">
-          <span style={{ cursor: 'help' }}>광고접촉</span>
-        </Tooltip>
-      ),
-      dataIndex: 'ad_touch_count',
-      key: 'ad_touch_count',
-      width: 70,
-      align: 'center',
-      render: (count) => (
-        <Tag color={count >= 3 ? 'purple' : count >= 2 ? 'blue' : 'default'} style={{ margin: 0 }}>
-          {count || 0}회
-        </Tag>
-      )
-    },
+
     {
       title: (
         <Tooltip title="이 광고가 해당 주문에서 수행한 역할">

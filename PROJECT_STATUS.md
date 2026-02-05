@@ -1,3 +1,4 @@
+| 2026-02-05 | 광고접촉중복제거수정 | detailService.js |
 | 2026-02-05 | 여정모달구매일중복수정 | journeyCalculations.js |
 | 2026-02-05 | 광고접촉IP/member병합 | detailService.js |
 | 2026-02-05 | 광고접촉visitor기반수정 | detailService.js |
@@ -12,4 +13,3 @@
 | 2026-02-05 | 미매핑광고배경색표시 | PerformanceTable.jsx |
 | 2026-02-04 | 광고명매핑양방향비교추가 | metaAdNameMapping.js |
 | 2026-02-04 | +기호키매칭버그수정 | detailRepository.js |
-| 2026-02-04 | 과거데이터타임존수정 | pageviews테이블(DB) |
