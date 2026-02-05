@@ -442,6 +442,15 @@ async function getCreativeOrders(params) {
       });
     });
     
+    // FIX (2026-02-05): 광고 접촉 횟수를 여정에서 직접 계산 (IP/member_id 병합된 데이터 사용)
+    // 별도 DB 조회는 visitor_id만 사용하므로 IP/member_id로 연결된 세션이 누락됨
+    const adTouchCount = journey.filter(touch => {
+      const touchKey = useAdId
+        ? `${touch.ad_id}||${touch.utm_medium}||${touch.utm_campaign}`
+        : `${touch.utm_content}||${touch.utm_source}||${touch.utm_medium}||${touch.utm_campaign}`;
+      return touchKey === targetCreativeKey;
+    }).length;
+    
     contributedOrders.push({
       ...order,
       is_last_touch: isLastTouch,
@@ -450,22 +459,18 @@ async function getCreativeOrders(params) {
       journey_creative_count: journeyCreativeCount,
       contribution_rate: contributionRate,
       attributed_amount: Math.round(attributedAmount),
-      journey: journeyInfo
+      journey: journeyInfo,
+      ad_touch_count: adTouchCount  // FIX (2026-02-05): 여정에서 직접 계산한 접촉 횟수
     });
   });
   
   // 기여 주문의 visitor들에 대한 추가 정보 조회
   const contributedVisitorArray = Array.from(contributedVisitorIds);
   
-  // FIX (2026-01-27): 광고 접촉 횟수 계산 시 구매일 기준 Attribution Window 적용
-  // 각 구매자의 구매일을 전달하여 구매일 기준 30일 이내 세션만 집계
-  const purchaserOrders = contributedOrders.map(order => ({
-    visitor_id: order.visitor_id,
-    order_date: order.order_date
-  }));
-  
-  // FIX (2026-02-05): ad_id 기반 조회 지원 - 기여도 계산과 동일한 기준으로 세션/접촉 횟수 조회
-  const [sessionInfoMap, touchCountMap, visitCountMap] = await Promise.all([
+  // FIX (2026-02-05): 광고 접촉 횟수는 여정에서 직접 계산하므로 getCreativeTouchCounts 호출 제거
+  // - 기존: getCreativeTouchCounts가 visitor_id만 사용하여 IP/member_id 연결 세션 누락
+  // - 수정: 기여도 계산 시 사용한 여정 (IP/member_id 병합)에서 직접 접촉 횟수 계산
+  const [sessionInfoMap, visitCountMap] = await Promise.all([
     repository.getVisitorSessionInfoForCreative({
       visitorIds: contributedVisitorArray,
       ad_id,
@@ -476,15 +481,6 @@ async function getCreativeOrders(params) {
       startDate,
       endDate,
       maxDurationSeconds
-    }),
-    repository.getCreativeTouchCounts({
-      purchaserOrders,
-      ad_id,
-      creative_name,
-      utm_source,
-      utm_medium,
-      utm_campaign,
-      attributionWindowDays
     }),
     repository.getVisitorTotalVisits({ visitorIds: contributedVisitorArray })
   ]);
@@ -509,7 +505,6 @@ async function getCreativeOrders(params) {
       last_touch_pageviews: 0,
       visit_count: 0
     };
-    const touchCount = touchCountMap[order.visitor_id] || 0;
     const totalVisits = visitCountMap[order.visitor_id] || 0;
     
     return {
@@ -532,7 +527,8 @@ async function getCreativeOrders(params) {
       session_duration: sessionInfo.duration_seconds,
       last_touch_duration: sessionInfo.last_touch_duration,
       last_touch_pageviews: sessionInfo.last_touch_pageviews,
-      ad_touch_count: touchCount,
+      // FIX (2026-02-05): 여정에서 직접 계산한 접촉 횟수 사용 (IP/member_id 병합 반영)
+      ad_touch_count: order.ad_touch_count,
       ad_visit_count: sessionInfo.visit_count,
       total_visits: totalVisits
     };
