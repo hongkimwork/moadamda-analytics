@@ -80,14 +80,16 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange, attributio
     if (!creative || !dateRange) return;
     setLoading(true);
     try {
+      // FIX (2026-02-05): ad_id 추가 (메인 테이블과 동일한 기준으로 조회)
       const response = await axios.post(`${API_URL}/api/creative-performance/orders`, {
+        ad_id: creative.ad_id,
         creative_name: creative.creative_name,
         utm_source: creative.utm_source,
         utm_medium: creative.utm_medium,
         utm_campaign: creative.utm_campaign,
         start: dateRange.start,
         end: dateRange.end,
-        attribution_window: attributionWindow // FIX (2026-02-04): Attribution Window
+        attribution_window: attributionWindow
       });
       if (response.data.success) {
         setOrders(response.data.data || []);

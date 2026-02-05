@@ -143,12 +143,24 @@ async function getVisitorOrders({ visitorIds, startDate, endDate }) {
 /**
  * Visitor들의 UTM 여정 조회
  * FIX (2026-02-04): REPLACE 제거 - View/UV 계산과 동일하게 원본 값 사용
+ * FIX (2026-02-05): ad_id 추가 및 정상 utm_id 필터 옵션 추가
  * 카페24 호환: visitors 테이블과 조인하여 봇 트래픽 제외
+ * 
+ * @param {Object} params
+ * @param {Array} params.visitorIds - 조회할 visitor ID 배열
+ * @param {boolean} params.onlyValidAdId - true면 정상 utm_id만 포함 (메인 테이블과 동일한 기준)
  */
-async function getVisitorJourneys({ visitorIds }) {
+async function getVisitorJourneys({ visitorIds, onlyValidAdId = false }) {
+  // 정상 utm_id 필터 조건 (메인 테이블과 동일: 빈 값, {{ad.id}} 등 제외)
+  const adIdFilter = onlyValidAdId
+    ? `AND NULLIF(us.utm_params->>'utm_id', '') IS NOT NULL
+       AND us.utm_params->>'utm_id' NOT LIKE '{{%'`
+    : '';
+  
   const query = `
     SELECT 
       us.visitor_id,
+      us.utm_params->>'utm_id' as ad_id,
       us.utm_params->>'utm_content' as utm_content,
       COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') as utm_source,
       COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') as utm_medium,
@@ -160,6 +172,7 @@ async function getVisitorJourneys({ visitorIds }) {
     WHERE us.visitor_id = ANY($1)
       AND us.utm_params->>'utm_content' IS NOT NULL
       AND v.is_bot = false
+      ${adIdFilter}
     ORDER BY us.visitor_id, us.sequence_order
   `;
   
@@ -171,16 +184,26 @@ async function getVisitorJourneys({ visitorIds }) {
  * IP 기반 UTM 여정 조회 (쿠키 끊김 대응)
  * 동일 IP의 다른 visitor_id들의 UTM 세션도 조회
  * FIX (2026-02-03): 상세 모달에서도 IP 기반 연결 적용
+ * FIX (2026-02-05): ad_id 추가 및 정상 utm_id 필터 옵션 추가
+ * 
+ * @param {Object} params
+ * @param {boolean} params.onlyValidAdId - true면 정상 utm_id만 포함
  */
-async function getVisitorJourneysByIp({ purchaserIps, purchaserIds }) {
+async function getVisitorJourneysByIp({ purchaserIps, purchaserIds, onlyValidAdId = false }) {
   if (!purchaserIps || purchaserIps.length === 0) {
     return [];
   }
+  
+  const adIdFilter = onlyValidAdId
+    ? `AND NULLIF(us.utm_params->>'utm_id', '') IS NOT NULL
+       AND us.utm_params->>'utm_id' NOT LIKE '{{%'`
+    : '';
   
   const query = `
     SELECT 
       v.ip_address,
       us.visitor_id,
+      us.utm_params->>'utm_id' as ad_id,
       us.utm_params->>'utm_content' as utm_content,
       COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') as utm_source,
       COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') as utm_medium,
@@ -193,6 +216,7 @@ async function getVisitorJourneysByIp({ purchaserIps, purchaserIds }) {
       AND us.visitor_id != ALL($2)
       AND us.utm_params->>'utm_content' IS NOT NULL
       AND v.is_bot = false
+      ${adIdFilter}
     ORDER BY v.ip_address, us.entry_timestamp
   `;
   
@@ -204,16 +228,26 @@ async function getVisitorJourneysByIp({ purchaserIps, purchaserIds }) {
  * member_id 기반 UTM 여정 조회 (쿠키 끊김 대응)
  * 동일 member_id의 다른 visitor_id들의 UTM 세션도 조회
  * FIX (2026-02-03): 상세 모달에서도 member_id 기반 연결 적용
+ * FIX (2026-02-05): ad_id 추가 및 정상 utm_id 필터 옵션 추가
+ * 
+ * @param {Object} params
+ * @param {boolean} params.onlyValidAdId - true면 정상 utm_id만 포함
  */
-async function getVisitorJourneysByMemberId({ purchaserMemberIds, purchaserIds }) {
+async function getVisitorJourneysByMemberId({ purchaserMemberIds, purchaserIds, onlyValidAdId = false }) {
   if (!purchaserMemberIds || purchaserMemberIds.length === 0) {
     return [];
   }
+  
+  const adIdFilter = onlyValidAdId
+    ? `AND NULLIF(us.utm_params->>'utm_id', '') IS NOT NULL
+       AND us.utm_params->>'utm_id' NOT LIKE '{{%'`
+    : '';
   
   const query = `
     SELECT 
       c2.member_id,
       us.visitor_id,
+      us.utm_params->>'utm_id' as ad_id,
       us.utm_params->>'utm_content' as utm_content,
       COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') as utm_source,
       COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') as utm_medium,
@@ -227,6 +261,7 @@ async function getVisitorJourneysByMemberId({ purchaserMemberIds, purchaserIds }
       AND us.visitor_id != ALL($2)
       AND us.utm_params->>'utm_content' IS NOT NULL
       AND v.is_bot = false
+      ${adIdFilter}
     ORDER BY c2.member_id, us.entry_timestamp
   `;
   

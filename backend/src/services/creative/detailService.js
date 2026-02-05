@@ -180,9 +180,12 @@ function filterJourneyByAttributionWindow(journey, purchaseDate, attributionWind
  * - 해당 광고가 기간 내 여정에 포함된 경우만 기여 주문으로 인정
  * 
  * FIX (2026-02-04): Attribution Window를 사용자가 선택할 수 있도록 변경
+ * FIX (2026-02-05): ad_id 기반으로 변경 (메인 테이블과 동일한 기준)
+ * - ad_id가 있으면 ad_id 기반으로 기여도 계산 (메인 테이블과 일치)
+ * - ad_id가 없으면 기존 creative_name 기반 (fallback)
  */
 async function getCreativeOrders(params) {
-  const { creative_name, utm_source, utm_medium, utm_campaign, start, end, max_duration = 600, attribution_window } = params;
+  const { ad_id, creative_name, utm_source, utm_medium, utm_campaign, start, end, max_duration = 600, attribution_window } = params;
   
   // FIX (2026-02-04): Attribution Window 파싱
   let attributionWindowDays = DEFAULT_ATTRIBUTION_WINDOW_DAYS;
@@ -201,7 +204,14 @@ async function getCreativeOrders(params) {
   validateCreativeParams(params);
   
   const { startDate, endDate } = parseDates(start, end);
-  const targetCreativeKey = `${creative_name}||${utm_source}||${utm_medium}||${utm_campaign}`;
+  
+  // FIX (2026-02-05): ad_id 기반 모드 판별 (메인 테이블과 동일한 기준)
+  const useAdId = ad_id && ad_id !== '' && !ad_id.startsWith('{{');
+  
+  // 타겟 광고 키 생성 (ad_id 기반 또는 creative_name 기반)
+  const targetCreativeKey = useAdId
+    ? `${ad_id}||${utm_medium}||${utm_campaign}`
+    : `${creative_name}||${utm_source}||${utm_medium}||${utm_campaign}`;
   
   // 이상치 기준 검증 (5분~2시간30분, 초 단위)
   const maxDurationSeconds = Math.min(Math.max(parseInt(max_duration) || 600, 300), 9000);
@@ -255,10 +265,11 @@ async function getCreativeOrders(params) {
   )];
   
   // visitor_id 기반 여정 + IP/member_id 기반 여정 병렬 조회
+  // FIX (2026-02-05): ad_id 모드일 때 정상 utm_id만 포함 (메인 테이블과 동일)
   const [journeyRows, ipJourneyRows, memberJourneyRows] = await Promise.all([
-    repository.getVisitorJourneys({ visitorIds: purchaserIds }),
-    repository.getVisitorJourneysByIp({ purchaserIps, purchaserIds }),
-    repository.getVisitorJourneysByMemberId({ purchaserMemberIds, purchaserIds })
+    repository.getVisitorJourneys({ visitorIds: purchaserIds, onlyValidAdId: useAdId }),
+    repository.getVisitorJourneysByIp({ purchaserIps, purchaserIds, onlyValidAdId: useAdId }),
+    repository.getVisitorJourneysByMemberId({ purchaserMemberIds, purchaserIds, onlyValidAdId: useAdId })
   ]);
   
   // visitor별 여정 그룹화
@@ -343,9 +354,12 @@ async function getCreativeOrders(params) {
     if (journey.length === 0) return;
     
     // 고유한 광고 조합 수집
+    // FIX (2026-02-05): ad_id 기반일 때 ad_id를 키로 사용 (메인 테이블과 동일)
     const uniqueCreativesMap = new Map();
     journey.forEach(touch => {
-      const touchKey = `${touch.utm_content}||${touch.utm_source}||${touch.utm_medium}||${touch.utm_campaign}`;
+      const touchKey = useAdId
+        ? `${touch.ad_id}||${touch.utm_medium}||${touch.utm_campaign}`
+        : `${touch.utm_content}||${touch.utm_source}||${touch.utm_medium}||${touch.utm_campaign}`;
       if (!uniqueCreativesMap.has(touchKey) || touch.sequence_order > uniqueCreativesMap.get(touchKey).sequence_order) {
         uniqueCreativesMap.set(touchKey, touch);
       }
@@ -353,7 +367,7 @@ async function getCreativeOrders(params) {
     
     const uniqueCreativeKeys = Array.from(uniqueCreativesMap.keys());
     
-    // 해당 광고가 30일 이내 여정에 포함되어 있는지 확인
+    // 해당 광고가 Attribution Window 이내 여정에 포함되어 있는지 확인
     if (!uniqueCreativeKeys.includes(targetCreativeKey)) return;
     
     contributedVisitorIds.add(order.visitor_id);
@@ -362,7 +376,10 @@ async function getCreativeOrders(params) {
     const lastTouch = journey.reduce((max, current) => 
       current.sequence_order > max.sequence_order ? current : max
     );
-    const lastTouchKey = `${lastTouch.utm_content}||${lastTouch.utm_source}||${lastTouch.utm_medium}||${lastTouch.utm_campaign}`;
+    // FIX (2026-02-05): ad_id 기반일 때 ad_id를 키로 사용
+    const lastTouchKey = useAdId
+      ? `${lastTouch.ad_id}||${lastTouch.utm_medium}||${lastTouch.utm_campaign}`
+      : `${lastTouch.utm_content}||${lastTouch.utm_source}||${lastTouch.utm_medium}||${lastTouch.utm_campaign}`;
     const isLastTouch = lastTouchKey === targetCreativeKey;
     const isSingleTouch = uniqueCreativeKeys.length === 1;
     
@@ -413,6 +430,7 @@ async function getCreativeOrders(params) {
       const isLast = key === lastTouchKey;
       journeyInfo.push({
         order: index + 1,
+        ad_id: touch.ad_id, // FIX (2026-02-05): ad_id 추가
         creative_name: touch.utm_content,
         utm_source: touch.utm_source,
         utm_medium: touch.utm_medium,

@@ -115,8 +115,10 @@ function CreativePerformance() {
   };
 
   // 주문 보기 버튼 클릭 핸들러
+  // FIX (2026-02-05): ad_id 추가 (메인 테이블과 동일한 기준으로 조회)
   const handleViewOrders = (record) => {
     setSelectedCreative({
+      ad_id: record.ad_id,
       creative_name: record.creative_name,
       utm_source: record.utm_source,
       utm_medium: record.utm_medium,
