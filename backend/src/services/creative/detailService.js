@@ -252,11 +252,8 @@ async function getCreativeOrders(params) {
     [o.visitor_id, o.session_visitor_id].filter(Boolean)
   ))];
   
-  // IP 주소 수집 (쿠키 끊김 대응)
-  const purchaserIps = [...new Set(allOrders
-    .map(o => o.ip_address)
-    .filter(ip => ip && ip !== 'unknown')
-  )];
+  // FIX (2026-02-05): IP 주소 수집 제거 - IP 기반 여정 병합 제거로 불필요
+  // - moadamda-access-log 방식: IP 기반은 참고 정보로만 사용
   
   // member_id 수집 (회원 기반 연결)
   const purchaserMemberIds = [...new Set(allOrders
@@ -264,25 +261,18 @@ async function getCreativeOrders(params) {
     .filter(id => id && id !== '')
   )];
   
-  // visitor_id 기반 여정 + IP/member_id 기반 여정 병렬 조회
+  // visitor_id 기반 여정 + member_id 기반 여정 병렬 조회
   // FIX (2026-02-05): ad_id 모드일 때 정상 utm_id만 포함 (메인 테이블과 동일)
-  const [journeyRows, ipJourneyRows, memberJourneyRows] = await Promise.all([
+  // FIX (2026-02-05): IP 기반 여정 병합 제거 - moadamda-access-log 방식 적용
+  // - IP 기반은 다른 사용자의 행동이 병합될 수 있어 정확도 문제 발생
+  // - member_id 기반만 유지 (동일 회원의 다른 기기)
+  const [journeyRows, memberJourneyRows] = await Promise.all([
     repository.getVisitorJourneys({ visitorIds: purchaserIds, onlyValidAdId: useAdId }),
-    repository.getVisitorJourneysByIp({ purchaserIps, purchaserIds, onlyValidAdId: useAdId }),
     repository.getVisitorJourneysByMemberId({ purchaserMemberIds, purchaserIds, onlyValidAdId: useAdId })
   ]);
   
   // visitor별 여정 그룹화
   const visitorJourneys = groupJourneysByVisitor(journeyRows);
-  
-  // IP별 여정 그룹화
-  const ipJourneys = {};
-  ipJourneyRows.forEach(row => {
-    if (!ipJourneys[row.ip_address]) {
-      ipJourneys[row.ip_address] = [];
-    }
-    ipJourneys[row.ip_address].push(row);
-  });
   
   // member_id별 여정 그룹화
   const memberJourneys = {};
@@ -311,22 +301,11 @@ async function getCreativeOrders(params) {
       fullJourney = visitorJourneys[order.session_visitor_id] || [];
     }
     
-    // IP 기반 여정 병합 (쿠키 끊김 대응)
-    if (order.ip_address && order.ip_address !== 'unknown') {
-      const ipJourney = ipJourneys[order.ip_address] || [];
-      if (ipJourney.length > 0) {
-        const existingKeys = new Set(fullJourney.map(j => 
-          `${j.entry_timestamp}||${j.utm_content}`
-        ));
-        const newTouches = ipJourney.filter(j => {
-          const key = `${j.entry_timestamp}||${j.utm_content}`;
-          return !existingKeys.has(key);
-        });
-        fullJourney = [...fullJourney, ...newTouches];
-      }
-    }
+    // FIX (2026-02-05): IP 기반 여정 병합 제거
+    // - 같은 IP의 다른 사용자 행동이 병합되어 오매칭 발생
+    // - moadamda-access-log 방식: IP 기반은 참고 정보로만 사용
     
-    // member_id 기반 여정 병합 (회원 기반 연결)
+    // member_id 기반 여정 병합 (회원 기반 연결 - 유지)
     if (order.member_id && order.member_id !== '') {
       const memberJourney = memberJourneys[order.member_id] || [];
       if (memberJourney.length > 0) {
@@ -341,7 +320,7 @@ async function getCreativeOrders(params) {
       }
     }
     
-    // IP/member_id 병합 후 시간순 정렬 및 sequence_order 재할당
+    // member_id 병합 후 시간순 정렬 및 sequence_order 재할당
     if (fullJourney.length > 1) {
       fullJourney.sort((a, b) => new Date(a.entry_timestamp) - new Date(b.entry_timestamp));
       fullJourney = fullJourney.map((j, idx) => ({ ...j, sequence_order: idx + 1 }));

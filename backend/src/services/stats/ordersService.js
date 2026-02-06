@@ -442,15 +442,26 @@ async function getOrderDetail(orderId, attributionWindowDays = 30) {
     original_visitor_id: row.visitor_id // 원래 어떤 visitor_id였는지
   }));
   
-  // UTM 히스토리 병합 (중복 제거: 같은 entry_time의 같은 utm_content)
-  const allUtmHistory = [...visitorUtmHistory, ...ipUtmHistory, ...memberUtmHistory];
-  const utmHistory = allUtmHistory
+  // FIX (2026-02-05): UTM 히스토리 분리 - moadamda-access-log 방식 적용
+  // - utm_history: visitor_id + member_id 기반만 (어트리뷰션 계산용)
+  // - ip_utm_history: IP 기반 (참고 정보로만 표시)
+  
+  // visitor_id + member_id 기반 UTM 히스토리 (어트리뷰션용)
+  const mainUtmHistory = [...visitorUtmHistory, ...memberUtmHistory];
+  const utmHistory = mainUtmHistory
     .filter((utm, idx, arr) => {
       // 중복 제거: 같은 entry_time과 utm_content 조합은 첫 번째만
       return arr.findIndex(u => 
         u.entry_time === utm.entry_time && u.utm_content === utm.utm_content
       ) === idx;
     })
+    .sort((a, b) => new Date(a.entry_time) - new Date(b.entry_time));
+  
+  // IP 기반 UTM 히스토리 (참고 정보용 - 별도 표시)
+  // 이미 utm_history에 포함된 것은 제외
+  const existingUtmKeys = new Set(utmHistory.map(u => `${u.entry_time}||${u.utm_content}`));
+  const ipOnlyUtmHistory = ipUtmHistory
+    .filter(utm => !existingUtmKeys.has(`${utm.entry_time}||${utm.utm_content}`))
     .sort((a, b) => new Date(a.entry_time) - new Date(b.entry_time));
 
   const sameIpVisitsMapped = sameIpVisits.map(row => ({
@@ -560,19 +571,23 @@ async function getOrderDetail(orderId, attributionWindowDays = 30) {
     // 기존 호환성 유지 (deprecated)
     page_path: purchaseJourneyPages,
     utm_history: utmHistory,
+    // FIX (2026-02-05): IP 기반 UTM 히스토리를 별도 필드로 분리
+    // - moadamda-access-log 방식: IP 기반은 참고 정보로만 표시
+    // - utm_history에는 visitor_id + member_id 기반만 포함
+    ip_utm_history: ipOnlyUtmHistory,
     same_ip_visits: sameIpVisitsMapped,
     past_purchases: pastPurchasesMapped,
     // 데이터 연결 정보 (IP + member_id 기반)
     data_enrichment: {
       ip_based_visits_found: ipPreviousVisits.length > 0,
-      ip_based_utm_found: ipUtmHistory.length > 0,
+      ip_based_utm_found: ipOnlyUtmHistory.length > 0,
       member_based_visits_found: memberPreviousVisits.length > 0,
       member_based_utm_found: memberUtmHistory.length > 0,
       visitor_visits_count: visitorPreviousVisits.length,
       ip_visits_count: ipPreviousVisits.length,
       member_visits_count: memberPreviousVisits.length,
       visitor_utm_count: visitorUtmHistory.length,
-      ip_utm_count: ipUtmHistory.length,
+      ip_utm_count: ipOnlyUtmHistory.length,
       member_utm_count: memberUtmHistory.length
     }
   };

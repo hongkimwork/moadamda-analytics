@@ -77,7 +77,8 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
     );
   }
 
-  const { order, purchase_journey, previous_visits, page_path, utm_history, past_purchases } = data;
+  // FIX (2026-02-05): IP 기반 UTM 히스토리를 별도로 받음 (참고 정보용)
+  const { order, purchase_journey, previous_visits, page_path, utm_history, ip_utm_history, past_purchases } = data;
 
   // 구매 직전 경로 (광고 클릭 후 ~ 구매까지)
   const journeyPages = purchase_journey?.pages || page_path || [];
