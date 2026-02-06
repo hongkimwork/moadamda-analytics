@@ -620,6 +620,7 @@ async function getCreativeEntries({ ad_id, creative_name, utm_source, utm_medium
   
   if (useAdId) {
     // ad_id 기반 조회 (메인 테이블과 동일한 기준)
+    // FIX (2026-02-06): sessions.start_time 기간 필터 추가 - 메인 테이블 View와 일치
     query = `
       WITH entries AS (
         SELECT 
@@ -635,11 +636,14 @@ async function getCreativeEntries({ ad_id, creative_name, utm_source, utm_medium
           ) as prev_entry
         FROM utm_sessions us
         JOIN visitors v ON us.visitor_id = v.visitor_id
+        JOIN sessions s ON us.session_id = s.session_id
         WHERE us.utm_params->>'utm_id' = $1
           AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $2
           AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $3
           AND us.entry_timestamp >= $4
           AND us.entry_timestamp <= $5
+          AND s.start_time >= $4
+          AND s.start_time <= $5
           AND v.is_bot = false
       )
       SELECT 
@@ -661,6 +665,7 @@ async function getCreativeEntries({ ad_id, creative_name, utm_source, utm_medium
     queryParams = [ad_id, utm_medium, utm_campaign, startDate, endDate, limit, offset];
   } else {
     // creative_name 기반 조회 (fallback)
+    // FIX (2026-02-06): sessions.start_time 기간 필터 추가 - 메인 테이블 View와 일치
     const creativeNames = Array.isArray(creative_name) ? creative_name : [creative_name];
     query = `
       WITH entries AS (
@@ -677,12 +682,15 @@ async function getCreativeEntries({ ad_id, creative_name, utm_source, utm_medium
           ) as prev_entry
         FROM utm_sessions us
         JOIN visitors v ON us.visitor_id = v.visitor_id
+        JOIN sessions s ON us.session_id = s.session_id
         WHERE us.utm_params->>'utm_content' = ANY($1)
           AND (COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2 )
           AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
           AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
           AND us.entry_timestamp >= $5
           AND us.entry_timestamp <= $6
+          AND s.start_time >= $5
+          AND s.start_time <= $6
           AND v.is_bot = false
       )
       SELECT 
@@ -726,31 +734,39 @@ async function getCreativeEntriesCount({ ad_id, creative_name, utm_source, utm_m
   
   if (useAdId) {
     // ad_id 기반 조회 (메인 테이블과 동일한 기준)
+    // FIX (2026-02-06): sessions.start_time 기간 필터 추가 - 메인 테이블 View와 일치
     query = `
       SELECT COUNT(*) as total
       FROM utm_sessions us
       JOIN visitors v ON us.visitor_id = v.visitor_id
+      JOIN sessions s ON us.session_id = s.session_id
       WHERE us.utm_params->>'utm_id' = $1
         AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $2
         AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $3
         AND us.entry_timestamp >= $4
         AND us.entry_timestamp <= $5
+        AND s.start_time >= $4
+        AND s.start_time <= $5
         AND v.is_bot = false
     `;
     queryParams = [ad_id, utm_medium, utm_campaign, startDate, endDate];
   } else {
     // creative_name 기반 조회 (fallback)
+    // FIX (2026-02-06): sessions.start_time 기간 필터 추가 - 메인 테이블 View와 일치
     const creativeNames = Array.isArray(creative_name) ? creative_name : [creative_name];
     query = `
       SELECT COUNT(*) as total
       FROM utm_sessions us
       JOIN visitors v ON us.visitor_id = v.visitor_id
+      JOIN sessions s ON us.session_id = s.session_id
       WHERE us.utm_params->>'utm_content' = ANY($1)
         AND (COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') = $2 )
         AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
         AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
         AND us.entry_timestamp >= $5
         AND us.entry_timestamp <= $6
+        AND s.start_time >= $5
+        AND s.start_time <= $6
         AND v.is_bot = false
     `;
     queryParams = [creativeNames, utm_source, utm_medium, utm_campaign, startDate, endDate];
@@ -911,6 +927,87 @@ async function getCreativeSessionsChartData({ ad_id, creative_name, utm_source, 
   return result.rows;
 }
 
+/**
+ * 세션 내 구매 중 이 광고가 막타인 건수 조회 (= 공통 건수)
+ * - member_id 기반 visitor 병합을 반영하여 정확한 last touch 판정
+ * FIX (2026-02-06): UV 전환 구매 수와 막타 횟수 차이 안내용
+ * 
+ * @param {Object} params
+ * @param {string} params.ad_id - 광고 ID (utm_id)
+ * @param {string} params.utm_medium - UTM Medium
+ * @param {string} params.utm_campaign - UTM Campaign
+ * @param {Date} params.startDate - 시작일
+ * @param {Date} params.endDate - 종료일
+ * @returns {Promise<number>} 이 광고가 막타이면서 세션 내 구매인 건수 (공통 건수)
+ */
+async function getSessionPurchaseLastTouchCount({ ad_id, utm_medium, utm_campaign, startDate, endDate }) {
+  if (!ad_id || ad_id === '' || ad_id.startsWith('{{')) return 0;
+  
+  const query = `
+    WITH target_sessions AS (
+      SELECT DISTINCT us.session_id
+      FROM utm_sessions us
+      JOIN visitors v ON us.visitor_id = v.visitor_id
+      WHERE us.utm_params->>'utm_id' = $1
+        AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $2
+        AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $3
+        AND us.entry_timestamp >= $4
+        AND us.entry_timestamp <= $5
+        AND v.is_bot = false
+    ),
+    session_purchases AS (
+      SELECT DISTINCT ON (s.session_id)
+        s.session_id,
+        s.visitor_id,
+        c.member_id,
+        c.timestamp as purchase_time
+      FROM sessions s
+      JOIN conversions c ON c.session_id = s.session_id
+      JOIN target_sessions ts ON s.session_id = ts.session_id
+      JOIN visitors v ON s.visitor_id = v.visitor_id
+      WHERE c.paid = 'T' AND c.final_payment > 0
+        AND (c.canceled = 'F' OR c.canceled IS NULL)
+        AND (c.order_status = 'confirmed' OR c.order_status IS NULL)
+        AND v.is_bot = false
+        AND s.start_time >= $4
+        AND s.start_time <= $5
+      ORDER BY s.session_id, c.timestamp
+    ),
+    -- member_id로 연결된 모든 visitor_id 수집
+    merged_visitors AS (
+      SELECT sp.session_id, sp.visitor_id, sp.member_id, sp.purchase_time,
+        COALESCE(other_v.visitor_id, sp.visitor_id) as all_vid
+      FROM session_purchases sp
+      LEFT JOIN (
+        SELECT DISTINCT c2.member_id, c2.visitor_id
+        FROM conversions c2
+        WHERE c2.member_id IS NOT NULL
+      ) other_v ON sp.member_id = other_v.member_id AND sp.member_id IS NOT NULL
+    ),
+    -- 각 구매에 대해 병합된 전체 visitor의 마지막 UTM 엔트리 찾기
+    last_utm_per_purchase AS (
+      SELECT DISTINCT ON (mv.session_id)
+        mv.session_id,
+        us.utm_params->>'utm_id' as last_ad_id
+      FROM merged_visitors mv
+      JOIN utm_sessions us ON us.visitor_id = mv.all_vid
+      JOIN visitors v ON us.visitor_id = v.visitor_id
+      WHERE us.entry_timestamp <= mv.purchase_time
+        AND NULLIF(us.utm_params->>'utm_id', '') IS NOT NULL
+        AND us.utm_params->>'utm_id' NOT LIKE '{{%'
+        AND us.utm_params->>'utm_content' IS NOT NULL
+        AND v.is_bot = false
+      ORDER BY mv.session_id, us.entry_timestamp DESC
+    )
+    SELECT COUNT(*) as count
+    FROM last_utm_per_purchase
+    WHERE last_ad_id = $1
+  `;
+  
+  const result = await db.query(query, [ad_id, utm_medium, utm_campaign, startDate, endDate]);
+  return parseInt(result.rows[0]?.count) || 0;
+}
+
 module.exports = {
   getAllOrdersInPeriod,
   getVisitorJourneys,
@@ -922,5 +1019,6 @@ module.exports = {
   getCreativeEntries,
   getCreativeEntriesCount,
   getCreativeOriginalUrl,
-  getCreativeSessionsChartData
+  getCreativeSessionsChartData,
+  getSessionPurchaseLastTouchCount
 };

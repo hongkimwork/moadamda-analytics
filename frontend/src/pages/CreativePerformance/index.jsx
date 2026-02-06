@@ -138,7 +138,8 @@ function CreativePerformance() {
       creative_name: record.creative_name,
       utm_source: record.utm_source,
       utm_medium: record.utm_medium,
-      utm_campaign: record.utm_campaign
+      utm_campaign: record.utm_campaign,
+      last_touch_count: record.last_touch_count
     });
     setSessionsModalVisible(true);
   };

@@ -82,11 +82,25 @@ async function getCreativePerformance(params) {
     validateSortColumn(sort_by, sort_order);
 
   // 4. UTM 필터 파싱
+  // FIX (2026-02-06): utm_source 필터는 광고 단위로 적용, 나머지는 진입 기록 단위로 적용
+  // utm_source가 빈 값이어도 ad_id가 동일한 실제 광고 클릭이 누락되지 않도록 함
+  const allFilters = utm_filters ? (typeof utm_filters === 'string' ? JSON.parse(utm_filters) : utm_filters) : [];
+  const sourceFilters = allFilters.filter(f => f.key === 'utm_source');
+  const entryFilters = allFilters.filter(f => f.key !== 'utm_source');
+
   const queryParams = [startDate, endDate];
   let paramIndex = 3;
-  const { conditions: utmFilterConditions, nextIndex } = 
-    parseUtmFilters(utm_filters, queryParams, paramIndex);
-  paramIndex = nextIndex;
+
+  // 진입 기록 단위 조건 (utm_medium, utm_campaign 등 - all_entries CTE 내부에서 적용)
+  const { conditions: entryUtmConditions, nextIndex: ni1 } = 
+    parseUtmFilters(entryFilters.length > 0 ? entryFilters : null, queryParams, paramIndex);
+  paramIndex = ni1;
+
+  // 광고 단위 조건 (utm_source - 최종 SELECT WHERE에서 적용)
+  // 집계된 컬럼(ec.utm_source)에 대해 필터링하므로 columnFormat: 'column' 사용
+  const { conditions: adLevelSourceConditions, nextIndex: ni2 } = 
+    parseUtmFilters(sourceFilters.length > 0 ? sourceFilters : null, queryParams, paramIndex, { columnFormat: 'column' });
+  paramIndex = ni2;
 
   // 5. Repository를 통해 데이터 조회 (ad_id 기준으로 이미 병합됨)
   const [rawDataRows, totalCount] = await Promise.all([
@@ -94,7 +108,8 @@ async function getCreativePerformance(params) {
       startDate,
       endDate,
       searchCondition: '', // 검색은 JS에서 처리
-      utmFilterConditions,
+      utmFilterConditions: entryUtmConditions,
+      adLevelFilterConditions: adLevelSourceConditions,
       sortColumn,
       sortDirectionSQL,
       queryParams,
@@ -109,7 +124,8 @@ async function getCreativePerformance(params) {
       startDate,
       endDate,
       searchCondition: '',
-      utmFilterConditions,
+      utmFilterConditions: entryUtmConditions,
+      adLevelFilterConditions: adLevelSourceConditions,
       queryParams,
       minDurationSeconds,
       minPvCount,

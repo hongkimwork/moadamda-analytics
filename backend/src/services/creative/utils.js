@@ -58,14 +58,19 @@ function safeDecodeURIComponent(str) {
  * @param {string} utmFiltersJson - UTM 필터 JSON 문자열
  * @param {Array} queryParams - SQL 쿼리 파라미터 배열 (참조로 전달)
  * @param {number} startIndex - 시작 파라미터 인덱스
+ * @param {Object} [options] - 옵션
+ * @param {string} [options.columnFormat='jsonb'] - 컬럼 참조 형식
+ *   'jsonb': us.utm_params->>'key' (개별 진입 기록 필터링, CTE 내부용)
+ *   'column': key (집계된 컬럼 필터링, 최종 SELECT WHERE용)
  * @returns {Object} - { conditions: string, nextIndex: number }
  */
-function parseUtmFilters(utmFiltersJson, queryParams, startIndex) {
+function parseUtmFilters(utmFiltersJson, queryParams, startIndex, options = {}) {
+  const { columnFormat = 'jsonb' } = options;
   let utmFilterConditions = '';
   let paramIndex = startIndex;
 
   try {
-    const filters = JSON.parse(utmFiltersJson);
+    const filters = typeof utmFiltersJson === 'string' ? JSON.parse(utmFiltersJson) : utmFiltersJson;
     if (Array.isArray(filters) && filters.length > 0) {
       const filterClauses = filters.map(filter => {
         const key = filter.key; // 예: 'utm_source'
@@ -77,18 +82,21 @@ function parseUtmFilters(utmFiltersJson, queryParams, startIndex) {
           return null;
         }
         
+        // 컬럼 참조 형식 결정
+        const columnRef = columnFormat === 'column' ? key : `us.utm_params->>'${key}'`;
+        
         // IN 연산자 처리 (배열 값)
         if (operator === 'in' && Array.isArray(value) && value.length > 0) {
           const placeholders = value.map((v) => {
             queryParams.push(v);
             return `$${paramIndex++}`;
           });
-          return `us.utm_params->>'${key}' IN (${placeholders.join(', ')})`;
+          return `${columnRef} IN (${placeholders.join(', ')})`;
         }
         
         // 기본 equals 연산자
         queryParams.push(value);
-        const clause = `us.utm_params->>'${key}' = $${paramIndex}`;
+        const clause = `${columnRef} = $${paramIndex}`;
         paramIndex++;
         return clause;
       }).filter(Boolean);

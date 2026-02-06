@@ -1,5 +1,5 @@
 import { Modal, Table, Typography, Spin, Empty, Tag, Tooltip, Button } from 'antd';
-import { TeamOutlined, QuestionCircleOutlined, BarChartOutlined, TableOutlined } from '@ant-design/icons';
+import { TeamOutlined, QuestionCircleOutlined, BarChartOutlined, TableOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import dayjs from 'dayjs';
@@ -236,6 +236,8 @@ function CreativeSessionsModal({ visible, onClose, creative, dateRange }) {
       setViewMode('table');
       setChartData(null);
       fetchSessions(1, null, null);
+      // FIX (2026-02-06): 모달 열릴 때 차트 데이터도 미리 조회 (세션 내 구매 수 표시용)
+      fetchChartData();
     }
   }, [visible, creative, dateRange]);
 
@@ -518,6 +520,49 @@ function CreativeSessionsModal({ visible, onClose, creative, dateRange }) {
           <div style={{ marginBottom: 12, padding: '8px 12px', background: '#f6ffed', borderRadius: 6, border: '1px solid #b7eb8f', fontSize: 12, color: '#389e0d' }}>
             같은 배경색은 같은 방문자의 세션입니다. 1명의 방문자가 여러 번 방문하면 여러 행으로 표시됩니다.
           </div>
+
+          {/* UV 전환 구매 수 vs 막타 횟수 차이 안내 */}
+          {(() => {
+            const lastTouchCount = creative?.last_touch_count || 0;
+            if (lastTouchCount === 0) return null;
+            
+            // 로딩 중: 스켈레톤 표시
+            if (chartLoading || !chartData || !chartData.conversion_distribution || chartData.session_purchase_last_touch_count === null || chartData.session_purchase_last_touch_count === undefined) {
+              return (
+                <div style={{ marginBottom: 12, padding: '10px 14px', background: '#e6f7ff', borderRadius: 6, border: '1px solid #91d5ff', fontSize: 12, color: '#1890ff' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Spin size="small" />
+                    <span style={{ color: '#8c8c8c' }}>세션 내 구매 분석 중...</span>
+                  </div>
+                </div>
+              );
+            }
+            
+            const sessionPurchaseCount = chartData.conversion_distribution.find(d => d.type === '구매')?.count || 0;
+            if (sessionPurchaseCount === 0 && lastTouchCount === 0) return null;
+            if (sessionPurchaseCount === lastTouchCount) return null;
+            const commonCount = chartData.session_purchase_last_touch_count;
+            const otherLastTouchCount = sessionPurchaseCount - commonCount;
+            const lastTouchNotInSession = Math.max(0, lastTouchCount - commonCount);
+            return (
+              <div style={{ marginBottom: 12, padding: '10px 14px', background: '#e6f7ff', borderRadius: 6, border: '1px solid #91d5ff', fontSize: 12, color: '#1890ff' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 8 }}>
+                  <InfoCircleOutlined />
+                  <span style={{ fontWeight: 600 }}>
+                    세션 내 구매: {sessionPurchaseCount.toLocaleString()}건 / 막타 횟수: {lastTouchCount.toLocaleString()}건
+                  </span>
+                </div>
+                <div style={{ color: '#595959', lineHeight: 1.9, paddingLeft: 2 }}>
+                  <span style={{ fontWeight: 600, color: '#333' }}>왜 수치가 다를까요?</span><br />
+                  이 광고를 클릭 → 바로 구매 + 마지막 본 광고도 이것 : <span style={{ fontWeight: 600, color: '#1890ff' }}>{commonCount.toLocaleString()}건</span> (공통)<br />
+                  <span style={{ color: '#1890ff', fontWeight: 600 }}>(1)</span> 이 광고를 클릭해서 들어온 방문에서 구매했지만, 사기 직전에 <span style={{ fontWeight: 600 }}>다른 광고를 한 번 더 본 경우</span><br />
+                  <span style={{ paddingLeft: 20, display: 'inline-block' }}>→ <span style={{ fontWeight: 600, color: '#1890ff' }}>{otherLastTouchCount.toLocaleString()}건</span>이 세션 내 구매에는 포함되지만, 막타에서는 빠짐</span><br />
+                  <span style={{ color: '#1890ff', fontWeight: 600 }}>(2)</span> 이 광고를 본 후, <span style={{ fontWeight: 600 }}>나중에 직접 사이트에 들어와서 구매한 경우</span><br />
+                  <span style={{ paddingLeft: 20, display: 'inline-block' }}>→ <span style={{ fontWeight: 600, color: '#1890ff' }}>{lastTouchNotInSession.toLocaleString()}건</span>이 세션 내 구매에서는 빠지지만, 막타에는 포함</span>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* 세션 목록 테이블 */}
           <Spin spinning={loading}>

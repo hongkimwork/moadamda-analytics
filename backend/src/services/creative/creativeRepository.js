@@ -34,6 +34,7 @@ async function getCreativeAggregation({
   endDate,
   searchCondition,
   utmFilterConditions,
+  adLevelFilterConditions = '',
   sortColumn,
   sortDirectionSQL,
   queryParams,
@@ -52,6 +53,9 @@ async function getCreativeAggregation({
     WITH all_entries AS (
       -- 모든 진입 기록 (View 계산용)
       -- 정상 utm_id만 포함 (빈 값, {{ad.id}} 등 제외)
+      -- FIX (2026-02-06): sessions.start_time 기간 필터 추가
+      -- 세션 모달(getCreativeSessionsCount)과 동일한 기준 적용
+      -- entry_timestamp는 기간 내이지만 session.start_time이 기간 외인 데이터 제외
       SELECT 
         us.session_id,
         us.visitor_id,
@@ -62,9 +66,12 @@ async function getCreativeAggregation({
         COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') as utm_campaign
       FROM utm_sessions us
       JOIN visitors v ON us.visitor_id = v.visitor_id
+      JOIN sessions s ON us.session_id = s.session_id
       WHERE us.utm_params->>'utm_content' IS NOT NULL
         AND us.entry_timestamp >= $1
         AND us.entry_timestamp <= $2
+        AND s.start_time >= $1
+        AND s.start_time <= $2
         AND v.is_bot = false
         -- 정상 utm_id만 포함 (빈 값, {{ad.id}} 등 잘못된 값 제외)
         AND NULLIF(us.utm_params->>'utm_id', '') IS NOT NULL
@@ -205,6 +212,8 @@ async function getCreativeAggregation({
       ec.utm_medium = sm.utm_medium AND
       ec.utm_campaign = sm.utm_campaign
     LEFT JOIN meta_ads ma ON ec.ad_id = ma.ad_id
+    WHERE 1=1
+      ${adLevelFilterConditions}
     ORDER BY ${sortColumn} ${sortDirectionSQL}
   `;
 
@@ -227,25 +236,33 @@ async function getCreativeCount({
   endDate,
   searchCondition,
   utmFilterConditions,
+  adLevelFilterConditions = '',
   queryParams,
   minDurationSeconds = 0,
   minPvCount = 0,
   minScrollPx = 0
 }) {
   // FIX (2026-02-05): ad_id 기준으로 개수 조회
-  // 정상 utm_id만 포함 (빈 값, {{ad.id}} 등 제외)
+  // FIX (2026-02-06): utm_source 필터는 광고 단위로 적용 (대표 utm_source 기준)
   const countQuery = `
-    SELECT COUNT(DISTINCT us.utm_params->>'utm_id') as total
-    FROM utm_sessions us
-    JOIN visitors v ON us.visitor_id = v.visitor_id
-    WHERE us.utm_params->>'utm_content' IS NOT NULL
-      AND us.entry_timestamp >= $1
-      AND us.entry_timestamp <= $2
-      AND v.is_bot = false
-      -- 정상 utm_id만 포함
-      AND NULLIF(us.utm_params->>'utm_id', '') IS NOT NULL
-      AND us.utm_params->>'utm_id' NOT LIKE '{{%'
-      ${utmFilterConditions}
+    WITH ad_summary AS (
+      SELECT 
+        us.utm_params->>'utm_id' as ad_id,
+        MODE() WITHIN GROUP (ORDER BY COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-')) as utm_source
+      FROM utm_sessions us
+      JOIN visitors v ON us.visitor_id = v.visitor_id
+      WHERE us.utm_params->>'utm_content' IS NOT NULL
+        AND us.entry_timestamp >= $1
+        AND us.entry_timestamp <= $2
+        AND v.is_bot = false
+        AND NULLIF(us.utm_params->>'utm_id', '') IS NOT NULL
+        AND us.utm_params->>'utm_id' NOT LIKE '{{%'
+        ${utmFilterConditions}
+      GROUP BY us.utm_params->>'utm_id'
+    )
+    SELECT COUNT(*) as total
+    FROM ad_summary
+    WHERE 1=1 ${adLevelFilterConditions}
   `;
 
   const result = await db.query(countQuery, queryParams);

@@ -925,6 +925,18 @@ async function getCreativeSessionsChart(params) {
     { range: '21~24시', count: hourlyMap[21] + hourlyMap[22] + hourlyMap[23] }
   ];
   
+  // FIX (2026-02-06): 세션 내 구매 중 이 광고가 막타인 건수 = 공통 건수 (차이 안내용)
+  let sessionPurchaseLastTouchCount = null;
+  if (convertedCount > 0 && useAdId) {
+    try {
+      sessionPurchaseLastTouchCount = await repository.getSessionPurchaseLastTouchCount({
+        ad_id, utm_medium, utm_campaign, startDate, endDate
+      });
+    } catch (e) {
+      // 조회 실패 시 null 유지 (안내 UI에만 영향)
+    }
+  }
+  
   return {
     success: true,
     totalSessions: rows.length,
@@ -932,7 +944,9 @@ async function getCreativeSessionsChart(params) {
     device_distribution,
     conversion_distribution,
     pv_distribution,
-    hourly_distribution: hourlyGrouped
+    hourly_distribution: hourlyGrouped,
+    // FIX (2026-02-06): UV-막타 차이 안내용 - 세션 내 구매 중 이 광고가 막타인 건수 (공통 건수)
+    session_purchase_last_touch_count: sessionPurchaseLastTouchCount
   };
 }
 

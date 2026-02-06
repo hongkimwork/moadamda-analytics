@@ -1,5 +1,5 @@
 import { Modal, Table, Typography, Spin, Empty, Statistic, Row, Col, Tag, Tooltip, Card } from 'antd';
-import { ShoppingCartOutlined, EyeOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { ShoppingCartOutlined, EyeOutlined, ExclamationCircleOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import dayjs from 'dayjs';
@@ -67,12 +67,20 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange, attributio
   // 테이블 페이지네이션 & 정렬 state
   const [currentPage, setCurrentPage] = useState(1);
   const [sortedInfo, setSortedInfo] = useState({});
+  
+  // FIX (2026-02-06): 세션 내 구매 수 조회 (UV 전환 구매 수와 막타 차이 안내용)
+  const [sessionsPurchaseCount, setSessionsPurchaseCount] = useState(null);
+  const [sessionPurchaseLastTouchCount, setSessionPurchaseLastTouchCount] = useState(null);
+  const [sessionsPurchaseLoading, setSessionsPurchaseLoading] = useState(false);
 
   useEffect(() => {
     if (visible && creative) {
       setCurrentPage(1); // 새 소재 선택 시 페이지 초기화
       setSortedInfo({}); // 정렬 상태 초기화
+      setSessionsPurchaseCount(null);
+      setSessionPurchaseLastTouchCount(null);
       fetchOrders();
+      fetchSessionsPurchaseCount();
     }
   }, [visible, creative]);
 
@@ -100,6 +108,32 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange, attributio
       setOrders([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // FIX (2026-02-06): 세션 내 구매 수 조회 (차트 API 활용)
+  const fetchSessionsPurchaseCount = async () => {
+    if (!creative || !dateRange) return;
+    setSessionsPurchaseLoading(true);
+    try {
+      const response = await axios.post(`${API_URL}/api/creative-performance/sessions/chart`, {
+        ad_id: creative.ad_id,
+        creative_name: creative.creative_name,
+        utm_source: creative.utm_source,
+        utm_medium: creative.utm_medium,
+        utm_campaign: creative.utm_campaign,
+        start: dateRange.start,
+        end: dateRange.end
+      });
+      if (response.data.success) {
+        const purchaseCount = response.data.conversion_distribution?.find(d => d.type === '구매')?.count || 0;
+        setSessionsPurchaseCount(purchaseCount);
+        setSessionPurchaseLastTouchCount(response.data.session_purchase_last_touch_count ?? null);
+      }
+    } catch (error) {
+      console.error('세션 구매 수 조회 실패:', error);
+    } finally {
+      setSessionsPurchaseLoading(false);
     }
   };
 
@@ -443,6 +477,46 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange, attributio
           </div>
         </div>
       </div>
+
+      {/* UV 세션 내 구매 수 vs 막타 주문 차이 안내 */}
+      {(() => {
+        if (!summary.last_touch_orders || summary.last_touch_orders === 0) return null;
+        
+        // 로딩 중: 스켈레톤 표시
+        if (sessionsPurchaseLoading || sessionsPurchaseCount === null || sessionPurchaseLastTouchCount === null) {
+          return (
+            <div style={{ marginBottom: 16, padding: '10px 14px', background: '#e6f7ff', borderRadius: 6, border: '1px solid #91d5ff', fontSize: 12, color: '#1890ff' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Spin size="small" />
+                <span style={{ color: '#8c8c8c' }}>세션 내 구매 분석 중...</span>
+              </div>
+            </div>
+          );
+        }
+        
+        if (sessionsPurchaseCount === summary.last_touch_orders) return null;
+        const commonCount = sessionPurchaseLastTouchCount;
+        const otherLastTouchCount = sessionsPurchaseCount - commonCount;
+        const lastTouchNotInSession = Math.max(0, summary.last_touch_orders - commonCount);
+        return (
+          <div style={{ marginBottom: 16, padding: '10px 14px', background: '#e6f7ff', borderRadius: 6, border: '1px solid #91d5ff', fontSize: 12, color: '#1890ff' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 8 }}>
+              <InfoCircleOutlined />
+              <span style={{ fontWeight: 600 }}>
+                UV 세션 내 구매: {sessionsPurchaseCount.toLocaleString()}건 / 막타 주문: {summary.last_touch_orders.toLocaleString()}건
+              </span>
+            </div>
+            <div style={{ color: '#595959', lineHeight: 1.9, paddingLeft: 2 }}>
+              <span style={{ fontWeight: 600, color: '#333' }}>왜 수치가 다를까요?</span><br />
+              이 광고를 클릭 → 바로 구매 + 마지막 본 광고도 이것 : <span style={{ fontWeight: 600, color: '#1890ff' }}>{commonCount.toLocaleString()}건</span> (공통)<br />
+              <span style={{ color: '#1890ff', fontWeight: 600 }}>(1)</span> 이 광고를 클릭해서 들어온 방문에서 구매했지만, 사기 직전에 <span style={{ fontWeight: 600 }}>다른 광고를 한 번 더 본 경우</span><br />
+              <span style={{ paddingLeft: 20, display: 'inline-block' }}>→ <span style={{ fontWeight: 600, color: '#1890ff' }}>{otherLastTouchCount.toLocaleString()}건</span>이 UV에는 포함되지만, 막타에서는 빠짐</span><br />
+              <span style={{ color: '#1890ff', fontWeight: 600 }}>(2)</span> 이 광고를 본 후, <span style={{ fontWeight: 600 }}>나중에 직접 사이트에 들어와서 구매한 경우</span><br />
+              <span style={{ paddingLeft: 20, display: 'inline-block' }}>→ <span style={{ fontWeight: 600, color: '#1890ff' }}>{lastTouchNotInSession.toLocaleString()}건</span>이 UV에서는 빠지지만, 막타에는 포함</span>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* 주문 목록 테이블 */}
       {orders.length > 0 ? (
