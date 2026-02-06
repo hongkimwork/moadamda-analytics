@@ -12,9 +12,10 @@ const DEFAULT_ATTRIBUTION_WINDOW_DAYS = 30;
  * - 여러 광고를 봤으면: 막타 50% + 나머지 어시 광고들이 50%를 균등 분배
  * - 같은 광고를 여러 번 봤어도 1개로 카운트 (고유 조합 기준)
  * 
- * FIX (2026-02-03): IP 기반 UTM 연결 추가 (쿠키 끊김 대응)
  * FIX (2026-02-04): Attribution Window를 사용자가 선택할 수 있도록 변경
  * FIX (2026-02-05): ad_id 기반 기여도 계산으로 변경
+ * FIX (2026-02-06): IP 기반 여정 병합 제거 - 다른 사용자의 행동이 잘못 병합되는 문제
+ * - 여정 연결: visitor_id + member_id 기반만 사용 (detailService.js와 동일)
  * - 기존: utm_content(광고명) 기준 → 광고명 변경 시 매칭 실패
  * - 변경: utm_id(ad_id) 기준 → 광고명 변경해도 정확한 기여도 계산
  * 
@@ -58,7 +59,6 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
   // 1단계: 선택 기간 내 모든 구매 조회
   // session_id도 함께 조회 (인앱 브라우저 쿠키 문제 대응)
   // FIX (2026-01-23): 취소/환불 주문 제외 - 실제 유효 매출만 기여도 계산
-  // FIX (2026-02-03): IP 주소 추가 (쿠키 끊김 대응)
   // FIX (2026-02-03): member_id 추가 (회원 기반 연결)
   const purchaseQuery = `
     SELECT 
@@ -68,11 +68,9 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
       c.final_payment,
       c.timestamp,
       c.member_id,
-      s.visitor_id as session_visitor_id,
-      COALESCE(s.ip_address, v.ip_address) as ip_address
+      s.visitor_id as session_visitor_id
     FROM conversions c
     LEFT JOIN sessions s ON c.session_id = s.session_id
-    LEFT JOIN visitors v ON c.visitor_id = v.visitor_id
     WHERE c.order_id IS NOT NULL
       AND c.paid = 'T'
       AND c.final_payment > 0
@@ -95,13 +93,7 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
     [p.visitor_id, p.session_visitor_id].filter(Boolean)
   ))];
   
-  // FIX (2026-02-03): IP 주소 수집 (쿠키 끊김 대응)
-  const purchaserIps = [...new Set(purchases
-    .map(p => p.ip_address)
-    .filter(ip => ip && ip !== 'unknown')
-  )];
-  
-  // FIX (2026-02-03): member_id 수집 (회원 기반 연결)
+  // member_id 수집 (회원 기반 연결)
   const purchaserMemberIds = [...new Set(purchases
     .map(p => p.member_id)
     .filter(id => id && id !== '')
@@ -141,45 +133,7 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
     visitorJourneys[row.visitor_id].push(row);
   });
   
-  // FIX (2026-02-03): IP 기반 UTM 여정 조회 (쿠키 끊김 대응)
-  // FIX (2026-02-05): utm_id(ad_id) 기반 - 정상 utm_id만 포함
-  const ipJourneyQuery = `
-    SELECT 
-      v.ip_address,
-      us.visitor_id,
-      us.utm_params->>'utm_id' as ad_id,
-      us.utm_params->>'utm_content' as utm_content,
-      COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') as utm_source,
-      COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') as utm_medium,
-      COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') as utm_campaign,
-      us.sequence_order,
-      us.entry_timestamp
-    FROM utm_sessions us
-    JOIN visitors v ON us.visitor_id = v.visitor_id
-    WHERE v.ip_address = ANY($1)
-      AND us.visitor_id != ALL($2)
-      AND us.utm_params->>'utm_content' IS NOT NULL
-      AND v.is_bot = false
-      -- 정상 utm_id만 포함
-      AND NULLIF(us.utm_params->>'utm_id', '') IS NOT NULL
-      AND us.utm_params->>'utm_id' NOT LIKE '{{%'
-    ORDER BY v.ip_address, us.entry_timestamp
-  `;
-  
-  const ipJourneyResult = purchaserIps.length > 0 
-    ? await db.query(ipJourneyQuery, [purchaserIps, purchaserIds])
-    : { rows: [] };
-  
-  // IP별 여정 그룹화
-  const ipJourneys = {};
-  ipJourneyResult.rows.forEach(row => {
-    if (!ipJourneys[row.ip_address]) {
-      ipJourneys[row.ip_address] = [];
-    }
-    ipJourneys[row.ip_address].push(row);
-  });
-  
-  // FIX (2026-02-03): member_id 기반 UTM 여정 조회 (회원 기반 연결)
+  // member_id 기반 UTM 여정 조회 (회원 기반 연결)
   // FIX (2026-02-05): utm_id(ad_id) 기반 - 정상 utm_id만 포함
   const memberJourneyQuery = `
     SELECT 
@@ -226,26 +180,7 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
       journey = visitorJourneys[purchase.session_visitor_id] || [];
     }
     
-    // FIX (2026-02-03): IP 기반 여정 병합 (쿠키 끊김 대응)
-    // visitor_id 기반 여정이 없거나 부족한 경우, IP 기반 여정 추가
-    if (purchase.ip_address && purchase.ip_address !== 'unknown') {
-      const ipJourney = ipJourneys[purchase.ip_address] || [];
-      if (ipJourney.length > 0) {
-        // 기존 여정과 IP 기반 여정 병합 (중복 제거)
-        const existingKeys = new Set(journey.map(j => 
-          `${j.entry_timestamp}||${j.utm_content}`
-        ));
-        
-        const newTouches = ipJourney.filter(j => {
-          const key = `${j.entry_timestamp}||${j.utm_content}`;
-          return !existingKeys.has(key);
-        });
-        
-        journey = [...journey, ...newTouches];
-      }
-    }
-    
-    // FIX (2026-02-03): member_id 기반 여정 병합 (회원 기반 연결)
+    // member_id 기반 여정 병합 (회원 기반 연결)
     // 동일 회원 ID의 다른 visitor_id들의 여정도 추가
     if (purchase.member_id && purchase.member_id !== '') {
       const memberJourney = memberJourneys[purchase.member_id] || [];
@@ -264,7 +199,7 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
       }
     }
     
-    // IP/member_id 병합 후 시간순 정렬 및 sequence_order 재할당
+    // member_id 병합 후 시간순 정렬 및 sequence_order 재할당
     if (journey.length > 1) {
       journey.sort((a, b) => new Date(a.entry_timestamp) - new Date(b.entry_timestamp));
       journey = journey.map((j, idx) => ({ ...j, sequence_order: idx + 1 }));
