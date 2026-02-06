@@ -5,7 +5,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import dayjs from 'dayjs';
-import { fetchCreativePerformance } from '../services/creativePerformanceApi';
+import { fetchCreativePerformance, fetchDistribution } from '../services/creativePerformanceApi';
 import { fetchActivePreset } from '../services/scoreSettingsApi';
 import { useAuth } from '../../../contexts/AuthContext';
 
@@ -113,6 +113,10 @@ export const useCreativePerformance = () => {
   // 점수 설정 state
   const [scoreSettings, setScoreSettings] = useState(null);
   const [scoreSettingsLoading, setScoreSettingsLoading] = useState(true);
+
+  // 분포 데이터 state
+  const [distributionData, setDistributionData] = useState(null);
+  const [distributionLoading, setDistributionLoading] = useState(false);
 
   // 점수 설정 조회 (적용 중인 프리셋)
   useEffect(() => {
@@ -251,6 +255,44 @@ export const useCreativePerformance = () => {
     fetchData();
   }, [currentPage, pageSize, filters, searchTerm, sortField, sortOrder, activeUtmFilters, quickFilterSources, maxDuration, maxPv, maxScroll, minDuration, minPv, minScroll, attributionWindow]);
 
+  // 분포 데이터 조회 (날짜/플랫폼 필터 변경 시만 재조회)
+  const fetchDistributionData = useCallback(async () => {
+    setDistributionLoading(true);
+    try {
+      const params = {
+        start: filters.dateRange[0],
+        end: filters.dateRange[1]
+      };
+
+      // UTM 필터 병합
+      const combinedFilters = [...activeUtmFilters];
+      if (quickFilterSources.length > 0) {
+        combinedFilters.push({
+          key: 'utm_source',
+          operator: 'in',
+          value: quickFilterSources
+        });
+      }
+      if (combinedFilters.length > 0) {
+        params.utm_filters = JSON.stringify(combinedFilters);
+      }
+
+      const response = await fetchDistribution(params);
+      if (response.success) {
+        setDistributionData(response.data);
+      }
+    } catch (err) {
+      console.error('분포 데이터 조회 실패:', err);
+    } finally {
+      setDistributionLoading(false);
+    }
+  }, [filters.dateRange, activeUtmFilters, quickFilterSources]);
+
+  // 분포 데이터 조회 (날짜/UTM 필터 변경 시)
+  useEffect(() => {
+    fetchDistributionData();
+  }, [fetchDistributionData]);
+
   // 검색 핸들러
   const handleSearch = (term) => {
     setSearchTerm(term);
@@ -338,6 +380,10 @@ export const useCreativePerformance = () => {
     scoreSettings,
     scoreSettingsLoading,
     setScoreSettings,
+    
+    // 분포 데이터 상태
+    distributionData,
+    distributionLoading,
     
     // 상태 변경 함수
     setOrdersModalVisible,

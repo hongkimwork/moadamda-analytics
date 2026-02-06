@@ -92,6 +92,10 @@ function CreativePerformance() {
     scoreSettings,
     setScoreSettings,
     
+    // 분포 데이터
+    distributionData,
+    distributionLoading,
+    
     // 핸들러
     handleSearch,
     handleFilterChange,
@@ -245,6 +249,8 @@ function CreativePerformance() {
         quickFilterSources={quickFilterSources}
         attributionWindow={attributionWindow}
         onAttributionWindowChange={setAttributionWindow}
+        distributionData={distributionData}
+        distributionLoading={distributionLoading}
       />
 
       {/* 에러 표시 */}

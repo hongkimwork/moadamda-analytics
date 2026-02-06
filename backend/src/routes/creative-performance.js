@@ -4,6 +4,7 @@ const creativeService = require('../services/creative/creativeService');
 const detailService = require('../services/creative/detailService');
 const scoreSettingsService = require('../services/scoreSettings/scoreSettingsService');
 const scorePresetsService = require('../services/scoreSettings/scorePresetsService');
+const db = require('../utils/database');
 
 /**
  * GET /api/creative-performance
@@ -233,6 +234,251 @@ router.post('/creative-performance/original-url', async (req, res) => {
       success: false,
       error: 'Failed to fetch creative original URL',
       message: error.message 
+    });
+  }
+});
+
+/**
+ * GET /api/creative-performance/distribution
+ * 광고 세션의 PV/체류시간/스크롤 분포 데이터 조회
+ * 모수 평가 기준 설정 시 데이터 분포를 시각화하기 위한 API
+ * 
+ * Query Parameters:
+ *  - start: 시작일 (YYYY-MM-DD) - 필수
+ *  - end: 종료일 (YYYY-MM-DD) - 필수
+ *  - utm_filters: UTM 필터 (JSON string) - 선택
+ */
+router.get('/creative-performance/distribution', async (req, res) => {
+  try {
+    const { start, end, utm_filters = '[]' } = req.query;
+
+    if (!start || !end) {
+      return res.status(400).json({
+        success: false,
+        error: 'start and end dates are required (YYYY-MM-DD format)'
+      });
+    }
+
+    const startDate = new Date(start);
+    startDate.setHours(0, 0, 0, 0);
+    const endDate = new Date(end);
+    endDate.setHours(23, 59, 59, 999);
+
+    // UTM 필터 파싱
+    const { parseUtmFilters } = require('../services/creative/utils');
+    const queryParams = [startDate, endDate];
+    const { conditions: utmFilterConditions } = parseUtmFilters(
+      utm_filters, queryParams, 3
+    );
+
+    // PV 히스토그램 + 백분위수 쿼리
+    const pvQuery = `
+      WITH filtered_sessions AS (
+        SELECT DISTINCT ON (us.session_id)
+          us.session_id,
+          s.pageview_count,
+          s.duration_seconds
+        FROM utm_sessions us
+        JOIN visitors v ON us.visitor_id = v.visitor_id
+        JOIN sessions s ON us.session_id = s.session_id
+        WHERE us.entry_timestamp >= $1
+          AND us.entry_timestamp <= $2
+          AND s.start_time >= $1
+          AND s.start_time <= $2
+          AND v.is_bot = false
+          AND s.duration_seconds > 0
+          AND NULLIF(us.utm_params->>'utm_id', '') IS NOT NULL
+          AND us.utm_params->>'utm_id' NOT LIKE '{{%'
+          ${utmFilterConditions}
+        ORDER BY us.session_id
+      ),
+      histogram AS (
+        SELECT 
+          CASE 
+            WHEN pageview_count = 1 THEN '1'
+            WHEN pageview_count = 2 THEN '2'
+            WHEN pageview_count = 3 THEN '3'
+            WHEN pageview_count BETWEEN 4 AND 5 THEN '4-5'
+            WHEN pageview_count BETWEEN 6 AND 10 THEN '6-10'
+            WHEN pageview_count BETWEEN 11 AND 15 THEN '11-15'
+            WHEN pageview_count BETWEEN 16 AND 20 THEN '16-20'
+            WHEN pageview_count BETWEEN 21 AND 30 THEN '21-30'
+            WHEN pageview_count BETWEEN 31 AND 50 THEN '31-50'
+            ELSE '51+'
+          END as range,
+          MIN(pageview_count) as range_min,
+          COUNT(*) as count
+        FROM filtered_sessions
+        GROUP BY 1
+      ),
+      percentiles AS (
+        SELECT
+          PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY pageview_count) as p25,
+          PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY pageview_count) as p50,
+          PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY pageview_count) as p75,
+          PERCENTILE_CONT(0.90) WITHIN GROUP (ORDER BY pageview_count) as p90,
+          PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY pageview_count) as p95,
+          COUNT(*) as total
+        FROM filtered_sessions
+      )
+      SELECT 
+        json_build_object(
+          'histogram', (SELECT json_agg(json_build_object('range', range, 'count', count, 'range_min', range_min) ORDER BY range_min) FROM histogram),
+          'percentiles', (SELECT row_to_json(p) FROM percentiles p),
+          'total', (SELECT total FROM percentiles)
+        ) as result
+    `;
+
+    // Duration 히스토그램 + 백분위수 쿼리
+    const durationQuery = `
+      WITH filtered_sessions AS (
+        SELECT DISTINCT ON (us.session_id)
+          us.session_id,
+          s.duration_seconds
+        FROM utm_sessions us
+        JOIN visitors v ON us.visitor_id = v.visitor_id
+        JOIN sessions s ON us.session_id = s.session_id
+        WHERE us.entry_timestamp >= $1
+          AND us.entry_timestamp <= $2
+          AND s.start_time >= $1
+          AND s.start_time <= $2
+          AND v.is_bot = false
+          AND s.duration_seconds > 0
+          AND NULLIF(us.utm_params->>'utm_id', '') IS NOT NULL
+          AND us.utm_params->>'utm_id' NOT LIKE '{{%'
+          ${utmFilterConditions}
+        ORDER BY us.session_id
+      ),
+      histogram AS (
+        SELECT 
+          CASE 
+            WHEN duration_seconds BETWEEN 1 AND 5 THEN '1-5초'
+            WHEN duration_seconds BETWEEN 6 AND 10 THEN '6-10초'
+            WHEN duration_seconds BETWEEN 11 AND 30 THEN '11-30초'
+            WHEN duration_seconds BETWEEN 31 AND 60 THEN '31-60초'
+            WHEN duration_seconds BETWEEN 61 AND 120 THEN '1-2분'
+            WHEN duration_seconds BETWEEN 121 AND 300 THEN '2-5분'
+            WHEN duration_seconds BETWEEN 301 AND 600 THEN '5-10분'
+            WHEN duration_seconds BETWEEN 601 AND 1800 THEN '10-30분'
+            WHEN duration_seconds BETWEEN 1801 AND 3600 THEN '30-60분'
+            ELSE '60분+'
+          END as range,
+          MIN(duration_seconds) as range_min,
+          COUNT(*) as count
+        FROM filtered_sessions
+        GROUP BY 1
+      ),
+      percentiles AS (
+        SELECT
+          PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY duration_seconds) as p25,
+          PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY duration_seconds) as p50,
+          PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY duration_seconds) as p75,
+          PERCENTILE_CONT(0.90) WITHIN GROUP (ORDER BY duration_seconds) as p90,
+          PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY duration_seconds) as p95,
+          COUNT(*) as total
+        FROM filtered_sessions
+      )
+      SELECT 
+        json_build_object(
+          'histogram', (SELECT json_agg(json_build_object('range', range, 'count', count, 'range_min', range_min) ORDER BY range_min) FROM histogram),
+          'percentiles', (SELECT row_to_json(p) FROM percentiles p),
+          'total', (SELECT total FROM percentiles)
+        ) as result
+    `;
+
+    // Scroll 히스토그램 + 백분위수 쿼리
+    const scrollQuery = `
+      WITH filtered_sessions AS (
+        SELECT DISTINCT ON (us.session_id)
+          us.session_id
+        FROM utm_sessions us
+        JOIN visitors v ON us.visitor_id = v.visitor_id
+        JOIN sessions s ON us.session_id = s.session_id
+        WHERE us.entry_timestamp >= $1
+          AND us.entry_timestamp <= $2
+          AND s.start_time >= $1
+          AND s.start_time <= $2
+          AND v.is_bot = false
+          AND s.duration_seconds > 0
+          AND NULLIF(us.utm_params->>'utm_id', '') IS NOT NULL
+          AND us.utm_params->>'utm_id' NOT LIKE '{{%'
+          ${utmFilterConditions}
+        ORDER BY us.session_id
+      ),
+      scroll_data AS (
+        SELECT 
+          fs.session_id,
+          ROUND(SUM((e.metadata->>'max_scroll_px')::NUMERIC)) as scroll_px
+        FROM filtered_sessions fs
+        JOIN events e ON fs.session_id = e.session_id
+        WHERE e.event_type = 'scroll_depth'
+          AND (e.metadata->>'max_scroll_px') IS NOT NULL
+          AND e.timestamp >= $1
+          AND e.timestamp <= $2
+        GROUP BY fs.session_id
+        HAVING SUM((e.metadata->>'max_scroll_px')::NUMERIC) > 0
+      ),
+      histogram AS (
+        SELECT 
+          CASE 
+            WHEN scroll_px BETWEEN 0 AND 500 THEN '0-500'
+            WHEN scroll_px BETWEEN 501 AND 1000 THEN '501-1,000'
+            WHEN scroll_px BETWEEN 1001 AND 2000 THEN '1,001-2,000'
+            WHEN scroll_px BETWEEN 2001 AND 5000 THEN '2,001-5,000'
+            WHEN scroll_px BETWEEN 5001 AND 10000 THEN '5,001-10,000'
+            WHEN scroll_px BETWEEN 10001 AND 15000 THEN '10,001-15,000'
+            WHEN scroll_px BETWEEN 15001 AND 20000 THEN '15,001-20,000'
+            WHEN scroll_px BETWEEN 20001 AND 25000 THEN '20,001-25,000'
+            WHEN scroll_px BETWEEN 25001 AND 30000 THEN '25,001-30,000'
+            WHEN scroll_px BETWEEN 30001 AND 40000 THEN '30,001-40,000'
+            WHEN scroll_px BETWEEN 40001 AND 50000 THEN '40,001-50,000'
+            WHEN scroll_px BETWEEN 50001 AND 60000 THEN '50,001-60,000'
+            ELSE '60,000+'
+          END as range,
+          MIN(scroll_px) as range_min,
+          COUNT(*) as count
+        FROM scroll_data
+        GROUP BY 1
+      ),
+      percentiles AS (
+        SELECT
+          PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY scroll_px) as p25,
+          PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY scroll_px) as p50,
+          PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY scroll_px) as p75,
+          PERCENTILE_CONT(0.90) WITHIN GROUP (ORDER BY scroll_px) as p90,
+          PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY scroll_px) as p95,
+          COUNT(*) as total
+        FROM scroll_data
+      )
+      SELECT 
+        json_build_object(
+          'histogram', (SELECT json_agg(json_build_object('range', range, 'count', count, 'range_min', range_min) ORDER BY range_min) FROM histogram),
+          'percentiles', (SELECT row_to_json(p) FROM percentiles p),
+          'total', (SELECT total FROM percentiles)
+        ) as result
+    `;
+
+    // 3개 쿼리 병렬 실행
+    const [pvResult, durationResult, scrollResult] = await Promise.all([
+      db.query(pvQuery, queryParams),
+      db.query(durationQuery, queryParams),
+      db.query(scrollQuery, queryParams)
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        pv: pvResult.rows[0]?.result || { histogram: [], percentiles: {}, total: 0 },
+        duration: durationResult.rows[0]?.result || { histogram: [], percentiles: {}, total: 0 },
+        scroll: scrollResult.rows[0]?.result || { histogram: [], percentiles: {}, total: 0 }
+      }
+    });
+  } catch (error) {
+    console.error('Distribution API error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch distribution data',
+      message: error.message
     });
   }
 });

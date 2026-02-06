@@ -14,6 +14,7 @@ import 'dayjs/locale/ko';
 import DynamicUtmFilterBar from '../../../components/DynamicUtmFilterBar';
 import UtmSourceQuickFilter from '../../../components/UtmSourceQuickFilter';
 import ScoreSettingsCard from './ScoreSettingsCard';
+import DataDistributionPanel from './DataDistributionPanel';
 
 const { RangePicker } = DatePicker;
 
@@ -184,7 +185,10 @@ function PerformanceFilters({
   quickFilterSources,
   // FIX (2026-02-04): Attribution Window 선택
   attributionWindow,
-  onAttributionWindowChange
+  onAttributionWindowChange,
+  // 분포 데이터
+  distributionData,
+  distributionLoading
 }) {
   const [searchTerm, setSearchTerm] = useState('');
   // 새로운 상태: 활성 그룹 (day, week, month, custom)
@@ -844,6 +848,16 @@ function PerformanceFilters({
         <ScoreSettingsCard
           settings={scoreSettings}
           onClick={onScoreSettingsClick}
+        />
+        <DataDistributionPanel
+          distributionData={distributionData}
+          distributionLoading={distributionLoading}
+          maxDuration={maxDuration}
+          maxPv={maxPv}
+          maxScroll={maxScroll}
+          minDuration={minDuration}
+          minPv={minPv}
+          minScroll={minScroll}
         />
       </Card>
     </>

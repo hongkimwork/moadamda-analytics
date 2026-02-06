@@ -25,6 +25,19 @@ export const fetchCreativePerformance = async (params) => {
 };
 
 /**
+ * 광고 세션의 PV/체류시간/스크롤 분포 데이터 조회
+ * @param {Object} params - 조회 파라미터
+ * @param {string} params.start - 시작일 (YYYY-MM-DD)
+ * @param {string} params.end - 종료일 (YYYY-MM-DD)
+ * @param {string} [params.utm_filters] - UTM 필터 (JSON string)
+ * @returns {Promise<Object>} API 응답
+ */
+export const fetchDistribution = async (params) => {
+  const response = await axios.get(`${API_URL}/api/creative-performance/distribution`, { params });
+  return response.data;
+};
+
+/**
  * 광고 소재의 원본 URL 조회
  * @param {Object} params - 조회 파라미터
  * @param {string} params.creative_name - 광고 소재 이름
