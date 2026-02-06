@@ -389,7 +389,14 @@ async function getCreativeSessions({ ad_id, creative_name, utm_source, utm_mediu
         s.pageview_count,
         s.entry_url,
         s.exit_url,
-        s.is_converted,
+        -- FIX (2026-02-06): is_converted 대신 conversions 테이블로 실제 구매 확인
+        -- 결제 과정(PG 리디렉트)에서 세션이 끊겨 is_converted 미반영 대응
+        (s.is_converted = true OR EXISTS (
+          SELECT 1 FROM conversions c
+          WHERE c.session_id = s.session_id AND c.paid = 'T' AND c.final_payment > 0
+          AND (c.canceled = 'F' OR c.canceled IS NULL)
+          AND (c.order_status = 'confirmed' OR c.order_status IS NULL)
+        )) as is_converted,
         v.device_type,
         v.browser,
         v.os,
@@ -441,7 +448,14 @@ async function getCreativeSessions({ ad_id, creative_name, utm_source, utm_mediu
         s.pageview_count,
         s.entry_url,
         s.exit_url,
-        s.is_converted,
+        -- FIX (2026-02-06): is_converted 대신 conversions 테이블로 실제 구매 확인
+        -- 결제 과정(PG 리디렉트)에서 세션이 끊겨 is_converted 미반영 대응
+        (s.is_converted = true OR EXISTS (
+          SELECT 1 FROM conversions c
+          WHERE c.session_id = s.session_id AND c.paid = 'T' AND c.final_payment > 0
+          AND (c.canceled = 'F' OR c.canceled IS NULL)
+          AND (c.order_status = 'confirmed' OR c.order_status IS NULL)
+        )) as is_converted,
         v.device_type,
         v.browser,
         v.os,
@@ -837,7 +851,14 @@ async function getCreativeSessionsChartData({ ad_id, creative_name, utm_source, 
       SELECT 
         s.duration_seconds,
         s.pageview_count,
-        s.is_converted,
+        -- FIX (2026-02-06): is_converted 대신 conversions 테이블로 실제 구매 확인
+        -- 결제 과정(PG 리디렉트)에서 세션이 끊겨 is_converted 미반영 대응
+        (s.is_converted = true OR EXISTS (
+          SELECT 1 FROM conversions c
+          WHERE c.session_id = s.session_id AND c.paid = 'T' AND c.final_payment > 0
+          AND (c.canceled = 'F' OR c.canceled IS NULL)
+          AND (c.order_status = 'confirmed' OR c.order_status IS NULL)
+        )) as is_converted,
         v.device_type,
         EXTRACT(HOUR FROM s.start_time) as start_hour
       FROM sessions s
@@ -866,7 +887,14 @@ async function getCreativeSessionsChartData({ ad_id, creative_name, utm_source, 
       SELECT 
         s.duration_seconds,
         s.pageview_count,
-        s.is_converted,
+        -- FIX (2026-02-06): is_converted 대신 conversions 테이블로 실제 구매 확인
+        -- 결제 과정(PG 리디렉트)에서 세션이 끊겨 is_converted 미반영 대응
+        (s.is_converted = true OR EXISTS (
+          SELECT 1 FROM conversions c
+          WHERE c.session_id = s.session_id AND c.paid = 'T' AND c.final_payment > 0
+          AND (c.canceled = 'F' OR c.canceled IS NULL)
+          AND (c.order_status = 'confirmed' OR c.order_status IS NULL)
+        )) as is_converted,
         v.device_type,
         EXTRACT(HOUR FROM s.start_time) as start_hour
       FROM sessions s
