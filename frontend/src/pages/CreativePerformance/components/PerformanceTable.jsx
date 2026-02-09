@@ -2,7 +2,7 @@
 // 광고 소재 퍼포먼스 테이블
 // ============================================================================
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useCallback } from 'react';
 import { Card, Table, Tooltip, Dropdown, Button, message } from 'antd';
 import { ShoppingCart, Link, AlertTriangle } from 'lucide-react';
 import { formatDuration, formatCurrency, formatNumber, calculateTrafficScores } from '../utils/formatters';
@@ -30,6 +30,14 @@ function PerformanceTable({
   onCreativeClick,
   minUv = 0
 }) {
+  // 정렬 방향 추적 (클라이언트 정렬 시 UV 하단 고정 유지용)
+  const sortDirectionRef = useRef(null);
+
+  const handleTableChangeWrapped = useCallback((pagination, filters, sorter) => {
+    sortDirectionRef.current = sorter.order || null;
+    onTableChange(pagination, filters, sorter);
+  }, [onTableChange]);
+
   // 모수 평가 점수 계산 (사용자 설정 기반)
   const trafficScores = useMemo(() => calculateTrafficScores(data, scoreSettings), [data, scoreSettings]);
 
@@ -424,6 +432,16 @@ function PerformanceTable({
         );
       },
       sorter: (a, b) => {
+        // UV 이하치 기준 미달 행은 하단 고정 (정렬 방향에 관계없이)
+        if (minUv > 0) {
+          const aAbove = (a.unique_visitors || 0) > minUv;
+          const bAbove = (b.unique_visitors || 0) > minUv;
+          if (aAbove !== bAbove) {
+            const pin = aAbove ? -1 : 1;
+            // Ant Design은 내림차순 시 결과를 반전하므로, 미리 반전하여 상쇄
+            return sortDirectionRef.current === 'descend' ? -pin : pin;
+          }
+        }
         if (!scoreSettings) return 0;
         const keyA = `${a.utm_source || ''}_${a.utm_campaign || ''}_${a.utm_medium || ''}_${a.creative_name || ''}`;
         const keyB = `${b.utm_source || ''}_${b.utm_campaign || ''}_${b.utm_medium || ''}_${b.creative_name || ''}`;
@@ -696,6 +714,15 @@ function PerformanceTable({
         );
       },
       sorter: (a, b) => {
+        // UV 이하치 기준 미달 행은 하단 고정 (정렬 방향에 관계없이)
+        if (minUv > 0) {
+          const aAbove = (a.unique_visitors || 0) > minUv;
+          const bAbove = (b.unique_visitors || 0) > minUv;
+          if (aAbove !== bAbove) {
+            const pin = aAbove ? -1 : 1;
+            return sortDirectionRef.current === 'descend' ? -pin : pin;
+          }
+        }
         const uvA = a.unique_visitors || 0;
         const uvB = b.unique_visitors || 0;
         const revenueA = a.attributed_revenue || 0;
@@ -761,7 +788,7 @@ function PerformanceTable({
           id: `row-${getRowKey(record)}`
         })}
         loading={loading}
-        onChange={onTableChange}
+        onChange={handleTableChangeWrapped}
         pagination={{
           current: currentPage,
           pageSize: pageSize,
