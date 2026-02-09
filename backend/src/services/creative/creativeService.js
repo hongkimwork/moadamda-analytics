@@ -33,6 +33,7 @@ async function getCreativePerformance(params) {
     min_duration = 0,
     min_pv = 0,
     min_scroll = 0,
+    min_uv = 0,
     attribution_window = '30'
   } = params;
   
@@ -66,6 +67,8 @@ async function getCreativePerformance(params) {
   let minDurationSeconds = Math.max(parseInt(min_duration) || 0, 0);
   let minPvCount = Math.max(parseInt(min_pv) || 0, 0);
   let minScrollPx = Math.max(parseInt(min_scroll) || 0, 0);
+
+  const minUvCount = Math.max(parseInt(min_uv) || 0, 0);
 
   // 범위 충돌 방지
   if (minDurationSeconds >= maxDurationSeconds) minDurationSeconds = 0;
@@ -190,7 +193,19 @@ async function getCreativePerformance(params) {
   });
 
   // 10. JavaScript에서 정렬
+  // UV 이하치 기준이 설정된 경우 2단계 정렬:
+  // 1단계: UV > minUvCount인 소재를 상단, 이하인 소재를 하단
+  // 2단계: 각 그룹 내에서 사용자 선택 정렬 기준 적용
   finalData.sort((a, b) => {
+    // 1단계: UV 이하치 기준으로 그룹 분리
+    if (minUvCount > 0) {
+      const aAbove = (a.unique_visitors || 0) > minUvCount;
+      const bAbove = (b.unique_visitors || 0) > minUvCount;
+      if (aAbove && !bAbove) return -1; // a가 기준 이상 → 상단
+      if (!aAbove && bAbove) return 1;  // b가 기준 이상 → 상단
+    }
+
+    // 2단계: 기존 정렬 기준
     let aVal = a[sortBy];
     let bVal = b[sortBy];
     

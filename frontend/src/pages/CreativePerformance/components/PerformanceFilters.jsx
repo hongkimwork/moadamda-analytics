@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { Card, Divider, DatePicker, InputNumber, Button, Select } from 'antd';
 import { 
   Search, X, RotateCcw, Calendar, Layers, AlertTriangle, Settings,
-  Clock, Eye, MousePointerClick, Filter, Target
+  Clock, Eye, MousePointerClick, Filter, Target, Users
 } from 'lucide-react';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ko';
@@ -177,9 +177,11 @@ function PerformanceFilters({
   minDuration,
   minPv,
   minScroll,
+  minUv,
   onMinDurationChange,
   onMinPvChange,
   onMinScrollChange,
+  onMinUvChange,
   scoreSettings,
   onScoreSettingsClick,
   quickFilterSources,
@@ -277,6 +279,7 @@ function PerformanceFilters({
   const [localMinDuration, setLocalMinDuration] = useState(minDuration ? minDuration : 0);
   const [localMinPv, setLocalMinPv] = useState(minPv || 0);
   const [localMinScroll, setLocalMinScroll] = useState(minScroll || 0);
+  const [localMinUv, setLocalMinUv] = useState(minUv || 0);
   
   // 상위 컴포넌트 값이 변경되면 로컬 state도 동기화
   useEffect(() => {
@@ -302,6 +305,10 @@ function PerformanceFilters({
   useEffect(() => {
     setLocalMinScroll(minScroll || 0);
   }, [minScroll]);
+
+  useEffect(() => {
+    setLocalMinUv(minUv || 0);
+  }, [minUv]);
 
   // 마운트 시 기본값 설정 제거 - 부모 훅에서 저장된 값 또는 기본값을 이미 사용함
   // useEffect에서 기본값으로 덮어쓰면 저장된 필터가 무시됨
@@ -371,6 +378,7 @@ function PerformanceFilters({
     setLocalMinDuration(minDuration || 0);
     setLocalMinPv(minPv || 0);
     setLocalMinScroll(minScroll || 0);
+    setLocalMinUv(minUv || 0);
     onFilterChange?.({ dateRange: getDateRangeByGroupAndOffset('month', 0) });
     onReset?.();
   };
@@ -405,6 +413,7 @@ function PerformanceFilters({
     onMinDurationChange?.(localMinDuration);
     onMinPvChange?.(localMinPv);
     onMinScrollChange?.(localMinScroll);
+    onMinUvChange?.(localMinUv);
   };
 
   // 이상치 필터 값이 변경되었는지 확인
@@ -420,7 +429,8 @@ function PerformanceFilters({
     const currentMinDuration = minDuration || 0;
     const currentMinPv = minPv || 0;
     const currentMinScroll = minScroll || 0;
-    return localMinDuration !== currentMinDuration || localMinPv !== currentMinPv || localMinScroll !== currentMinScroll;
+    const currentMinUv = minUv || 0;
+    return localMinDuration !== currentMinDuration || localMinPv !== currentMinPv || localMinScroll !== currentMinScroll || localMinUv !== currentMinUv;
   };
 
   // 범위 충돌 여부 확인 (이하치 >= 이상치)
@@ -800,6 +810,25 @@ function PerformanceFilters({
                   parser={(value) => value.replace(/,/g, '')}
                 />
                 <span className="text-xs text-gray-600">px 이하 제외</span>
+              </div>
+
+              {/* UV 이하 하단 배치 */}
+              <div className="flex items-center gap-2 bg-gray-50 px-3 h-[42px] rounded-lg border border-gray-100">
+                <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
+                  <Users size={14} className="text-orange-500" />
+                  <span>UV</span>
+                </div>
+                <InputNumber
+                  size="small"
+                  value={localMinUv}
+                  onChange={(val) => setLocalMinUv(val || 0)}
+                  min={0}
+                  step={1}
+                  style={{ width: 70 }}
+                  disabled={loading}
+                  className="bg-white rounded border border-gray-200"
+                />
+                <span className="text-xs text-gray-600">이하 하단</span>
               </div>
               
               {/* 적용 버튼 */}

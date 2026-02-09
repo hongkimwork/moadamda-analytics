@@ -27,7 +27,8 @@ function PerformanceTable({
   onViewOriginalUrl,
   scoreSettings,
   isMetaFiltered,
-  onCreativeClick
+  onCreativeClick,
+  minUv = 0
 }) {
   // 모수 평가 점수 계산 (사용자 설정 기반)
   const trafficScores = useMemo(() => calculateTrafficScores(data, scoreSettings), [data, scoreSettings]);
@@ -772,7 +773,9 @@ function PerformanceTable({
         }}
         size="middle"
         rowClassName={(record, index) => {
-          return index % 2 === 0 ? 'table-row-even' : 'table-row-odd';
+          const stripe = index % 2 === 0 ? 'table-row-even' : 'table-row-odd';
+          const belowUv = minUv > 0 && (record.unique_visitors || 0) <= minUv ? 'table-row-below-uv' : '';
+          return `${stripe} ${belowUv}`.trim();
         }}
         style={{
           borderRadius: '8px',
@@ -832,6 +835,22 @@ function PerformanceTable({
         /* 행 구분선 */
         .creative-performance-table .ant-table-tbody > tr > td {
           border-bottom: 1px solid #f0f0f0 !important;
+        }
+        /* UV 이하치 기준 미달 행 (하단 배치, 연한 회색 처리) */
+        .creative-performance-table .table-row-below-uv td {
+          background-color: #f5f5f5 !important;
+          opacity: 0.55;
+        }
+        .creative-performance-table .table-row-below-uv td.ant-table-cell-fix-left,
+        .creative-performance-table .table-row-below-uv td.ant-table-cell-fix-right {
+          background-color: #f5f5f5 !important;
+          opacity: 0.55;
+        }
+        .creative-performance-table .table-row-below-uv:hover td,
+        .creative-performance-table .table-row-below-uv:hover td.ant-table-cell-fix-left,
+        .creative-performance-table .table-row-below-uv:hover td.ant-table-cell-fix-right {
+          opacity: 0.8 !important;
+          background-color: #ebebeb !important;
         }
       `}</style>
     </Card>

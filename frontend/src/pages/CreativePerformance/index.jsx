@@ -68,6 +68,7 @@ function CreativePerformance() {
     minDuration,
     minPv,
     minScroll,
+    minUv,
     attributionWindow, // FIX (2026-02-04): Attribution Window
     
     // 모달 상태
@@ -85,6 +86,7 @@ function CreativePerformance() {
     setMinDuration,
     setMinPv,
     setMinScroll,
+    setMinUv,
     setAttributionWindow, // FIX (2026-02-04): Attribution Window
     setError,
     
@@ -241,9 +243,11 @@ function CreativePerformance() {
         minDuration={minDuration}
         minPv={minPv}
         minScroll={minScroll}
+        minUv={minUv}
         onMinDurationChange={setMinDuration}
         onMinPvChange={setMinPv}
         onMinScrollChange={setMinScroll}
+        onMinUvChange={setMinUv}
         scoreSettings={scoreSettings}
         onScoreSettingsClick={() => setScoreSettingsModalVisible(true)}
         quickFilterSources={quickFilterSources}
@@ -283,6 +287,7 @@ function CreativePerformance() {
         scoreSettings={scoreSettings}
         isMetaFiltered={isMetaFiltered}
         onCreativeClick={handleCreativeClick}
+        minUv={minUv}
       />
 
       {/* 주문 보기 모달 */}

@@ -106,6 +106,9 @@ export const useCreativePerformance = () => {
   const [minPv, setMinPv] = useState(() => savedFilters?.minPv ?? 0);
   const [minScroll, setMinScroll] = useState(() => savedFilters?.minScroll ?? 0);
 
+  // UV 이하치 기준 state (이 값 이하인 광고 소재를 테이블 하단 배치)
+  const [minUv, setMinUv] = useState(() => savedFilters?.minUv ?? 0);
+
   // FIX (2026-02-04): Attribution Window 선택 (30, 60, 90, 'all')
   const [attributionWindow, setAttributionWindow] = useState(() => savedFilters?.attributionWindow ?? '30');
 
@@ -151,11 +154,12 @@ export const useCreativePerformance = () => {
       minDuration,
       minPv,
       minScroll,
+      minUv,
       attributionWindow // FIX (2026-02-04): Attribution Window 저장
     };
     
     saveFiltersToStorage(user.id, filtersToSave);
-  }, [user?.id, filters.dateRange, quickFilterSources, maxDuration, maxPv, maxScroll, minDuration, minPv, minScroll, attributionWindow]);
+  }, [user?.id, filters.dateRange, quickFilterSources, maxDuration, maxPv, maxScroll, minDuration, minPv, minScroll, minUv, attributionWindow]);
 
   // 요약 통계 계산
   const summaryStats = useMemo(() => {
@@ -216,6 +220,7 @@ export const useCreativePerformance = () => {
         min_duration: minDuration,
         min_pv: minPv,
         min_scroll: minScroll,
+        min_uv: minUv,
         attribution_window: attributionWindow // FIX (2026-02-04): Attribution Window
       };
 
@@ -264,7 +269,7 @@ export const useCreativePerformance = () => {
   useEffect(() => {
     const id = ++fetchIdRef.current;
     fetchData(id);
-  }, [currentPage, pageSize, filters, searchTerm, sortField, sortOrder, activeUtmFilters, quickFilterSources, maxDuration, maxPv, maxScroll, minDuration, minPv, minScroll, attributionWindow]);
+  }, [currentPage, pageSize, filters, searchTerm, sortField, sortOrder, activeUtmFilters, quickFilterSources, maxDuration, maxPv, maxScroll, minDuration, minPv, minScroll, minUv, attributionWindow]);
 
   // 분포 데이터 조회 (날짜/플랫폼 필터 변경 시만 재조회)
   const fetchDistributionData = useCallback(async () => {
@@ -381,6 +386,7 @@ export const useCreativePerformance = () => {
     minDuration,
     minPv,
     minScroll,
+    minUv,
     attributionWindow, // FIX (2026-02-04): Attribution Window
     
     // 모달 상태
@@ -407,6 +413,7 @@ export const useCreativePerformance = () => {
     setMinDuration,
     setMinPv,
     setMinScroll,
+    setMinUv,
     setAttributionWindow, // FIX (2026-02-04): Attribution Window
     setError,
     
