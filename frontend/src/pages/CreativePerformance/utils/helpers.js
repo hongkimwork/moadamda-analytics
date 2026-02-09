@@ -8,5 +8,5 @@
  * @returns {string} 고유 키
  */
 export const getRowKey = (record) => {
-  return `${record.creative_name}||${record.utm_source}||${record.utm_medium}||${record.utm_campaign}`;
+  return `${record.ad_id}||${record.utm_medium}||${record.utm_campaign}`;
 };

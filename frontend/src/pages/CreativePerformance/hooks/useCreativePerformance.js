@@ -2,7 +2,7 @@
 // 광고 소재 퍼포먼스 커스텀 훅
 // ============================================================================
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { fetchCreativePerformance, fetchDistribution } from '../services/creativePerformanceApi';
@@ -49,6 +49,9 @@ const loadFiltersFromStorage = (userId) => {
 export const useCreativePerformance = () => {
   // 인증 정보
   const { user } = useAuth();
+
+  // 요청 ID 관리 (stale response 방지)
+  const fetchIdRef = useRef(0);
   
   // URL 쿼리 파라미터 읽기 (광고 클릭 카드에서 이동 시 search 파라미터 사용)
   const [searchParams] = useSearchParams();
@@ -193,7 +196,7 @@ export const useCreativePerformance = () => {
   }, [data]);
 
   // 데이터 조회
-  const fetchData = async () => {
+  const fetchData = async (currentFetchId) => {
     setLoading(true);
     setError(null);
     setData([]);
@@ -234,6 +237,11 @@ export const useCreativePerformance = () => {
 
       const response = await fetchCreativePerformance(params);
 
+      // stale response 무시: 이 요청 이후 새로운 요청이 시작되었으면 무시
+      if (currentFetchId !== fetchIdRef.current) {
+        return;
+      }
+
       if (response.success) {
         setData(response.data || []);
         setTotal(response.pagination.total || 0);
@@ -243,6 +251,8 @@ export const useCreativePerformance = () => {
 
       setLoading(false);
     } catch (err) {
+      // stale 요청의 에러도 무시
+      if (currentFetchId !== fetchIdRef.current) return;
       console.error('광고 소재 분석 데이터 조회 실패:', err);
       setError(err.response?.data?.error || err.message || '데이터를 불러올 수 없습니다.');
       setData([]);
@@ -252,7 +262,8 @@ export const useCreativePerformance = () => {
 
   // 의존성 변경 시 재조회
   useEffect(() => {
-    fetchData();
+    const id = ++fetchIdRef.current;
+    fetchData(id);
   }, [currentPage, pageSize, filters, searchTerm, sortField, sortOrder, activeUtmFilters, quickFilterSources, maxDuration, maxPv, maxScroll, minDuration, minPv, minScroll, attributionWindow]);
 
   // 분포 데이터 조회 (날짜/플랫폼 필터 변경 시만 재조회)
@@ -405,6 +416,6 @@ export const useCreativePerformance = () => {
     handleReset,
     handleTableChange,
     handlePageChange,
-    fetchData
+    fetchData: () => { const id = ++fetchIdRef.current; fetchData(id); }
   };
 };
