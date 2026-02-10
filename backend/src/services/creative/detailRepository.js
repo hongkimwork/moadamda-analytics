@@ -785,12 +785,15 @@ async function getCreativeOriginalUrl({ creative_name, utm_source, utm_medium, u
   // 단일 광고명이면 배열로 변환
   const creativeNames = Array.isArray(creative_name) ? creative_name : [creative_name];
   
+  // FIX (2026-02-10): s.entry_url → us.page_url 변경
+  // 멀티터치 세션에서 entry_url은 세션 시작 URL이므로 다른 광고의 URL일 수 있음
+  // us.page_url은 해당 UTM 터치포인트 고유의 URL이므로 정확한 광고 URL을 반환
   const query = `
     WITH entry_urls AS (
       SELECT 
-        s.entry_url,
+        us.page_url,
         -- URL에 쿼리 파라미터가 있는지 확인 (? 포함 여부)
-        CASE WHEN s.entry_url LIKE '%?%' THEN 1 ELSE 0 END as has_params,
+        CASE WHEN us.page_url LIKE '%?%' THEN 1 ELSE 0 END as has_params,
         COUNT(*) as cnt
       FROM v_sessions_cafe24 s
       JOIN utm_sessions us ON s.session_id = us.session_id
@@ -804,11 +807,11 @@ async function getCreativeOriginalUrl({ creative_name, utm_source, utm_medium, u
         AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
         AND s.start_time >= $5
         AND s.start_time <= $6
-        AND s.entry_url IS NOT NULL
-      GROUP BY s.entry_url
+        AND us.page_url IS NOT NULL
+      GROUP BY us.page_url
     )
     SELECT 
-      entry_url as full_url,
+      page_url as full_url,
       cnt as total_count
     FROM entry_urls
     ORDER BY has_params DESC, cnt DESC
@@ -1008,10 +1011,106 @@ async function getSessionPurchaseLastTouchCount({ ad_id, utm_medium, utm_campaig
   return parseInt(result.rows[0]?.count) || 0;
 }
 
+/**
+ * IP+기기+OS 기반 UTM 여정 조회 (인앱 브라우저 쿠키 분리 대응)
+ * FIX (2026-02-10): detailService의 getCreativeOrders에서 extended 모드 지원용
+ * 
+ * 동일 IP + device_type + OS를 가진 다른 visitor_id들의 UTM 세션 기록을 조회합니다.
+ * creativeAttribution.js의 ipDeviceJourneyQuery와 동일한 로직
+ * 
+ * @param {Array} purchaserIds - 이미 찾은 구매자 visitor_id 목록 (제외용)
+ * @param {boolean} onlyValidAdId - true면 정상 utm_id만 포함
+ */
+async function getVisitorJourneysByIpDeviceOs({ purchaserIds, onlyValidAdId = false }) {
+  if (!purchaserIds || purchaserIds.length === 0) {
+    return { visitorInfoRows: [], journeyRows: [] };
+  }
+
+  // 1단계: 구매자들의 IP, device_type, OS 정보 조회
+  const visitorInfoQuery = `
+    SELECT visitor_id, ip_address, device_type, os
+    FROM visitors
+    WHERE visitor_id = ANY($1)
+      AND ip_address IS NOT NULL
+      AND ip_address != 'unknown'
+      AND device_type IS NOT NULL
+      AND os IS NOT NULL
+  `;
+  const visitorInfoResult = await db.query(visitorInfoQuery, [purchaserIds]);
+  
+  // IP+device_type+OS 조합별로 구매자 그룹화
+  const fingerprintGroups = {};
+  visitorInfoResult.rows.forEach(row => {
+    const fingerprint = `${row.ip_address}||${row.device_type}||${row.os}`;
+    if (!fingerprintGroups[fingerprint]) {
+      fingerprintGroups[fingerprint] = [];
+    }
+    fingerprintGroups[fingerprint].push(row.visitor_id);
+  });
+  
+  const uniqueFingerprints = Object.keys(fingerprintGroups);
+  if (uniqueFingerprints.length === 0) {
+    return { visitorInfoRows: visitorInfoResult.rows, journeyRows: [] };
+  }
+  
+  // 2단계: 동일 IP+device+OS의 다른 visitor_id들의 UTM 여정 조회
+  const adIdFilter = onlyValidAdId
+    ? `AND NULLIF(us.utm_params->>'utm_id', '') IS NOT NULL
+       AND us.utm_params->>'utm_id' NOT LIKE '{{%'`
+    : '';
+  
+  const ips = [];
+  const deviceTypes = [];
+  const oses = [];
+  uniqueFingerprints.forEach(fp => {
+    const [ip, dt, os] = fp.split('||');
+    ips.push(ip);
+    deviceTypes.push(dt);
+    oses.push(os);
+  });
+  
+  const journeyQuery = `
+    SELECT 
+      match_v.visitor_id as match_visitor_id,
+      match_v.ip_address,
+      match_v.device_type,
+      match_v.os,
+      us.visitor_id,
+      us.utm_params->>'utm_id' as ad_id,
+      us.utm_params->>'utm_content' as utm_content,
+      COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') as utm_source,
+      COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') as utm_medium,
+      COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') as utm_campaign,
+      us.sequence_order,
+      us.entry_timestamp
+    FROM visitors match_v
+    JOIN utm_sessions us ON us.visitor_id = match_v.visitor_id
+    JOIN visitors v ON us.visitor_id = v.visitor_id
+    WHERE match_v.visitor_id != ALL($1)
+      AND match_v.is_bot = false
+      AND v.is_bot = false
+      AND (match_v.ip_address, match_v.device_type, match_v.os) IN (
+        SELECT unnest($2::text[]), unnest($3::text[]), unnest($4::text[])
+      )
+      AND us.utm_params->>'utm_content' IS NOT NULL
+      ${adIdFilter}
+    ORDER BY match_v.visitor_id, us.entry_timestamp
+  `;
+  
+  const journeyResult = await db.query(journeyQuery, [purchaserIds, ips, deviceTypes, oses]);
+  
+  return { 
+    visitorInfoRows: visitorInfoResult.rows, 
+    journeyRows: journeyResult.rows,
+    fingerprintGroups
+  };
+}
+
 module.exports = {
   getAllOrdersInPeriod,
   getVisitorJourneys,
   getVisitorJourneysByMemberId,
+  getVisitorJourneysByIpDeviceOs,
   getVisitorSessionInfoForCreative,
   getVisitorTotalVisits,
   getCreativeSessions,

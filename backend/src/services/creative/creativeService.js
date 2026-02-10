@@ -34,7 +34,8 @@ async function getCreativePerformance(params) {
     min_pv = 0,
     min_scroll = 0,
     min_uv = 0,
-    attribution_window = '30'
+    attribution_window = '30',
+    matching_mode = 'extended'
   } = params;
   
   // Attribution Window 파싱
@@ -171,7 +172,9 @@ async function getCreativePerformance(params) {
 
   // 8. 기여도 계산
   // FIX (2026-02-05): ad_id 기반으로 기여도 계산
-  const attributionData = await calculateCreativeAttribution(filteredData, startDate, endDate, attributionWindowDays);
+  // FIX (2026-02-10): matching_mode 전달 (extended = IP+기기+OS 포함)
+  const validMatchingMode = ['default', 'extended'].includes(matching_mode) ? matching_mode : 'default';
+  const attributionData = await calculateCreativeAttribution(filteredData, startDate, endDate, attributionWindowDays, validMatchingMode);
 
   // 9. 기여도 데이터 병합
   // FIX (2026-02-05): ad_id 기반 키로 기여도 매칭
@@ -235,6 +238,7 @@ async function getCreativePerformance(params) {
     success: true,
     period: { start, end },
     attribution_window: attributionWindowDays,
+    matching_mode: validMatchingMode,
     data: paginatedData,
     pagination: {
       page: pageNum,

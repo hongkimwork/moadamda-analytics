@@ -12,7 +12,7 @@ import { calculateTrafficScores, formatCurrency } from '../utils/formatters';
 /**
  * Top 5 랭킹 리스트 아이템 컴포넌트
  */
-const RankingItem = ({ rank, title, subText, score, value, type, maxValue }) => {
+const RankingItem = ({ rank, title, subText, score, value, type, maxValue, onClick }) => {
   // 점수에 따른 색상 (트래픽 품질용)
   const getScoreColor = (s) => {
     if (s >= 80) return '#389e0d'; // 녹색 (우수)
@@ -30,13 +30,20 @@ const RankingItem = ({ rank, title, subText, score, value, type, maxValue }) => 
   };
 
   return (
-    <div style={{ 
-      display: 'flex', 
-      alignItems: 'center', 
-      padding: '12px 0', 
-      borderBottom: '1px solid #f0f0f0',
-      lastChild: { borderBottom: 'none' }
-    }}>
+    <div 
+      onClick={onClick}
+      style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        padding: '12px 0', 
+        borderBottom: '1px solid #f0f0f0',
+        cursor: onClick ? 'pointer' : 'default',
+        borderRadius: '6px',
+        transition: 'background-color 0.15s ease',
+      }}
+      onMouseEnter={(e) => { if (onClick) e.currentTarget.style.backgroundColor = '#f5f5f5'; }}
+      onMouseLeave={(e) => { if (onClick) e.currentTarget.style.backgroundColor = 'transparent'; }}
+    >
       {/* 순위 뱃지 */}
       <div style={{ 
         width: '24px', 
@@ -135,7 +142,7 @@ const RankingItem = ({ rank, title, subText, score, value, type, maxValue }) => 
  * @param {Array} data - 전체 광고 데이터
  * @param {Object|null} scoreSettings - 모수 평가 점수 설정
  */
-function InsightCards({ data, scoreSettings }) {
+function InsightCards({ data, scoreSettings, onItemClick }) {
   // Top 5 데이터 계산
   const { trafficTop5, valueTop5, maxValue } = useMemo(() => {
     if (!data || data.length === 0) {
@@ -241,6 +248,7 @@ function InsightCards({ data, scoreSettings }) {
                 title={getDisplayName(item)}
                 type="traffic"
                 score={item.trafficScore}
+                onClick={() => onItemClick && onItemClick(item)}
               />
             ))
           ) : (
@@ -274,6 +282,7 @@ function InsightCards({ data, scoreSettings }) {
                 type="value"
                 value={item.valuePerVisitor}
                 maxValue={maxValue}
+                onClick={() => onItemClick && onItemClick(item)}
               />
             ))
           ) : (

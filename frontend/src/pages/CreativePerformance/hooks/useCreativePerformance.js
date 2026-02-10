@@ -96,6 +96,9 @@ export const useCreativePerformance = () => {
     return ['meta', 'instagram', 'ig'];
   });
 
+  // 플랫폼 ↔ UTM Source 연결 상태 (true: 플랫폼이 주도, false: UTM Source가 독립 동작)
+  const [platformLinked, setPlatformLinked] = useState(true);
+
   // 이상치 기준 state (저장된 값 우선 사용) - 상한선
   const [maxDuration, setMaxDuration] = useState(() => savedFilters?.maxDuration ?? 60);
   const [maxPv, setMaxPv] = useState(() => savedFilters?.maxPv ?? 15);
@@ -111,6 +114,9 @@ export const useCreativePerformance = () => {
 
   // FIX (2026-02-04): Attribution Window 선택 (30, 60, 90, 'all')
   const [attributionWindow, setAttributionWindow] = useState(() => savedFilters?.attributionWindow ?? '30');
+
+  // FIX (2026-02-10): 매칭 방식 extended 고정 (쿠키 + 회원ID + IP+기기+OS 3단계 매칭)
+  const matchingMode = 'extended';
 
   // 모달 state
   const [ordersModalVisible, setOrdersModalVisible] = useState(false);
@@ -221,19 +227,28 @@ export const useCreativePerformance = () => {
         min_pv: minPv,
         min_scroll: minScroll,
         min_uv: minUv,
-        attribution_window: attributionWindow // FIX (2026-02-04): Attribution Window
+        attribution_window: attributionWindow, // FIX (2026-02-04): Attribution Window
+        matching_mode: matchingMode // FIX (2026-02-10): 매칭 방식
       };
 
-      // 동적 UTM 필터 + 퀵 필터 병합
-      const combinedFilters = [...activeUtmFilters];
+      // 동적 UTM 필터 + 퀵 필터 병합 (연결 상태에 따라 분기)
+      const combinedFilters = [...activeUtmFilters.filter(f => f.key !== 'utm_source')];
       
-      // 퀵 필터가 있으면 utm_source IN 조건 추가
-      if (quickFilterSources.length > 0) {
-        combinedFilters.push({
-          key: 'utm_source',
-          operator: 'in',
-          value: quickFilterSources
-        });
+      if (platformLinked) {
+        // 연결 상태: 플랫폼 필터가 utm_source 담당
+        if (quickFilterSources.length > 0) {
+          combinedFilters.push({
+            key: 'utm_source',
+            operator: 'in',
+            value: quickFilterSources
+          });
+        }
+      } else {
+        // 연결 해제: activeUtmFilters의 utm_source가 담당
+        const utmSourceFilter = activeUtmFilters.find(f => f.key === 'utm_source');
+        if (utmSourceFilter) {
+          combinedFilters.push(utmSourceFilter);
+        }
       }
       
       if (combinedFilters.length > 0) {
@@ -269,7 +284,7 @@ export const useCreativePerformance = () => {
   useEffect(() => {
     const id = ++fetchIdRef.current;
     fetchData(id);
-  }, [currentPage, pageSize, filters, searchTerm, sortField, sortOrder, activeUtmFilters, quickFilterSources, maxDuration, maxPv, maxScroll, minDuration, minPv, minScroll, minUv, attributionWindow]);
+  }, [currentPage, pageSize, filters, searchTerm, sortField, sortOrder, activeUtmFilters, quickFilterSources, platformLinked, maxDuration, maxPv, maxScroll, minDuration, minPv, minScroll, minUv, attributionWindow, matchingMode]);
 
   // 분포 데이터 조회 (날짜/플랫폼 필터 변경 시만 재조회)
   const fetchDistributionData = useCallback(async () => {
@@ -280,15 +295,24 @@ export const useCreativePerformance = () => {
         end: filters.dateRange[1]
       };
 
-      // UTM 필터 병합
-      const combinedFilters = [...activeUtmFilters];
-      if (quickFilterSources.length > 0) {
-        combinedFilters.push({
-          key: 'utm_source',
-          operator: 'in',
-          value: quickFilterSources
-        });
+      // UTM 필터 병합 (연결 상태에 따라 분기)
+      const combinedFilters = [...activeUtmFilters.filter(f => f.key !== 'utm_source')];
+      
+      if (platformLinked) {
+        if (quickFilterSources.length > 0) {
+          combinedFilters.push({
+            key: 'utm_source',
+            operator: 'in',
+            value: quickFilterSources
+          });
+        }
+      } else {
+        const utmSourceFilter = activeUtmFilters.find(f => f.key === 'utm_source');
+        if (utmSourceFilter) {
+          combinedFilters.push(utmSourceFilter);
+        }
       }
+      
       if (combinedFilters.length > 0) {
         params.utm_filters = JSON.stringify(combinedFilters);
       }
@@ -302,7 +326,7 @@ export const useCreativePerformance = () => {
     } finally {
       setDistributionLoading(false);
     }
-  }, [filters.dateRange, activeUtmFilters, quickFilterSources]);
+  }, [filters.dateRange, activeUtmFilters, quickFilterSources, platformLinked]);
 
   // 분포 데이터 조회 (날짜/UTM 필터 변경 시)
   useEffect(() => {
@@ -380,6 +404,7 @@ export const useCreativePerformance = () => {
     pageSize,
     activeUtmFilters,
     quickFilterSources,
+    platformLinked,
     maxDuration,
     maxPv,
     maxScroll,
@@ -388,7 +413,6 @@ export const useCreativePerformance = () => {
     minScroll,
     minUv,
     attributionWindow, // FIX (2026-02-04): Attribution Window
-    
     // 모달 상태
     ordersModalVisible,
     selectedCreative,
@@ -407,6 +431,7 @@ export const useCreativePerformance = () => {
     setSelectedCreative,
     setActiveUtmFilters,
     setQuickFilterSources,
+    setPlatformLinked,
     setMaxDuration,
     setMaxPv,
     setMaxScroll,

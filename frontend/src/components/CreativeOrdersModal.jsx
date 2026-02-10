@@ -43,7 +43,7 @@ function getExposureInfo(order, dateRange) {
  * CreativeOrdersModal - 광고 소재별 기여 주문 목록 모달
  * FIX (2026-02-04): Attribution Window 선택 기능 추가
  */
-function CreativeOrdersModal({ visible, onClose, creative, dateRange, attributionWindow = '30' }) {
+function CreativeOrdersModal({ visible, onClose, creative, dateRange, attributionWindow = '30', matchingMode = 'extended' }) {
   const [loading, setLoading] = useState(false);
   const [orders, setOrders] = useState([]);
   const [summary, setSummary] = useState({
@@ -89,6 +89,7 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange, attributio
     setLoading(true);
     try {
       // FIX (2026-02-05): ad_id 추가 (메인 테이블과 동일한 기준으로 조회)
+      // FIX (2026-02-10): matching_mode 추가 (메인 테이블과 동일한 매칭 조건)
       const response = await axios.post(`${API_URL}/api/creative-performance/orders`, {
         ad_id: creative.ad_id,
         creative_name: creative.creative_name,
@@ -97,7 +98,8 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange, attributio
         utm_campaign: creative.utm_campaign,
         start: dateRange.start,
         end: dateRange.end,
-        attribution_window: attributionWindow
+        attribution_window: attributionWindow,
+        matching_mode: matchingMode
       });
       if (response.data.success) {
         setOrders(response.data.data || []);

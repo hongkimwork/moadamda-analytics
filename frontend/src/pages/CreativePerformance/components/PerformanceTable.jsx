@@ -2,7 +2,7 @@
 // 광고 소재 퍼포먼스 테이블
 // ============================================================================
 
-import React, { useMemo, useRef, useCallback } from 'react';
+import React, { useMemo, useRef, useCallback, useEffect } from 'react';
 import { Card, Table, Tooltip, Dropdown, Button, message } from 'antd';
 import { ShoppingCart, Link, AlertTriangle } from 'lucide-react';
 import { formatDuration, formatCurrency, formatNumber, calculateTrafficScores } from '../utils/formatters';
@@ -28,10 +28,28 @@ function PerformanceTable({
   scoreSettings,
   isMetaFiltered,
   onCreativeClick,
-  minUv = 0
+  minUv = 0,
+  highlightRowKey = null,
+  onHighlightDone
 }) {
   // 정렬 방향 추적 (클라이언트 정렬 시 UV 하단 고정 유지용)
   const sortDirectionRef = useRef(null);
+
+  // 하이라이트된 행으로 스크롤 + 하이라이트 애니메이션
+  useEffect(() => {
+    if (!highlightRowKey) return;
+    const timer = setTimeout(() => {
+      const rowEl = document.getElementById(`row-${highlightRowKey}`);
+      if (rowEl) {
+        rowEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 100);
+    // 2초 후 하이라이트 자동 해제
+    const clearTimer = setTimeout(() => {
+      onHighlightDone && onHighlightDone();
+    }, 2500);
+    return () => { clearTimeout(timer); clearTimeout(clearTimer); };
+  }, [highlightRowKey]);
 
   const handleTableChangeWrapped = useCallback((pagination, filters, sorter) => {
     sortDirectionRef.current = sorter.order || null;
@@ -802,7 +820,8 @@ function PerformanceTable({
         rowClassName={(record, index) => {
           const stripe = index % 2 === 0 ? 'table-row-even' : 'table-row-odd';
           const belowUv = minUv > 0 && (record.unique_visitors || 0) <= minUv ? 'table-row-below-uv' : '';
-          return `${stripe} ${belowUv}`.trim();
+          const highlight = highlightRowKey && getRowKey(record) === highlightRowKey ? 'table-row-highlight' : '';
+          return `${stripe} ${belowUv} ${highlight}`.trim();
         }}
         style={{
           borderRadius: '8px',
@@ -878,6 +897,21 @@ function PerformanceTable({
         .creative-performance-table .table-row-below-uv:hover td.ant-table-cell-fix-right {
           opacity: 0.8 !important;
           background-color: #ebebeb !important;
+        }
+        /* 인사이트 카드 클릭 시 하이라이트 애니메이션 */
+        @keyframes rowHighlight {
+          0%, 100% { background-color: #ffffff; }
+          20%, 80% { background-color: #e6f7ff; }
+          50% { background-color: #bae7ff; }
+        }
+        .creative-performance-table .table-row-highlight > td {
+          animation: rowHighlight 2.5s ease !important;
+          background-color: #e6f7ff !important;
+        }
+        .creative-performance-table .table-row-highlight > td.ant-table-cell-fix-left,
+        .creative-performance-table .table-row-highlight > td.ant-table-cell-fix-right {
+          animation: rowHighlight 2.5s ease !important;
+          background-color: #e6f7ff !important;
         }
       `}</style>
     </Card>

@@ -26,10 +26,10 @@ const { RangePicker } = DatePicker;
  * OrderDetailPageContent 컴포넌트
  * 모달과 페이지에서 공통 사용
  */
-export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = null }) {
+export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = null, matchingMode = 'default' }) {
   // FIX (2026-02-04): 기본값을 '전체'로 변경, UI 제거
   const [attributionWindow] = useState('all');
-  const { data, loading, error } = useOrderDetail(orderId, attributionWindow);
+  const { data, loading, error } = useOrderDetail(orderId, attributionWindow, matchingMode);
   const { expandedJourneys, toggleJourney } = useJourneyExpansion(['purchase']);
   const [selectedDateRange, setSelectedDateRange] = useState(null);
 
@@ -78,7 +78,8 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
   }
 
   // FIX (2026-02-05): IP 기반 UTM 히스토리를 별도로 받음 (참고 정보용)
-  const { order, purchase_journey, previous_visits, page_path, utm_history, ip_utm_history, past_purchases } = data;
+  // FIX (2026-02-10): display_utm_history = 광고 클릭 카드 표시용 (구매 이후 UTM 포함)
+  const { order, purchase_journey, previous_visits, page_path, utm_history, display_utm_history, ip_utm_history, past_purchases } = data;
 
   // 구매 직전 경로 (광고 클릭 후 ~ 구매까지)
   const journeyPages = purchase_journey?.pages || page_path || [];
@@ -99,7 +100,8 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
   const filteredPreviousVisits = filterPreviousVisits(previous_visits, order.timestamp, selectedDateRange);
 
   // 모든 여정 통합 (광고 유입 시점 표시 + 이전 구매 감지 포함)
-  const allJourneys = buildAllJourneys(filteredPreviousVisits, validJourneyPages, purchaseDate, utm_history || [], past_purchases || []);
+  // FIX (2026-02-10): 광고 클릭 카드에는 display_utm_history 사용 (구매 이후 UTM 포함)
+  const allJourneys = buildAllJourneys(filteredPreviousVisits, validJourneyPages, purchaseDate, display_utm_history || utm_history || [], past_purchases || []);
 
   return (
     <div style={{ background: '#fafbfc', height: '100%', display: 'flex', flexDirection: 'column' }}>

@@ -185,7 +185,7 @@ function filterJourneyByAttributionWindow(journey, purchaseDate, attributionWind
  * - ad_id가 없으면 기존 creative_name 기반 (fallback)
  */
 async function getCreativeOrders(params) {
-  const { ad_id, creative_name, utm_source, utm_medium, utm_campaign, start, end, max_duration = 600, attribution_window } = params;
+  const { ad_id, creative_name, utm_source, utm_medium, utm_campaign, start, end, max_duration = 600, attribution_window, matching_mode } = params;
   
   // FIX (2026-02-04): Attribution Window 파싱
   let attributionWindowDays = DEFAULT_ATTRIBUTION_WINDOW_DAYS;
@@ -261,14 +261,21 @@ async function getCreativeOrders(params) {
     .filter(id => id && id !== '')
   )];
   
+  // FIX (2026-02-10): matching_mode 기본값을 extended로 변경 (3단계 매칭 항상 적용)
+  const validMatchingMode = ['default', 'extended'].includes(matching_mode) ? matching_mode : 'extended';
+  
   // visitor_id 기반 여정 + member_id 기반 여정 병렬 조회
   // FIX (2026-02-05): ad_id 모드일 때 정상 utm_id만 포함 (메인 테이블과 동일)
   // FIX (2026-02-05): IP 기반 여정 병합 제거 - moadamda-access-log 방식 적용
   // - IP 기반은 다른 사용자의 행동이 병합될 수 있어 정확도 문제 발생
   // - member_id 기반만 유지 (동일 회원의 다른 기기)
-  const [journeyRows, memberJourneyRows] = await Promise.all([
+  // FIX (2026-02-10): extended 모드 시 IP+기기+OS 기반 여정도 조회
+  const [journeyRows, memberJourneyRows, ipDeviceOsResult] = await Promise.all([
     repository.getVisitorJourneys({ visitorIds: purchaserIds, onlyValidAdId: useAdId }),
-    repository.getVisitorJourneysByMemberId({ purchaserMemberIds, purchaserIds, onlyValidAdId: useAdId })
+    repository.getVisitorJourneysByMemberId({ purchaserMemberIds, purchaserIds, onlyValidAdId: useAdId }),
+    validMatchingMode === 'extended'
+      ? repository.getVisitorJourneysByIpDeviceOs({ purchaserIds, onlyValidAdId: useAdId })
+      : Promise.resolve({ visitorInfoRows: [], journeyRows: [], fingerprintGroups: {} })
   ]);
   
   // visitor별 여정 그룹화
@@ -282,6 +289,24 @@ async function getCreativeOrders(params) {
     }
     memberJourneys[row.member_id].push(row);
   });
+  
+  // FIX (2026-02-10): IP+기기+OS 기반 여정 매핑 (extended 모드)
+  const ipDeviceJourneys = {};
+  if (validMatchingMode === 'extended' && ipDeviceOsResult.fingerprintGroups) {
+    const { journeyRows: ipJourneyRows, fingerprintGroups } = ipDeviceOsResult;
+    
+    ipJourneyRows.forEach(row => {
+      const fingerprint = `${row.ip_address}||${row.device_type}||${row.os}`;
+      const purchaserVisitorIds = fingerprintGroups[fingerprint] || [];
+      
+      purchaserVisitorIds.forEach(purchaserVid => {
+        if (!ipDeviceJourneys[purchaserVid]) {
+          ipDeviceJourneys[purchaserVid] = [];
+        }
+        ipDeviceJourneys[purchaserVid].push(row);
+      });
+    });
+  }
   
   // 기여도 기반 주문 필터링 및 상세 계산
   const contributedOrders = [];
@@ -320,7 +345,23 @@ async function getCreativeOrders(params) {
       }
     }
     
-    // member_id 병합 후 시간순 정렬 및 sequence_order 재할당
+    // FIX (2026-02-10): IP+기기+OS 기반 여정 병합 (extended 모드)
+    if (validMatchingMode === 'extended') {
+      const vid = order.visitor_id || order.session_visitor_id;
+      const ipJourney = ipDeviceJourneys[vid] || [];
+      if (ipJourney.length > 0) {
+        const existingKeys = new Set(fullJourney.map(j => 
+          `${j.entry_timestamp}||${j.utm_content}`
+        ));
+        const newTouches = ipJourney.filter(j => {
+          const key = `${j.entry_timestamp}||${j.utm_content}`;
+          return !existingKeys.has(key);
+        });
+        fullJourney = [...fullJourney, ...newTouches];
+      }
+    }
+    
+    // 여정 병합 후 시간순 정렬 및 sequence_order 재할당
     if (fullJourney.length > 1) {
       fullJourney.sort((a, b) => new Date(a.entry_timestamp) - new Date(b.entry_timestamp));
       fullJourney = fullJourney.map((j, idx) => ({ ...j, sequence_order: idx + 1 }));
@@ -506,6 +547,7 @@ async function getCreativeOrders(params) {
     creative: { creative_name, utm_source, utm_medium, utm_campaign },
     period: { start, end },
     attribution_window: attributionWindowDays, // FIX (2026-02-04): 사용자 선택 Attribution Window
+    matching_mode: validMatchingMode, // FIX (2026-02-10): 매칭 방식
     data: formattedOrders,
     summary: {
       total_orders: totalOrders,

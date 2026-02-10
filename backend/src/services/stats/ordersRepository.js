@@ -372,7 +372,7 @@ async function getPreviousVisits(visitorId, purchaseTimestamp) {
  * @param {Date|string} purchaseTimestamp - 구매일시 (Attribution Window 계산용)
  * @param {number|null} attributionWindowDays - Attribution Window 일수 (30, 60, 90, null=전체)
  */
-async function getUtmHistory(visitorId, sessionId = null, purchaseTimestamp = null, attributionWindowDays = 30) {
+async function getUtmHistory(visitorId, sessionId = null, purchaseTimestamp = null, attributionWindowDays = 30, removeUpperBound = false) {
   // Attribution Window 적용 여부 결정 (null이면 전체 기간)
   const hasAttributionFilter = purchaseTimestamp !== null && attributionWindowDays !== null;
   
@@ -405,10 +405,10 @@ async function getUtmHistory(visitorId, sessionId = null, purchaseTimestamp = nu
       FROM utm_sessions us
       WHERE us.visitor_id IN (SELECT visitor_id FROM target_visitors)
         ${hasAttributionFilter ? `
-        -- Attribution Window 적용 (사용자 선택 기간)
+        -- Attribution Window 하한 적용 (사용자 선택 기간)
         AND us.entry_timestamp >= ($3::timestamp - INTERVAL '${attributionWindowDays} days')
-        AND us.entry_timestamp <= $3::timestamp
-        ` : (purchaseTimestamp !== null ? `
+        ${removeUpperBound ? '' : `AND us.entry_timestamp <= $3::timestamp`}
+        ` : (purchaseTimestamp !== null && !removeUpperBound ? `
         -- 전체 기간: 구매일 이전만 필터
         AND us.entry_timestamp <= $3::timestamp
         ` : '')}
@@ -466,8 +466,10 @@ async function getUtmHistory(visitorId, sessionId = null, purchaseTimestamp = nu
     ORDER BY entry_timestamp ASC
   `;
 
-  // FIX (2026-02-04): purchaseTimestamp가 있으면 항상 params에 포함 (전체 기간일 때도 $3 참조)
-  const needsPurchaseTimestamp = purchaseTimestamp !== null;
+  // FIX (2026-02-10): $3이 SQL에서 참조될 때만 params에 포함
+  // - hasAttributionFilter: 하한 조건에서 $3 참조
+  // - !removeUpperBound && purchaseTimestamp: 상한 조건에서 $3 참조
+  const needsPurchaseTimestamp = purchaseTimestamp !== null && (hasAttributionFilter || !removeUpperBound);
   const params = needsPurchaseTimestamp
     ? [visitorId, sessionId, purchaseTimestamp]
     : [visitorId, sessionId];
@@ -510,29 +512,37 @@ async function getSameIpVisits(ipAddress, excludeSessionId) {
 }
 
 /**
- * IP 기반 과거 방문 기록 조회 (쿠키 끊김 대응)
+ * IP+기기+OS 기반 과거 방문 기록 조회 (쿠키 끊김 대응)
  * 
  * 쿠키가 끊어져서 visitor_id가 달라진 경우에도
- * 동일 IP로 과거 방문 기록을 연결합니다.
+ * 동일 IP + device_type + OS로 과거 방문 기록을 연결합니다.
+ * (브라우저 제외 = 인앱 브라우저 간 연결 가능)
  * 
  * FIX (2026-02-04): 구매일 이전 제한 제거 - 전체 방문 기록 조회
+ * FIX (2026-02-10): IP만 매칭 → IP+기기+OS 매칭으로 변경 (UTM 히스토리와 기준 통일)
  * 
  * @param {string} ipAddress - IP 주소
+ * @param {string} deviceType - 기기 종류 (pc, mobile, tablet)
+ * @param {string} os - 운영체제 (iOS, Android, Windows 등)
  * @param {string} currentVisitorId - 현재 visitor_id (제외용)
  */
-async function getPreviousVisitsByIp(ipAddress, currentVisitorId) {
+async function getPreviousVisitsByIp(ipAddress, deviceType, os, currentVisitorId) {
   if (!ipAddress || ipAddress === 'unknown') {
     return [];
   }
 
+  // device_type이나 os가 없으면 IP만으로 매칭 (하위 호환)
+  const hasDeviceInfo = deviceType && os && deviceType !== 'unknown' && os !== 'unknown';
+
   const query = `
     WITH ip_visitors AS (
-      -- 동일 IP의 다른 visitor_id들 찾기
+      -- 동일 IP + 기기 + OS의 다른 visitor_id들 찾기
       SELECT DISTINCT v.visitor_id
       FROM visitors v
       WHERE v.ip_address = $1
         AND v.visitor_id != $2
         AND v.is_bot = false
+        ${hasDeviceInfo ? `AND v.device_type = $3 AND v.os = $4` : ''}
     ),
     ip_pageviews AS (
       SELECT
@@ -563,7 +573,11 @@ async function getPreviousVisitsByIp(ipAddress, currentVisitorId) {
     ORDER BY timestamp ASC
   `;
 
-  const result = await db.query(query, [ipAddress, currentVisitorId]);
+  const params = hasDeviceInfo
+    ? [ipAddress, currentVisitorId, deviceType, os]
+    : [ipAddress, currentVisitorId];
+
+  const result = await db.query(query, params);
   return result.rows;
 }
 
@@ -697,7 +711,7 @@ async function getPreviousVisitsByMemberId(memberId, currentVisitorId) {
  * @param {Date} purchaseTimestamp - 구매일시
  * @param {number|null} attributionWindowDays - Attribution Window (30, 60, 90, null=전체)
  */
-async function getUtmHistoryByMemberId(memberId, currentVisitorId, purchaseTimestamp, attributionWindowDays = 30) {
+async function getUtmHistoryByMemberId(memberId, currentVisitorId, purchaseTimestamp, attributionWindowDays = 30, removeUpperBound = false) {
   if (!memberId || memberId === '') {
     return [];
   }
@@ -735,14 +749,20 @@ async function getUtmHistoryByMemberId(memberId, currentVisitorId, purchaseTimes
         ${hasAttributionFilter ? `
         AND us.entry_timestamp >= ($3::timestamp - INTERVAL '${attributionWindowDays} days')
         ` : ''}
-        AND us.entry_timestamp <= $3::timestamp
+        ${removeUpperBound ? '' : `AND us.entry_timestamp <= $3::timestamp`}
       ORDER BY us.session_id, us.utm_params->>'utm_content', us.entry_timestamp ASC
     )
     SELECT * FROM deduplicated_utm
     ORDER BY entry_timestamp ASC
   `;
 
-  const result = await db.query(query, [memberId, currentVisitorId, purchaseTimestamp]);
+  // FIX (2026-02-10): $3이 SQL에서 참조될 때만 params에 포함
+  const needsPurchaseTimestamp = hasAttributionFilter || !removeUpperBound;
+  const params = needsPurchaseTimestamp
+    ? [memberId, currentVisitorId, purchaseTimestamp]
+    : [memberId, currentVisitorId];
+
+  const result = await db.query(query, params);
   return result.rows;
 }
 
@@ -871,6 +891,72 @@ async function getPastPurchasesByMemberId(memberId, excludeOrderId) {
   return result.rows;
 }
 
+/**
+ * IP+기기+OS 기반 UTM 히스토리 조회 (인앱 브라우저 쿠키 분리 대응)
+ * 
+ * 동일 IP + device_type + OS를 가진 다른 visitor_id들의 UTM 세션 기록을 조회합니다.
+ * 기존 getUtmHistoryByIp()보다 정확한 매칭 (브라우저 제외 = 인앱 브라우저 간 연결 가능)
+ * 
+ * FIX (2026-02-10): 신규 추가
+ * 
+ * @param {string} ipAddress - IP 주소
+ * @param {string} deviceType - 기기 종류 (pc, mobile)
+ * @param {string} os - 운영체제 (iOS, Android, Windows 등)
+ * @param {string} currentVisitorId - 현재 visitor_id (제외용)
+ * @param {Date} purchaseTimestamp - 구매일시
+ * @param {number|null} attributionWindowDays - Attribution Window (30, 60, 90, null=전체)
+ */
+async function getUtmHistoryByIpDeviceOs(ipAddress, deviceType, os, currentVisitorId, purchaseTimestamp, attributionWindowDays = 30, removeUpperBound = false) {
+  if (!ipAddress || ipAddress === 'unknown' || !deviceType || !os) {
+    return [];
+  }
+
+  const hasAttributionFilter = attributionWindowDays !== null;
+
+  const query = `
+    WITH ip_device_visitors AS (
+      -- 동일 IP + device_type + OS의 다른 visitor_id들 찾기 (브라우저 제외)
+      SELECT DISTINCT v.visitor_id
+      FROM visitors v
+      WHERE v.ip_address = $1
+        AND v.device_type = $2
+        AND v.os = $3
+        AND v.visitor_id != $4
+        AND v.is_bot = false
+    ),
+    deduplicated_utm AS (
+      SELECT DISTINCT ON (us.session_id, us.utm_params->>'utm_content')
+        us.visitor_id,
+        us.session_id,
+        COALESCE(us.utm_source, us.utm_params->>'utm_source', 'direct') as utm_source,
+        COALESCE(us.utm_medium, us.utm_params->>'utm_medium') as utm_medium,
+        COALESCE(us.utm_campaign, us.utm_params->>'utm_campaign') as utm_campaign,
+        us.utm_params->>'utm_content' as utm_content,
+        us.entry_timestamp,
+        us.duration_seconds,
+        us.sequence_order
+      FROM utm_sessions us
+      WHERE us.visitor_id IN (SELECT visitor_id FROM ip_device_visitors)
+        ${hasAttributionFilter ? `
+        AND us.entry_timestamp >= ($5::timestamp - INTERVAL '${attributionWindowDays} days')
+        ` : ''}
+        ${removeUpperBound ? '' : `AND us.entry_timestamp <= $5::timestamp`}
+      ORDER BY us.session_id, us.utm_params->>'utm_content', us.entry_timestamp ASC
+    )
+    SELECT * FROM deduplicated_utm
+    ORDER BY entry_timestamp ASC
+  `;
+
+  // FIX (2026-02-10): $5가 SQL에서 참조될 때만 params에 포함
+  const needsPurchaseTimestamp = hasAttributionFilter || !removeUpperBound;
+  const params = needsPurchaseTimestamp
+    ? [ipAddress, deviceType, os, currentVisitorId, purchaseTimestamp]
+    : [ipAddress, deviceType, os, currentVisitorId];
+
+  const result = await db.query(query, params);
+  return result.rows;
+}
+
 module.exports = {
   getOrders,
   getOrdersCount,
@@ -881,6 +967,7 @@ module.exports = {
   getPreviousVisitsByMemberId,
   getUtmHistory,
   getUtmHistoryByIp,
+  getUtmHistoryByIpDeviceOs,
   getUtmHistoryByMemberId,
   getSameIpVisits,
   getPastPurchases,

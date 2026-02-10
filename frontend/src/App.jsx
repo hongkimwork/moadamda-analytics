@@ -2,10 +2,10 @@ import React, { useState, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { Layout, Menu, Spin, ConfigProvider, Dropdown, Avatar, Space, message, Form, Input, Button } from 'antd';
 import koKR from 'antd/locale/ko_KR';
-import { 
-  ShoppingOutlined, 
-  DatabaseOutlined, 
-  UserOutlined, 
+import {
+  ShoppingOutlined,
+  DatabaseOutlined,
+  UserOutlined,
   ClockCircleOutlined,
   EyeOutlined,
   ThunderboltOutlined,
@@ -32,10 +32,10 @@ dayjs.locale('ko');
 
 // Lazy load pages for code splitting (reduces initial bundle size)
 // Named exports from OrderAnalysis are wrapped to work with lazy loading
-const OrderListPage = lazy(() => 
+const OrderListPage = lazy(() =>
   import('./pages/OrderAnalysis').then(module => ({ default: module.OrderListPage }))
 );
-const OrderDetailPage = lazy(() => 
+const OrderDetailPage = lazy(() =>
   import('./pages/OrderAnalysis').then(module => ({ default: module.OrderDetailPage }))
 );
 const DataTables = lazy(() => import('./pages/DataTables'));
@@ -48,7 +48,7 @@ const OurDataCompare = lazy(() => import('./pages/OurDataCompare/index'));
 const LoginPage = lazy(() => import('./pages/Login/index'));
 const UserManagement = lazy(() => import('./pages/UserManagement/index'));
 
-const { Sider, Content, Header } = Layout;
+const { Sider, Content } = Layout;
 
 // ============================================================================
 // 메인 레이아웃 컴포넌트
@@ -57,7 +57,7 @@ const { Sider, Content, Header } = Layout;
 function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const { user, logout, isAdmin } = useAuth();
 
   // 현재 경로에서 선택된 메뉴 키 계산
@@ -245,12 +245,12 @@ function AppLayout() {
   return (
     <Layout style={{ minHeight: '100vh' }}>
       {/* 사이드바 */}
-      <Sider 
-        collapsible 
-        collapsed={collapsed} 
+      <Sider
+        collapsible
+        collapsed={collapsed}
         onCollapse={setCollapsed}
         width={250}
-                            style={{ 
+        style={{
           overflow: 'auto',
           height: '100vh',
           position: 'fixed',
@@ -259,27 +259,36 @@ function AppLayout() {
           bottom: 0,
         }}
       >
-        {/* 로고/타이틀 */}
-        <div style={{ 
-          height: '64px', 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center',
+        {/* 사용자 정보 (사이드바 상단) */}
+        <div style={{
+          padding: '16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: collapsed ? 'center' : 'flex-start',
           color: 'white',
-          fontSize: collapsed ? '18px' : '16px',
-          fontWeight: 'bold',
           borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-          gap: '8px'
+          marginBottom: '8px'
         }}>
-          {collapsed ? (
-            <BarChart3 size={20} />
-          ) : (
-            <>
-              <BarChart3 size={20} />
-              <span>Moadamda Analytics</span>
-            </>
-          )}
-              </div>
+          <Dropdown menu={{ items: profileMenuItems }} placement="bottomRight" trigger={['click']}>
+            <div style={{ connection: 'pointer', display: 'flex', alignItems: 'center', cursor: 'pointer', width: '100%', justifyContent: collapsed ? 'center' : 'flex-start' }}>
+              <Avatar
+                style={{ backgroundColor: '#1890ff', flexShrink: 0 }}
+                icon={<UserOutlined />}
+              />
+              {!collapsed && (
+                <div style={{ marginLeft: 12, overflow: 'hidden' }}>
+                  <div style={{ color: '#fff', fontWeight: 500, fontSize: '14px', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                    {user?.name}
+                  </div>
+                  <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: '12px', display: 'flex', alignItems: 'center' }}>
+                    <span>{getRoleText(user?.role)}</span>
+                    <DownOutlined style={{ fontSize: 10, marginLeft: 6 }} />
+                  </div>
+                </div>
+              )}
+            </div>
+          </Dropdown>
+        </div>
 
         {/* 메뉴 */}
         <Menu
@@ -294,32 +303,9 @@ function AppLayout() {
 
       {/* 컨텐츠 영역 */}
       <Layout style={{ marginLeft: collapsed ? 80 : 250, transition: 'margin-left 0.2s' }}>
-        {/* 상단 헤더 - 프로필 영역 */}
-        <Header style={{ 
-          background: '#fff', 
-          padding: '0 24px', 
-          display: 'flex', 
-          justifyContent: 'flex-end', 
-          alignItems: 'center',
-          boxShadow: '0 1px 4px rgba(0, 0, 0, 0.08)',
-          position: 'sticky',
-          top: 0,
-          zIndex: 10
-        }}>
-          <Dropdown menu={{ items: profileMenuItems }} placement="bottomRight">
-            <Space style={{ cursor: 'pointer' }}>
-              <Avatar 
-                style={{ backgroundColor: '#1890ff' }}
-                icon={<UserOutlined />} 
-              />
-              <span style={{ fontWeight: 500 }}>{user?.name}</span>
-              <span style={{ color: '#999', fontSize: 12 }}>({getRoleText(user?.role)})</span>
-              <DownOutlined style={{ fontSize: 10, color: '#999' }} />
-            </Space>
-          </Dropdown>
-        </Header>
 
-        <Content style={{ minHeight: 'calc(100vh - 64px)' }}>
+
+        <Content style={{ minHeight: '100vh' }}>
           <Suspense fallback={
             <div style={{ padding: '50px', textAlign: 'center' }}>
               <Spin size="large" tip="로딩 중..." />
@@ -329,25 +315,25 @@ function AppLayout() {
               {/* 주문 분석 */}
               <Route path="/" element={<OrderListPage />} />
               <Route path="/order/:orderId" element={<OrderDetailPage />} />
-              
+
               {/* 광고 소재 분석 */}
               <Route path="/creative-performance" element={<CreativePerformance />} />
-              
+
               {/* 카페24 Data 비교 */}
               <Route path="/our-data-compare" element={<OurDataCompare />} />
-              
+
               {/* 방문자 분석 */}
               <Route path="/visitor-analysis" element={<VisitorAnalysis />} />
-              
+
               {/* 나만의 대시보드 */}
               <Route path="/my-dashboard" element={<MyDashboard />} />
-              
+
               {/* 메타 성과 조회 */}
               <Route path="/meta-insights" element={<MetaInsights />} />
-              
+
               {/* 페이지 매핑 */}
               <Route path="/page-mapping" element={<PageMapping />} />
-              
+
               {/* 데이터 테이블 */}
               <Route path="/data/:tableName" element={<DataTables />} />
 
@@ -370,7 +356,7 @@ function AppLayout() {
 // ============================================================================
 function MyProfilePage() {
   const { user } = useAuth();
-  
+
   const getRoleText = (role) => {
     switch (role) {
       case 'master': return '마스터';
@@ -480,10 +466,10 @@ function AuthenticatedApp() {
   // 로딩 중
   if (loading) {
     return (
-      <div style={{ 
-        minHeight: '100vh', 
-        display: 'flex', 
-        alignItems: 'center', 
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
         justifyContent: 'center',
         background: '#f0f2f5'
       }}>
@@ -496,11 +482,11 @@ function AuthenticatedApp() {
   if (!isAuthenticated) {
     return (
       <Suspense fallback={
-        <div style={{ 
-          minHeight: '100vh', 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center' 
+        <div style={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
         }}>
           <Spin size="large" />
         </div>

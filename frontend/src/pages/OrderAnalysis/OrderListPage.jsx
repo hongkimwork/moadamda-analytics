@@ -121,6 +121,9 @@ export function OrderListPage() {
     };
   }, [orders]);
 
+  // FIX (2026-02-10): 매칭 방식 extended 고정 (쿠키 + 회원ID + IP+기기+OS 3단계 매칭)
+  const matchingMode = 'extended';
+
   // 모달 state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState(null);
@@ -359,6 +362,7 @@ export function OrderListPage() {
             }}>
               주문 목록을 조회하고 고객 여정을 분석합니다
             </Text>
+            {/* FIX (2026-02-10): 3단계 매칭 항상 적용 (쿠키 + 회원ID + IP+기기+OS) */}
           </div>
           
           {/* 새로고침 버튼 + 갱신 시간 */}
@@ -536,6 +540,7 @@ export function OrderListPage() {
             orderId={selectedOrderId}
             userMappings={userMappings}
             onClose={handleCloseModal}
+            matchingMode={matchingMode}
           />
         )}
       </Modal>

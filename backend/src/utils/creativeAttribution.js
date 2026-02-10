@@ -18,14 +18,18 @@ const DEFAULT_ATTRIBUTION_WINDOW_DAYS = 30;
  * - 여정 연결: visitor_id + member_id 기반만 사용 (detailService.js와 동일)
  * - 기존: utm_content(광고명) 기준 → 광고명 변경 시 매칭 실패
  * - 변경: utm_id(ad_id) 기준 → 광고명 변경해도 정확한 기여도 계산
+ * FIX (2026-02-10): IP+기기+OS 기반 여정 연결 옵션 추가
+ * - matching_mode='extended' 시 동일 IP + device_type + OS의 다른 visitor_id UTM도 포함
+ * - 인앱 브라우저 간 쿠키 분리로 누락되던 광고 기여도 보충
  * 
  * @param {Array} creatives - 광고 소재 목록 [{ ad_id, creative_name, utm_source, utm_medium, utm_campaign, _variant_names, ... }]
  * @param {String} startDate - 시작일
  * @param {String} endDate - 종료일
  * @param {number|null} attributionWindowDays - Attribution Window 일수 (30, 60, 90, null=전체)
+ * @param {string} matchingMode - 매칭 방식 ('default' = 방문자ID+회원ID, 'extended' = +IP+기기+OS)
  * @returns {Object} - 광고별 기여도 데이터 { creative_name: { contributed_orders, attributed_revenue, total_revenue } }
  */
-async function calculateCreativeAttribution(creatives, startDate, endDate, attributionWindowDays = DEFAULT_ATTRIBUTION_WINDOW_DAYS) {
+async function calculateCreativeAttribution(creatives, startDate, endDate, attributionWindowDays = DEFAULT_ATTRIBUTION_WINDOW_DAYS, matchingMode = 'extended') {
   // FIX (2026-02-05): ad_id 기반 unique key 생성
   // 같은 creative_name이라도 ad_id가 다르면 별도로 기여도 계산
   const getCreativeKey = (creative) => {
@@ -172,6 +176,100 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
     memberJourneys[row.member_id].push(row);
   });
 
+  // FIX (2026-02-10): IP+기기+OS 기반 여정 연결 (extended 모드)
+  // 동일 IP + device_type + OS를 가진 다른 visitor_id의 UTM 여정도 포함
+  let ipDeviceJourneys = {}; // visitor_id → UTM 여정 배열
+  
+  if (matchingMode === 'extended') {
+    // 구매자들의 IP, device_type, OS 정보 일괄 조회
+    const visitorInfoQuery = `
+      SELECT visitor_id, ip_address, device_type, os
+      FROM visitors
+      WHERE visitor_id = ANY($1)
+        AND ip_address IS NOT NULL
+        AND ip_address != 'unknown'
+        AND device_type IS NOT NULL
+        AND os IS NOT NULL
+    `;
+    const visitorInfoResult = await db.query(visitorInfoQuery, [purchaserIds]);
+    
+    // IP+device_type+OS 조합별로 구매자 그룹화
+    const fingerprintGroups = {};
+    visitorInfoResult.rows.forEach(row => {
+      const fingerprint = `${row.ip_address}||${row.device_type}||${row.os}`;
+      if (!fingerprintGroups[fingerprint]) {
+        fingerprintGroups[fingerprint] = [];
+      }
+      fingerprintGroups[fingerprint].push(row.visitor_id);
+    });
+    
+    // 이미 찾은 visitor_id 목록 (중복 제외용)
+    const alreadyFoundIds = new Set([...purchaserIds, ...purchaserMemberIds.length > 0 
+      ? memberJourneyResult.rows.map(r => r.visitor_id) : []]);
+    
+    // 각 fingerprint 그룹에 대해 동일 조건의 다른 visitor_id 찾기
+    const uniqueFingerprints = Object.keys(fingerprintGroups);
+    
+    if (uniqueFingerprints.length > 0) {
+      // 일괄 조회: IP+device_type+OS가 같은 다른 visitor_id들의 UTM 여정
+      const ipDeviceJourneyQuery = `
+        SELECT 
+          match_v.visitor_id as match_visitor_id,
+          match_v.ip_address,
+          match_v.device_type,
+          match_v.os,
+          us.visitor_id,
+          us.utm_params->>'utm_id' as ad_id,
+          us.utm_params->>'utm_content' as utm_content,
+          COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') as utm_source,
+          COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') as utm_medium,
+          COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') as utm_campaign,
+          us.sequence_order,
+          us.entry_timestamp
+        FROM visitors match_v
+        JOIN utm_sessions us ON us.visitor_id = match_v.visitor_id
+        JOIN visitors v ON us.visitor_id = v.visitor_id
+        WHERE match_v.visitor_id != ALL($1)
+          AND match_v.is_bot = false
+          AND v.is_bot = false
+          AND (match_v.ip_address, match_v.device_type, match_v.os) IN (
+            SELECT unnest($2::text[]), unnest($3::text[]), unnest($4::text[])
+          )
+          AND us.utm_params->>'utm_content' IS NOT NULL
+          AND NULLIF(us.utm_params->>'utm_id', '') IS NOT NULL
+          AND us.utm_params->>'utm_id' NOT LIKE '{{%'
+        ORDER BY match_v.visitor_id, us.entry_timestamp
+      `;
+      
+      // fingerprint 분해
+      const ips = [];
+      const deviceTypes = [];
+      const oses = [];
+      uniqueFingerprints.forEach(fp => {
+        const [ip, dt, os] = fp.split('||');
+        ips.push(ip);
+        deviceTypes.push(dt);
+        oses.push(os);
+      });
+      
+      const allFoundIds = Array.from(alreadyFoundIds);
+      const ipDeviceResult = await db.query(ipDeviceJourneyQuery, [allFoundIds, ips, deviceTypes, oses]);
+      
+      // 매칭된 visitor의 IP+device+OS → 원래 구매자 visitor_id 매핑
+      ipDeviceResult.rows.forEach(row => {
+        const fingerprint = `${row.ip_address}||${row.device_type}||${row.os}`;
+        const purchaserVisitorIds = fingerprintGroups[fingerprint] || [];
+        
+        purchaserVisitorIds.forEach(purchaserVid => {
+          if (!ipDeviceJourneys[purchaserVid]) {
+            ipDeviceJourneys[purchaserVid] = [];
+          }
+          ipDeviceJourneys[purchaserVid].push(row);
+        });
+      });
+    }
+  }
+
   // 각 구매건에 대해 기여도 계산
   purchases.forEach(purchase => {
     // 인앱 브라우저 대응: visitor_id로 못 찾으면 session_visitor_id로 시도
@@ -199,7 +297,25 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
       }
     }
     
-    // member_id 병합 후 시간순 정렬 및 sequence_order 재할당
+    // FIX (2026-02-10): IP+기기+OS 기반 여정 병합 (extended 모드)
+    if (matchingMode === 'extended') {
+      const vid = purchase.visitor_id || purchase.session_visitor_id;
+      const ipJourney = ipDeviceJourneys[vid] || [];
+      if (ipJourney.length > 0) {
+        const existingKeys = new Set(journey.map(j => 
+          `${j.entry_timestamp}||${j.utm_content}`
+        ));
+        
+        const newTouches = ipJourney.filter(j => {
+          const key = `${j.entry_timestamp}||${j.utm_content}`;
+          return !existingKeys.has(key);
+        });
+        
+        journey = [...journey, ...newTouches];
+      }
+    }
+    
+    // 여정 병합 후 시간순 정렬 및 sequence_order 재할당
     if (journey.length > 1) {
       journey.sort((a, b) => new Date(a.entry_timestamp) - new Date(b.entry_timestamp));
       journey = journey.map((j, idx) => ({ ...j, sequence_order: idx + 1 }));

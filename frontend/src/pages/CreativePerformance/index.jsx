@@ -2,11 +2,12 @@
 // 광고 소재 퍼포먼스 페이지 (리팩토링)
 // ============================================================================
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Alert, Modal, message, Spin } from 'antd';
 import dayjs from 'dayjs';
 import { useCreativePerformance } from './hooks/useCreativePerformance';
 import { fetchCreativeOriginalUrl } from './services/creativePerformanceApi';
+import { getRowKey } from './utils/helpers';
 import PerformanceHeader from './components/PerformanceHeader';
 import InsightCards from './components/InsightCards';
 import PerformanceFilters from './components/PerformanceFilters';
@@ -14,7 +15,6 @@ import PerformanceTable from './components/PerformanceTable';
 import CreativeOrdersModal from '../../components/CreativeOrdersModal';
 import CreativeSessionsModal from '../../components/CreativeSessionsModal';
 import CreativeEntriesModal from '../../components/CreativeEntriesModal';
-import TestResultModal from '../../components/TestResultModal';
 import ScoreSettingsModal from './components/ScoreSettingsModal';
 import CreativeMediaPreviewModal from './components/CreativeMediaPreviewModal';
 
@@ -24,17 +24,14 @@ import CreativeMediaPreviewModal from './components/CreativeMediaPreviewModal';
 function CreativePerformance() {
   // 마지막 갱신 시간 state
   const [lastUpdated, setLastUpdated] = useState(dayjs());
-  
-  // 테스트 결과 모달 state
-  const [testResultModalVisible, setTestResultModalVisible] = useState(false);
-  
+
   // 점수 설정 모달 state
   const [scoreSettingsModalVisible, setScoreSettingsModalVisible] = useState(false);
-  
+
   // 세션 상세 모달 state (UV 클릭)
   const [sessionsModalVisible, setSessionsModalVisible] = useState(false);
   const [sessionsCreative, setSessionsCreative] = useState(null);
-  
+
   // 진입 목록 모달 state (View 클릭)
   const [entriesModalVisible, setEntriesModalVisible] = useState(false);
   const [entriesCreative, setEntriesCreative] = useState(null);
@@ -48,6 +45,20 @@ function CreativePerformance() {
   const [mediaPreviewModalVisible, setMediaPreviewModalVisible] = useState(false);
   const [mediaPreviewCreativeName, setMediaPreviewCreativeName] = useState(null);
 
+  // 인사이트 패널 토글 state (기본: 숨김)
+  const [showInsight, setShowInsight] = useState(false);
+
+  // 인사이트 카드 클릭 → 테이블 행 하이라이트 state
+  const [highlightRowKey, setHighlightRowKey] = useState(null);
+
+  // 인사이트 카드 항목 클릭 핸들러
+  const handleInsightItemClick = useCallback((item) => {
+    const key = getRowKey(item);
+    // 동일 키 재클릭 시에도 다시 트리거되도록 한번 null로 리셋
+    setHighlightRowKey(null);
+    setTimeout(() => setHighlightRowKey(key), 0);
+  }, []);
+
   const {
     // 데이터
     data,
@@ -55,11 +66,12 @@ function CreativePerformance() {
     total,
     error,
     summaryStats,
-    
+
     // 필터 상태
     filters,
     activeUtmFilters,
     quickFilterSources,
+    platformLinked,
     currentPage,
     pageSize,
     maxDuration,
@@ -70,16 +82,17 @@ function CreativePerformance() {
     minScroll,
     minUv,
     attributionWindow, // FIX (2026-02-04): Attribution Window
-    
+
     // 모달 상태
     ordersModalVisible,
     selectedCreative,
-    
+
     // 상태 변경 함수
     setOrdersModalVisible,
     setSelectedCreative,
     setActiveUtmFilters,
     setQuickFilterSources,
+    setPlatformLinked,
     setMaxDuration,
     setMaxPv,
     setMaxScroll,
@@ -89,15 +102,15 @@ function CreativePerformance() {
     setMinUv,
     setAttributionWindow, // FIX (2026-02-04): Attribution Window
     setError,
-    
+
     // 점수 설정
     scoreSettings,
     setScoreSettings,
-    
+
     // 분포 데이터
     distributionData,
     distributionLoading,
-    
+
     // 핸들러
     handleSearch,
     handleFilterChange,
@@ -168,7 +181,7 @@ function CreativePerformance() {
     setOriginalUrlLoading(true);
     setOriginalUrlModalVisible(true);
     setOriginalUrlData({ creative_name: record.creative_name });
-    
+
     try {
       const result = await fetchCreativeOriginalUrl({
         creative_name: record.creative_name,
@@ -178,7 +191,7 @@ function CreativePerformance() {
         start: filters.dateRange[0],
         end: filters.dateRange[1]
       });
-      
+
       if (result.success) {
         setOriginalUrlData({
           creative_name: record.creative_name,
@@ -208,7 +221,7 @@ function CreativePerformance() {
   };
 
   // 메타 필터 적용 여부 계산 (meta, instagram, ig 소스 필터링 중인지)
-  const isMetaFiltered = quickFilterSources.some(source => 
+  const isMetaFiltered = quickFilterSources.some(source =>
     ['meta', 'instagram', 'ig', 'facebook', 'fb'].includes(source.toLowerCase())
   );
 
@@ -219,11 +232,8 @@ function CreativePerformance() {
         onRefresh={handleRefresh}
         loading={loading}
         lastUpdated={lastUpdated}
-        onTestResult={() => setTestResultModalVisible(true)}
-      />
 
-      {/* 인사이트 카드 (Top 5 랭킹) */}
-      <InsightCards data={data} scoreSettings={scoreSettings} />
+      />
 
       {/* 검색 및 필터 */}
       <PerformanceFilters
@@ -255,7 +265,24 @@ function CreativePerformance() {
         onAttributionWindowChange={setAttributionWindow}
         distributionData={distributionData}
         distributionLoading={distributionLoading}
+        platformLinked={platformLinked}
+        onPlatformLinkedChange={setPlatformLinked}
+        showInsight={showInsight}
+        onInsightToggle={() => setShowInsight(prev => !prev)}
       />
+
+      {/* 인사이트 카드 (Top 5 랭킹) - 토글 버튼으로 표시/숨김 */}
+      {showInsight && (
+        <div style={{ marginTop: '12px', animation: 'fadeSlideIn 200ms ease' }}>
+          <InsightCards data={data} scoreSettings={scoreSettings} onItemClick={handleInsightItemClick} />
+          <style>{`
+            @keyframes fadeSlideIn {
+              from { opacity: 0; transform: translateY(-8px); }
+              to { opacity: 1; transform: translateY(0); }
+            }
+          `}</style>
+        </div>
+      )}
 
       {/* 에러 표시 */}
       {error && (
@@ -266,11 +293,12 @@ function CreativePerformance() {
           showIcon
           closable
           onClose={() => setError(null)}
-          style={{ marginBottom: '16px' }}
+          style={{ marginTop: '16px', marginBottom: '16px' }}
         />
       )}
 
       {/* 테이블 */}
+      <div style={{ marginTop: '16px' }}>
       <PerformanceTable
         data={data}
         loading={loading}
@@ -288,9 +316,13 @@ function CreativePerformance() {
         isMetaFiltered={isMetaFiltered}
         onCreativeClick={handleCreativeClick}
         minUv={minUv}
+        highlightRowKey={highlightRowKey}
+        onHighlightDone={() => setHighlightRowKey(null)}
       />
+      </div>
 
       {/* 주문 보기 모달 */}
+      {/* FIX (2026-02-10): matchingMode 전달 - 메인 테이블과 동일한 매칭 조건으로 주문 조회 */}
       <CreativeOrdersModal
         visible={ordersModalVisible}
         onClose={() => {
@@ -303,6 +335,7 @@ function CreativePerformance() {
           end: filters.dateRange[1]
         }}
         attributionWindow={attributionWindow}
+        matchingMode="extended"
       />
 
       {/* 세션 상세 모달 (UV 클릭) */}
@@ -333,12 +366,6 @@ function CreativePerformance() {
         }}
       />
 
-      {/* 테스트 결과 모달 */}
-      <TestResultModal
-        visible={testResultModalVisible}
-        onClose={() => setTestResultModalVisible(false)}
-      />
-
       {/* 원본 URL 모달 */}
       <Modal
         title="원본 URL"
@@ -364,16 +391,16 @@ function CreativePerformance() {
                 {originalUrlData.decoded_creative_name || originalUrlData.creative_name || '-'}
               </div>
             </div>
-            
+
             {originalUrlData.full_url ? (
               <>
                 <div style={{ marginBottom: '16px' }}>
                   <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>광고 랜딩 URL</div>
-                  <div 
-                    style={{ 
-                      fontSize: '13px', 
-                      padding: '12px', 
-                      background: '#f5f5f5', 
+                  <div
+                    style={{
+                      fontSize: '13px',
+                      padding: '12px',
+                      background: '#f5f5f5',
                       borderRadius: '6px',
                       wordBreak: 'break-all',
                       cursor: 'pointer',
@@ -386,7 +413,7 @@ function CreativePerformance() {
                     {originalUrlData.full_url}
                   </div>
                 </div>
-                
+
                 <div style={{ fontSize: '12px', color: '#999' }}>
                   * 해당 기간 내 {originalUrlData.total_count?.toLocaleString()}회 유입된 대표 URL입니다. 클릭하면 복사됩니다.
                 </div>
