@@ -1,9 +1,15 @@
-v29.0 (v056)
+v29.1 (v057)
 Updated: 2026-02-11
 
 🔑 방문자 식별 체계 강화 (브라우저 핑거프린트 + Cafe24 회원 ID)
 
-NEW IN v29.0 (v056):
+NEW IN v29.1 (v057):
+✅ 핑거프린트 localStorage 캐시 추가
+  - MPA(카페24) 환경에서 페이지 이동 시 스크립트 재실행 → 핑거프린트 매번 null 문제 해결
+  - 첫 페이지: 비동기 로드 후 localStorage에 저장
+  - 두 번째 페이지부터: 캐시에서 즉시 읽어 모든 페이지뷰에 핑거프린트 포함
+
+PREVIOUS v29.0 (v056):
 ✅ 브라우저 핑거프린트 수집 (FingerprintJS v5 CDN 비동기 로드)
   - CDN 실패 시 경량 fallback (canvas + screen + hardware 기반)
   - 공유 네트워크에서 다른 PC를 정확히 구별

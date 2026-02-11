@@ -122,7 +122,12 @@
   let retryTimer = null;  // retry timer for failed events
   
   // Browser fingerprint for visitor matching (loaded async from FingerprintJS CDN)
+  // FIX (2026-02-11): localStorage 캐시 추가 - MPA 환경에서 페이지 이동마다 스크립트 재실행되므로
+  // 캐시된 값을 즉시 사용하고, 백그라운드에서 새 값으로 갱신
   let browserFingerprint = null;
+  try {
+    browserFingerprint = localStorage.getItem('ma_browser_fp') || null;
+  } catch(e) {}
   
   // Scroll depth tracking variables
   let maxScrollY = 0;  // Maximum scroll position reached (px)
@@ -156,6 +161,10 @@
     } catch (e) {
       console.warn('[MA] FingerprintJS CDN failed, using fallback');
       browserFingerprint = generateFallbackFingerprint();
+    }
+    // FIX (2026-02-11): localStorage에 캐시 - 다음 페이지 로드 시 즉시 사용 가능
+    if (browserFingerprint) {
+      try { localStorage.setItem('ma_browser_fp', browserFingerprint); } catch(e) {}
     }
   }
   
