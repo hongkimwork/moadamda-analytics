@@ -4,18 +4,15 @@
 // ============================================================================
 
 import { useState, useEffect } from 'react';
-import { Card, Divider, DatePicker, InputNumber, Button, Select } from 'antd';
-import { 
-  Search, X, RotateCcw, Calendar, Layers, AlertTriangle, Settings,
-  Clock, Eye, MousePointerClick, Filter, Target, Users,
-  BarChart3, Package, ChevronDown
+import { Card, Divider, DatePicker } from 'antd';
+import {
+  Search, X, RotateCcw, Calendar, Layers, Settings,
+  Package, ChevronDown
 } from 'lucide-react';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ko';
 import DynamicUtmFilterBar from '../../../components/DynamicUtmFilterBar';
 import UtmSourceQuickFilter from '../../../components/UtmSourceQuickFilter';
-import ScoreSettingsCard from './ScoreSettingsCard';
-import DataDistributionPanel from './DataDistributionPanel';
 
 const { RangePicker } = DatePicker;
 
@@ -23,26 +20,26 @@ const { RangePicker } = DatePicker;
  * Date Navigator Group - 날짜 네비게이션 버튼 그룹
  * 구조: [-1단위] [중앙 버튼] [+1단위]
  */
-const DateNavigatorGroup = ({ 
-  label, 
-  prevLabel, 
-  nextLabel, 
-  isActive, 
-  offset, 
-  onCenterClick, 
-  onPrevClick, 
-  onNextClick, 
-  disabled 
+const DateNavigatorGroup = ({
+  label,
+  prevLabel,
+  nextLabel,
+  isActive,
+  offset,
+  onCenterClick,
+  onPrevClick,
+  onNextClick,
+  disabled
 }) => {
   const getButtonStyle = (position) => {
     let isSelected = false;
-    
+
     if (isActive) {
       if (position === 'center' && offset === 0) isSelected = true;
       if (position === 'prev' && offset < 0) isSelected = true;
       if (position === 'next' && offset > 0) isSelected = true;
     }
-    
+
     return {
       display: 'flex',
       alignItems: 'center',
@@ -191,13 +188,13 @@ const TogglePanelButton = ({ icon: Icon, label, badge, isOpen, onClick, color = 
         {badge}
       </span>
     )}
-    <ChevronDown 
-      size={13} 
-      style={{ 
+    <ChevronDown
+      size={13}
+      style={{
         flexShrink: 0,
         transition: 'transform 150ms ease',
         transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)'
-      }} 
+      }}
     />
   </button>
 );
@@ -217,32 +214,18 @@ function PerformanceFilters({
   maxDuration,
   maxPv,
   maxScroll,
-  onMaxDurationChange,
-  onMaxPvChange,
-  onMaxScrollChange,
   minDuration,
   minPv,
   minScroll,
   minUv,
-  onMinDurationChange,
-  onMinPvChange,
-  onMinScrollChange,
-  onMinUvChange,
-  scoreSettings,
-  onScoreSettingsClick,
   quickFilterSources,
   // FIX (2026-02-04): Attribution Window 선택
   attributionWindow,
-  onAttributionWindowChange,
-  // 분포 데이터
-  distributionData,
-  distributionLoading,
+  // 평가 설정 통합 모달 열기
+  onEvaluationSettingsClick,
   // 플랫폼 ↔ UTM Source 동기화
   platformLinked,
-  onPlatformLinkedChange,
-  // 인사이트 패널 토글 (부모에서 InsightCards 렌더링 제어)
-  showInsight,
-  onInsightToggle
+  onPlatformLinkedChange
 }) {
   const [searchTerm, setSearchTerm] = useState('');
   // 새로운 상태: 활성 그룹 (day, week, month, custom)
@@ -252,26 +235,22 @@ function PerformanceFilters({
   const [customDateRange, setCustomDateRange] = useState(null);
   const [isDateInitialized, setIsDateInitialized] = useState(false);
 
-  // 토글 패널 상태 (독립적으로 열고 닫기 가능, 인사이트는 부모에서 관리)
+  // 토글 패널 상태 (독립적으로 열고 닫기 가능)
   const [openPanels, setOpenPanels] = useState({
     utm: false,
     evaluation: false
   });
 
   const togglePanel = (panel) => {
-    if (panel === 'insight') {
-      onInsightToggle?.();
-      return;
-    }
     setOpenPanels(prev => ({ ...prev, [panel]: !prev[panel] }));
   };
-  
+
   /**
    * 그룹과 offset에 따라 날짜 범위 계산
    */
   const getDateRangeByGroupAndOffset = (group, offsetValue) => {
     const now = dayjs();
-    
+
     switch (group) {
       case 'day': {
         const targetDay = now.add(offsetValue, 'day');
@@ -295,17 +274,17 @@ function PerformanceFilters({
   // 저장된 dateRange에서 activeGroup/offset 계산 (최초 1회만)
   useEffect(() => {
     if (isDateInitialized || !filters?.dateRange) return;
-    
+
     const [start, end] = filters.dateRange;
     const startDate = dayjs(start);
     const endDate = dayjs(end);
     const now = dayjs();
     const diffDays = endDate.diff(startDate, 'day');
-    
+
     // 날짜 범위로 그룹 타입 계산
     let calculatedGroup = 'custom';
     let calculatedOffset = 0;
-    
+
     // 단일 일자인 경우 (day 그룹)
     if (diffDays === 0) {
       calculatedGroup = 'day';
@@ -325,7 +304,7 @@ function PerformanceFilters({
       calculatedGroup = 'month';
       calculatedOffset = startDate.month() - now.month() + (startDate.year() - now.year()) * 12;
     }
-    
+
     if (calculatedGroup !== 'custom') {
       setActiveGroup(calculatedGroup);
       setOffset(calculatedOffset);
@@ -335,49 +314,6 @@ function PerformanceFilters({
     }
     setIsDateInitialized(true);
   }, [filters?.dateRange, isDateInitialized]);
-  
-  // 이상치 필터 로컬 state (적용 버튼 클릭 전까지 로컬에서만 관리)
-  const [localDuration, setLocalDuration] = useState(maxDuration ? maxDuration / 60 : 1);
-  const [localPv, setLocalPv] = useState(maxPv || 35);
-  const [localScroll, setLocalScroll] = useState(maxScroll || 30000);
-
-  // 이하치 필터 로컬 state (적용 버튼 클릭 전까지 로컬에서만 관리)
-  const [localMinDuration, setLocalMinDuration] = useState(minDuration ? minDuration : 0);
-  const [localMinPv, setLocalMinPv] = useState(minPv || 0);
-  const [localMinScroll, setLocalMinScroll] = useState(minScroll || 0);
-  const [localMinUv, setLocalMinUv] = useState(minUv || 0);
-  
-  // 상위 컴포넌트 값이 변경되면 로컬 state도 동기화
-  useEffect(() => {
-    if (maxDuration) setLocalDuration(maxDuration / 60);
-  }, [maxDuration]);
-  
-  useEffect(() => {
-    if (maxPv) setLocalPv(maxPv);
-  }, [maxPv]);
-  
-  useEffect(() => {
-    if (maxScroll) setLocalScroll(maxScroll);
-  }, [maxScroll]);
-
-  useEffect(() => {
-    setLocalMinDuration(minDuration || 0);
-  }, [minDuration]);
-
-  useEffect(() => {
-    setLocalMinPv(minPv || 0);
-  }, [minPv]);
-
-  useEffect(() => {
-    setLocalMinScroll(minScroll || 0);
-  }, [minScroll]);
-
-  useEffect(() => {
-    setLocalMinUv(minUv || 0);
-  }, [minUv]);
-
-  // 마운트 시 기본값 설정 제거 - 부모 훅에서 저장된 값 또는 기본값을 이미 사용함
-  // useEffect에서 기본값으로 덮어쓰면 저장된 필터가 무시됨
 
   const handleSearchSubmit = () => onSearch?.(searchTerm.trim());
 
@@ -436,75 +372,8 @@ function PerformanceFilters({
     setActiveGroup('month');
     setOffset(0);
     setCustomDateRange(null);
-    // 이상치 필터도 초기화
-    setLocalDuration(maxDuration ? maxDuration / 60 : 1);
-    setLocalPv(maxPv || 35);
-    setLocalScroll(maxScroll || 30000);
-    // 이하치 필터도 초기화
-    setLocalMinDuration(minDuration || 0);
-    setLocalMinPv(minPv || 0);
-    setLocalMinScroll(minScroll || 0);
-    setLocalMinUv(minUv || 0);
     onFilterChange?.({ dateRange: getDateRangeByGroupAndOffset('month', 0) });
     onReset?.();
-  };
-
-  // 이상치 필터 적용 버튼 핸들러
-  const handleApplyOutlierFilters = () => {
-    if (localDuration && localDuration > 0) {
-      onMaxDurationChange?.(localDuration * 60);
-    }
-    if (localPv && localPv > 0) {
-      onMaxPvChange?.(localPv);
-    }
-    if (localScroll && localScroll > 0) {
-      onMaxScrollChange?.(localScroll);
-    }
-  };
-
-  // 이하치 필터 적용 버튼 핸들러
-  const handleApplyMinFilters = () => {
-    // 범위 충돌 검사 (이하치는 이상치보다 작아야 함)
-    const maxDurationSec = localDuration * 60;
-    if (localMinDuration >= maxDurationSec) {
-      return; // 충돌 시 적용 안 함
-    }
-    if (localMinPv >= localPv) {
-      return;
-    }
-    if (localMinScroll >= localScroll) {
-      return;
-    }
-    
-    onMinDurationChange?.(localMinDuration);
-    onMinPvChange?.(localMinPv);
-    onMinScrollChange?.(localMinScroll);
-    onMinUvChange?.(localMinUv);
-  };
-
-  // 이상치 필터 값이 변경되었는지 확인
-  const isOutlierFilterChanged = () => {
-    const currentDurationMin = maxDuration ? maxDuration / 60 : 1;
-    const currentPv = maxPv || 35;
-    const currentScroll = maxScroll || 30000;
-    return localDuration !== currentDurationMin || localPv !== currentPv || localScroll !== currentScroll;
-  };
-
-  // 이하치 필터 값이 변경되었는지 확인
-  const isMinFilterChanged = () => {
-    const currentMinDuration = minDuration || 0;
-    const currentMinPv = minPv || 0;
-    const currentMinScroll = minScroll || 0;
-    const currentMinUv = minUv || 0;
-    return localMinDuration !== currentMinDuration || localMinPv !== currentMinPv || localMinScroll !== currentMinScroll || localMinUv !== currentMinUv;
-  };
-
-  // 범위 충돌 여부 확인 (이하치 >= 이상치)
-  const hasRangeConflict = () => {
-    const maxDurationSec = localDuration * 60;
-    return (localMinDuration > 0 && localMinDuration >= maxDurationSec) ||
-           (localMinPv > 0 && localMinPv >= localPv) ||
-           (localMinScroll > 0 && localMinScroll >= localScroll);
   };
 
   const isDefaultState = () => !searchTerm && activeGroup === 'month' && offset === 0;
@@ -573,7 +442,7 @@ function PerformanceFilters({
               disabled={loading}
               size="middle"
               locale={dayjs.locale('ko')}
-              style={{ 
+              style={{
                 width: 200,
                 height: '28px'
               }}
@@ -658,15 +527,8 @@ function PerformanceFilters({
           borderTop: '1px solid #f0f0f0'
         }}>
           <TogglePanelButton
-            icon={BarChart3}
-            label="인사이트"
-            isOpen={showInsight}
-            onClick={() => togglePanel('insight')}
-            color="#1890ff"
-          />
-          <TogglePanelButton
             icon={Package}
-            label="UTM 필터"
+            label="광고 / UTM 필터"
             badge={utmBadge}
             isOpen={openPanels.utm}
             onClick={() => togglePanel('utm')}
@@ -676,8 +538,8 @@ function PerformanceFilters({
             icon={Settings}
             label="평가설정"
             badge={evaluationBadge}
-            isOpen={openPanels.evaluation}
-            onClick={() => togglePanel('evaluation')}
+            isOpen={false}
+            onClick={onEvaluationSettingsClick}
             color="#fa8c16"
           />
         </div>
@@ -686,14 +548,13 @@ function PerformanceFilters({
 
       {/* ================================================================ */}
       {/* 토글 패널 영역 (버튼 클릭 시에만 나타남) */}
-      {/* 인사이트 패널은 index.jsx에서 showInsight 상태로 InsightCards 렌더링 */}
       {/* ================================================================ */}
 
       {/* UTM 필터 패널 */}
       {openPanels.utm && (
-        <Card 
-          size="small" 
-          style={{ 
+        <Card
+          size="small"
+          style={{
             marginTop: '12px',
             marginBottom: '0',
             borderRadius: '12px',
@@ -704,7 +565,7 @@ function PerformanceFilters({
         >
           <div className="flex gap-6 flex-wrap">
             {/* 좌측: UTM Source 퀵 필터 */}
-            <div 
+            <div
               className="flex-1 min-w-[300px]"
               style={{
                 opacity: platformLinked ? 1 : 0.45,
@@ -713,11 +574,11 @@ function PerformanceFilters({
             >
               <div className="mb-3 text-sm text-gray-700 font-semibold flex items-center gap-2">
                 <Layers size={18} strokeWidth={2} className={platformLinked ? 'text-blue-500' : 'text-gray-400'} />
-                광고 플랫폼
+                광고 플랫폼 필터
                 {!platformLinked && (
-                  <span style={{ 
-                    fontSize: '11px', 
-                    fontWeight: 400, 
+                  <span style={{
+                    fontSize: '11px',
+                    fontWeight: 400,
                     color: '#999',
                     marginLeft: '4px'
                   }}>
@@ -761,291 +622,6 @@ function PerformanceFilters({
               />
             </div>
           </div>
-        </Card>
-      )}
-
-      {/* 평가설정 패널 */}
-      {openPanels.evaluation && (
-        <Card 
-          size="small" 
-          style={{ 
-            marginTop: '12px',
-            marginBottom: '0',
-            borderRadius: '12px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-            border: '1px solid #e8eaed',
-            animation: 'fadeSlideIn 200ms ease'
-          }}
-        >
-          {/* 기여 기간 + 방문자 연결 */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '16px',
-            flexWrap: 'wrap',
-            marginBottom: '16px'
-          }}>
-            {/* 기여 기간 (Attribution Window) 선택 */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              height: '36px',
-              padding: '0 14px',
-              background: '#f0f7ff',
-              borderRadius: '8px',
-              border: '1px solid #91caff'
-            }}>
-              <Target size={16} style={{ color: '#1677ff', flexShrink: 0 }} />
-              <span style={{ fontSize: '13px', color: '#1677ff', fontWeight: 500 }}>기여 기간</span>
-              <Select
-                value={attributionWindow}
-                onChange={onAttributionWindowChange}
-                disabled={loading}
-                size="small"
-                style={{ width: 90 }}
-                bordered={false}
-                options={[
-                  { value: '30', label: '30일' },
-                  { value: '60', label: '60일' },
-                  { value: '90', label: '90일' },
-                  { value: 'all', label: '전체' }
-                ]}
-              />
-            </div>
-
-            {/* FIX (2026-02-10): 매칭 방식 드롭다운 제거 - 3단계 매칭(쿠키+회원ID+IP+기기+OS) 항상 적용 */}
-          </div>
-
-          <Divider style={{ margin: '0 0 16px 0' }} />
-
-          {/* 이상치 + 이하치 필터 */}
-          <div className="flex gap-6 flex-wrap" style={{ marginBottom: '16px' }}>
-            {/* 좌측: 이상치 값 대체 필터 (상한선) */}
-            <div className="flex-1 min-w-[300px]">
-              <div className="mb-3 text-sm text-gray-700 font-semibold flex items-center gap-2">
-                <AlertTriangle size={18} strokeWidth={2} className="text-amber-500" />
-                이상치 값 대체 필터
-                <span className="text-xs font-normal text-gray-400">(기준 초과 시 대체)</span>
-              </div>
-              <div className="flex gap-3 flex-wrap items-center">
-                {/* 체류시간 초과 대체 (분 단위 입력, 내부는 초 단위) */}
-                <div className="flex items-center gap-2 bg-gray-50 px-3 h-[42px] rounded-lg border border-gray-100">
-                  <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
-                    <Clock size={14} className="text-green-500" />
-                    <span>체류시간</span>
-                  </div>
-                  <InputNumber
-                    size="small"
-                    value={localDuration}
-                    onChange={(val) => setLocalDuration(val)}
-                    min={0.5}
-                    step={0.5}
-                    style={{ width: 70 }}
-                    disabled={loading}
-                    className="bg-white rounded border border-gray-200"
-                  />
-                  <span className="text-xs text-gray-600">분 초과 대체</span>
-                </div>
-                
-                {/* PV 초과 대체 */}
-                <div className="flex items-center gap-2 bg-gray-50 px-3 h-[42px] rounded-lg border border-gray-100">
-                  <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
-                    <Eye size={14} className="text-purple-500" />
-                    <span>PV</span>
-                  </div>
-                  <InputNumber
-                    size="small"
-                    value={localPv}
-                    onChange={(val) => setLocalPv(val)}
-                    min={1}
-                    step={1}
-                    style={{ width: 70 }}
-                    disabled={loading}
-                    className="bg-white rounded border border-gray-200"
-                  />
-                  <span className="text-xs text-gray-600">초과 대체</span>
-                </div>
-                
-                {/* 스크롤 초과 대체 */}
-                <div className="flex items-center gap-2 bg-gray-50 px-3 h-[42px] rounded-lg border border-gray-100">
-                  <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
-                    <MousePointerClick size={14} className="text-blue-500" />
-                    <span>스크롤</span>
-                  </div>
-                  <InputNumber
-                    size="small"
-                    value={localScroll}
-                    onChange={(val) => setLocalScroll(val)}
-                    min={100}
-                    step={1000}
-                    style={{ width: 100 }}
-                    disabled={loading}
-                    className="bg-white rounded border border-gray-200"
-                    formatter={(value) => value ? `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''}
-                    parser={(value) => value.replace(/,/g, '')}
-                  />
-                  <span className="text-xs text-gray-600">px 초과 대체</span>
-                </div>
-                
-                {/* 적용 버튼 */}
-                <Button
-                  type="primary"
-                  size="small"
-                  onClick={handleApplyOutlierFilters}
-                  disabled={loading || !isOutlierFilterChanged()}
-                  style={{
-                    height: '42px',
-                    padding: '0 12px',
-                    borderRadius: '8px',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    boxShadow: 'none'
-                  }}
-                >
-                  적용
-                </Button>
-              </div>
-            </div>
-
-            {/* 구분선 */}
-            <Divider type="vertical" className="h-auto m-0" />
-
-            {/* 우측: 이하치 값 제외 필터 (하한선) */}
-            <div className="flex-1 min-w-[300px]">
-              <div className="mb-3 text-sm text-gray-700 font-semibold flex items-center gap-2">
-                <Filter size={18} strokeWidth={2} className="text-blue-500" />
-                이하치 값 제외 필터
-                <span className="text-xs font-normal text-gray-400">(기준 이하 시 제외)</span>
-              </div>
-              <div className="flex gap-3 flex-wrap items-center">
-                {/* 체류시간 이하 제외 (초 단위 입력) */}
-                <div className="flex items-center gap-2 bg-gray-50 px-3 h-[42px] rounded-lg border border-gray-100">
-                  <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
-                    <Clock size={14} className="text-green-500" />
-                    <span>체류시간</span>
-                  </div>
-                  <InputNumber
-                    size="small"
-                    value={localMinDuration}
-                    onChange={(val) => setLocalMinDuration(val || 0)}
-                    min={0}
-                    step={1}
-                    style={{ width: 70 }}
-                    disabled={loading}
-                    className="bg-white rounded border border-gray-200"
-                  />
-                  <span className="text-xs text-gray-600">초 이하 제외</span>
-                </div>
-                
-                {/* PV 이하 제외 */}
-                <div className="flex items-center gap-2 bg-gray-50 px-3 h-[42px] rounded-lg border border-gray-100">
-                  <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
-                    <Eye size={14} className="text-purple-500" />
-                    <span>PV</span>
-                  </div>
-                  <InputNumber
-                    size="small"
-                    value={localMinPv}
-                    onChange={(val) => setLocalMinPv(val || 0)}
-                    min={0}
-                    step={1}
-                    style={{ width: 70 }}
-                    disabled={loading}
-                    className="bg-white rounded border border-gray-200"
-                  />
-                  <span className="text-xs text-gray-600">이하 제외</span>
-                </div>
-                
-                {/* 스크롤 이하 제외 */}
-                <div className="flex items-center gap-2 bg-gray-50 px-3 h-[42px] rounded-lg border border-gray-100">
-                  <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
-                    <MousePointerClick size={14} className="text-blue-500" />
-                    <span>스크롤</span>
-                  </div>
-                  <InputNumber
-                    size="small"
-                    value={localMinScroll}
-                    onChange={(val) => setLocalMinScroll(val || 0)}
-                    min={0}
-                    step={100}
-                    style={{ width: 100 }}
-                    disabled={loading}
-                    className="bg-white rounded border border-gray-200"
-                    formatter={(value) => value ? `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''}
-                    parser={(value) => value.replace(/,/g, '')}
-                  />
-                  <span className="text-xs text-gray-600">px 이하 제외</span>
-                </div>
-
-                {/* UV 이하 하단 배치 */}
-                <div className="flex items-center gap-2 bg-gray-50 px-3 h-[42px] rounded-lg border border-gray-100">
-                  <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
-                    <Users size={14} className="text-orange-500" />
-                    <span>UV</span>
-                  </div>
-                  <InputNumber
-                    size="small"
-                    value={localMinUv}
-                    onChange={(val) => setLocalMinUv(val || 0)}
-                    min={0}
-                    step={1}
-                    style={{ width: 70 }}
-                    disabled={loading}
-                    className="bg-white rounded border border-gray-200"
-                  />
-                  <span className="text-xs text-gray-600">이하 하단</span>
-                </div>
-                
-                {/* 적용 버튼 */}
-                <Button
-                  type="primary"
-                  size="small"
-                  onClick={handleApplyMinFilters}
-                  disabled={loading || !isMinFilterChanged() || hasRangeConflict()}
-                  style={{
-                    height: '42px',
-                    padding: '0 12px',
-                    borderRadius: '8px',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    boxShadow: 'none'
-                  }}
-                >
-                  적용
-                </Button>
-              </div>
-              {/* 범위 충돌 경고 */}
-              {hasRangeConflict() && (
-                <div className="mt-2 text-xs text-red-500 flex items-center gap-1">
-                  <AlertTriangle size={12} />
-                  이하치 값은 이상치 값보다 작아야 합니다
-                </div>
-              )}
-            </div>
-          </div>
-
-          <Divider style={{ margin: '0 0 16px 0' }} />
-
-          {/* 모수 평가 기준 설정 */}
-          <div className="mb-3 text-sm text-gray-700 font-semibold flex items-center gap-2">
-            <Settings size={18} strokeWidth={2} className="text-purple-600" />
-            모수 평가 기준
-          </div>
-          <ScoreSettingsCard
-            settings={scoreSettings}
-            onClick={onScoreSettingsClick}
-          />
-          <DataDistributionPanel
-            distributionData={distributionData}
-            distributionLoading={distributionLoading}
-            maxDuration={maxDuration}
-            maxPv={maxPv}
-            maxScroll={maxScroll}
-            minDuration={minDuration}
-            minPv={minPv}
-            minScroll={minScroll}
-          />
         </Card>
       )}
 

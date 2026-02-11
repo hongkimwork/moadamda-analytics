@@ -263,6 +263,8 @@ async function getOrderBasicInfo(orderId) {
       v.utm_medium,
       v.utm_campaign,
       v.first_visit,
+      v.browser_fingerprint,
+      v.member_id_crypt,
       (
         SELECT e.product_name
         FROM events e
@@ -512,39 +514,32 @@ async function getSameIpVisits(ipAddress, excludeSessionId) {
 }
 
 /**
- * IP+기기+OS 기반 과거 방문 기록 조회 (쿠키 끊김 대응)
+ * 브라우저 핑거프린트 기반 과거 방문 기록 조회 (쿠키 끊김 대응)
  * 
  * 쿠키가 끊어져서 visitor_id가 달라진 경우에도
- * 동일 IP + device_type + OS로 과거 방문 기록을 연결합니다.
- * (브라우저 제외 = 인앱 브라우저 간 연결 가능)
+ * 동일 browser_fingerprint로 과거 방문 기록을 연결합니다.
  * 
- * FIX (2026-02-04): 구매일 이전 제한 제거 - 전체 방문 기록 조회
- * FIX (2026-02-10): IP만 매칭 → IP+기기+OS 매칭으로 변경 (UTM 히스토리와 기준 통일)
+ * FIX (2026-02-11): IP+기기+OS 매칭 → browser_fingerprint 매칭으로 전면 교체
+ * - 공유 네트워크 오매칭 문제 근본 해결
  * 
- * @param {string} ipAddress - IP 주소
- * @param {string} deviceType - 기기 종류 (pc, mobile, tablet)
- * @param {string} os - 운영체제 (iOS, Android, Windows 등)
+ * @param {string} fingerprint - 브라우저 핑거프린트
  * @param {string} currentVisitorId - 현재 visitor_id (제외용)
  */
-async function getPreviousVisitsByIp(ipAddress, deviceType, os, currentVisitorId) {
-  if (!ipAddress || ipAddress === 'unknown') {
+async function getPreviousVisitsByFingerprint(fingerprint, currentVisitorId) {
+  if (!fingerprint) {
     return [];
   }
 
-  // device_type이나 os가 없으면 IP만으로 매칭 (하위 호환)
-  const hasDeviceInfo = deviceType && os && deviceType !== 'unknown' && os !== 'unknown';
-
   const query = `
-    WITH ip_visitors AS (
-      -- 동일 IP + 기기 + OS의 다른 visitor_id들 찾기
+    WITH fp_visitors AS (
+      -- 동일 browser_fingerprint의 다른 visitor_id들 찾기
       SELECT DISTINCT v.visitor_id
       FROM visitors v
-      WHERE v.ip_address = $1
+      WHERE v.browser_fingerprint = $1
         AND v.visitor_id != $2
         AND v.is_bot = false
-        ${hasDeviceInfo ? `AND v.device_type = $3 AND v.os = $4` : ''}
     ),
-    ip_pageviews AS (
+    fp_pageviews AS (
       SELECT
         p.page_url,
         p.page_title,
@@ -553,7 +548,7 @@ async function getPreviousVisitsByIp(ipAddress, deviceType, os, currentVisitorId
         p.visitor_id,
         LEAD(p.timestamp) OVER (PARTITION BY DATE(p.timestamp) ORDER BY p.timestamp) as next_timestamp
       FROM pageviews p
-      WHERE p.visitor_id IN (SELECT visitor_id FROM ip_visitors)
+      WHERE p.visitor_id IN (SELECT visitor_id FROM fp_visitors)
     )
     SELECT
       visit_date,
@@ -569,51 +564,60 @@ async function getPreviousVisitsByIp(ipAddress, deviceType, os, currentVisitorId
           )
         ELSE 0
       END as time_spent_seconds
-    FROM ip_pageviews
+    FROM fp_pageviews
     ORDER BY timestamp ASC
   `;
 
-  const params = hasDeviceInfo
-    ? [ipAddress, currentVisitorId, deviceType, os]
-    : [ipAddress, currentVisitorId];
-
-  const result = await db.query(query, params);
+  const result = await db.query(query, [fingerprint, currentVisitorId]);
   return result.rows;
 }
 
 /**
- * IP 기반 UTM 히스토리 조회 (쿠키 끊김 대응)
+ * 브라우저 핑거프린트 기반 UTM 히스토리 조회 (쿠키 끊김 대응)
  * 
- * 동일 IP의 다른 visitor_id들의 UTM 세션 기록을 조회합니다.
+ * 동일 browser_fingerprint의 다른 visitor_id들의 UTM 세션 기록을 조회합니다.
  * 
- * FIX (2026-02-04): Attribution Window를 사용자가 선택할 수 있도록 변경
+ * FIX (2026-02-11): IP 기반 → browser_fingerprint 기반으로 전면 교체
+ * - getUtmHistoryByIp() + getUtmHistoryByIpDeviceOs()를 통합 대체
+ * - 동시 활동 필터 유지 (안전장치)
  * 
- * @param {string} ipAddress - IP 주소
+ * @param {string} fingerprint - 브라우저 핑거프린트
  * @param {string} currentVisitorId - 현재 visitor_id (제외용)
  * @param {Date} purchaseTimestamp - 구매일시
  * @param {number|null} attributionWindowDays - Attribution Window (30, 60, 90, null=전체)
+ * @param {boolean} removeUpperBound - true면 구매 이후 UTM도 포함
  */
-async function getUtmHistoryByIp(ipAddress, currentVisitorId, purchaseTimestamp, attributionWindowDays = 30) {
-  if (!ipAddress || ipAddress === 'unknown') {
+async function getUtmHistoryByFingerprint(fingerprint, currentVisitorId, purchaseTimestamp, attributionWindowDays = 30, removeUpperBound = false) {
+  if (!fingerprint) {
     return [];
   }
 
-  // Attribution Window 적용 여부 결정 (null이면 전체 기간)
   const hasAttributionFilter = attributionWindowDays !== null;
 
-  // FIX (2026-02-04): session_id로 그룹화하여 중복 제거
-  // 트래커가 페이지 이동마다 UTM 세션을 새로 기록하는 버그 대응
   const query = `
-    WITH ip_visitors AS (
-      -- 동일 IP의 다른 visitor_id들 찾기
+    WITH fp_visitors AS (
+      -- 동일 browser_fingerprint의 다른 visitor_id들 찾기
+      -- + 동시 활동 필터: 구매자와 세션이 60초 이상 겹치는 방문자는 다른 사람으로 제외
       SELECT DISTINCT v.visitor_id
       FROM visitors v
-      WHERE v.ip_address = $1
+      WHERE v.browser_fingerprint = $1
         AND v.visitor_id != $2
         AND v.is_bot = false
+        AND NOT EXISTS (
+          SELECT 1
+          FROM sessions match_s
+          JOIN sessions purch_s ON purch_s.visitor_id = $2
+          WHERE match_s.visitor_id = v.visitor_id
+            AND match_s.start_time < COALESCE(purch_s.end_time, purch_s.start_time)
+            AND purch_s.start_time < COALESCE(match_s.end_time, match_s.start_time)
+            AND EXTRACT(EPOCH FROM (
+              LEAST(COALESCE(match_s.end_time, match_s.start_time), COALESCE(purch_s.end_time, purch_s.start_time))
+              - GREATEST(match_s.start_time, purch_s.start_time)
+            )) >= 60
+          LIMIT 1
+        )
     ),
     deduplicated_utm AS (
-      -- session_id + utm_content 조합으로 그룹화하여 첫 번째 entry만 선택
       SELECT DISTINCT ON (us.session_id, us.utm_params->>'utm_content')
         us.visitor_id,
         us.session_id,
@@ -625,18 +629,23 @@ async function getUtmHistoryByIp(ipAddress, currentVisitorId, purchaseTimestamp,
         us.duration_seconds,
         us.sequence_order
       FROM utm_sessions us
-      WHERE us.visitor_id IN (SELECT visitor_id FROM ip_visitors)
+      WHERE us.visitor_id IN (SELECT visitor_id FROM fp_visitors)
         ${hasAttributionFilter ? `
         AND us.entry_timestamp >= ($3::timestamp - INTERVAL '${attributionWindowDays} days')
         ` : ''}
-        AND us.entry_timestamp <= $3::timestamp
+        ${removeUpperBound ? '' : `AND us.entry_timestamp <= $3::timestamp`}
       ORDER BY us.session_id, us.utm_params->>'utm_content', us.entry_timestamp ASC
     )
     SELECT * FROM deduplicated_utm
     ORDER BY entry_timestamp ASC
   `;
 
-  const result = await db.query(query, [ipAddress, currentVisitorId, purchaseTimestamp]);
+  const needsPurchaseTimestamp = hasAttributionFilter || !removeUpperBound;
+  const params = needsPurchaseTimestamp
+    ? [fingerprint, currentVisitorId, purchaseTimestamp]
+    : [fingerprint, currentVisitorId];
+
+  const result = await db.query(query, params);
   return result.rows;
 }
 
@@ -804,15 +813,14 @@ async function getPastPurchases(visitorId, excludeOrderId) {
 }
 
 /**
- * IP 기반 과거 구매 이력 조회 (쿠키 끊김 대응)
- * FIX (2026-02-04): 다른 visitor_id로 구매한 경우도 조회
+ * 브라우저 핑거프린트 기반 과거 구매 이력 조회 (쿠키 끊김 대응)
+ * FIX (2026-02-11): IP 기반 → browser_fingerprint 기반으로 전면 교체
  */
-async function getPastPurchasesByIp(ipAddress, currentVisitorId, excludeOrderId) {
-  if (!ipAddress || ipAddress === 'unknown') {
+async function getPastPurchasesByFingerprint(fingerprint, currentVisitorId, excludeOrderId) {
+  if (!fingerprint) {
     return [];
   }
 
-  // FIX (2026-02-04): 취소 필터 제거 - 구매 시도 여부가 중요하므로 모든 주문 표시
   const query = `
     SELECT
       c.order_id,
@@ -837,14 +845,14 @@ async function getPastPurchasesByIp(ipAddress, currentVisitorId, excludeOrderId)
       ) as product_name
     FROM conversions c
     JOIN visitors v ON c.visitor_id = v.visitor_id
-    WHERE v.ip_address = $1
+    WHERE v.browser_fingerprint = $1
       AND c.visitor_id != $2
       AND c.order_id != $3
     ORDER BY c.timestamp DESC
     LIMIT 20
   `;
 
-  const result = await db.query(query, [ipAddress, currentVisitorId, excludeOrderId]);
+  const result = await db.query(query, [fingerprint, currentVisitorId, excludeOrderId]);
   return result.rows;
 }
 
@@ -891,87 +899,20 @@ async function getPastPurchasesByMemberId(memberId, excludeOrderId) {
   return result.rows;
 }
 
-/**
- * IP+기기+OS 기반 UTM 히스토리 조회 (인앱 브라우저 쿠키 분리 대응)
- * 
- * 동일 IP + device_type + OS를 가진 다른 visitor_id들의 UTM 세션 기록을 조회합니다.
- * 기존 getUtmHistoryByIp()보다 정확한 매칭 (브라우저 제외 = 인앱 브라우저 간 연결 가능)
- * 
- * FIX (2026-02-10): 신규 추가
- * 
- * @param {string} ipAddress - IP 주소
- * @param {string} deviceType - 기기 종류 (pc, mobile)
- * @param {string} os - 운영체제 (iOS, Android, Windows 등)
- * @param {string} currentVisitorId - 현재 visitor_id (제외용)
- * @param {Date} purchaseTimestamp - 구매일시
- * @param {number|null} attributionWindowDays - Attribution Window (30, 60, 90, null=전체)
- */
-async function getUtmHistoryByIpDeviceOs(ipAddress, deviceType, os, currentVisitorId, purchaseTimestamp, attributionWindowDays = 30, removeUpperBound = false) {
-  if (!ipAddress || ipAddress === 'unknown' || !deviceType || !os) {
-    return [];
-  }
-
-  const hasAttributionFilter = attributionWindowDays !== null;
-
-  const query = `
-    WITH ip_device_visitors AS (
-      -- 동일 IP + device_type + OS의 다른 visitor_id들 찾기 (브라우저 제외)
-      SELECT DISTINCT v.visitor_id
-      FROM visitors v
-      WHERE v.ip_address = $1
-        AND v.device_type = $2
-        AND v.os = $3
-        AND v.visitor_id != $4
-        AND v.is_bot = false
-    ),
-    deduplicated_utm AS (
-      SELECT DISTINCT ON (us.session_id, us.utm_params->>'utm_content')
-        us.visitor_id,
-        us.session_id,
-        COALESCE(us.utm_source, us.utm_params->>'utm_source', 'direct') as utm_source,
-        COALESCE(us.utm_medium, us.utm_params->>'utm_medium') as utm_medium,
-        COALESCE(us.utm_campaign, us.utm_params->>'utm_campaign') as utm_campaign,
-        us.utm_params->>'utm_content' as utm_content,
-        us.entry_timestamp,
-        us.duration_seconds,
-        us.sequence_order
-      FROM utm_sessions us
-      WHERE us.visitor_id IN (SELECT visitor_id FROM ip_device_visitors)
-        ${hasAttributionFilter ? `
-        AND us.entry_timestamp >= ($5::timestamp - INTERVAL '${attributionWindowDays} days')
-        ` : ''}
-        ${removeUpperBound ? '' : `AND us.entry_timestamp <= $5::timestamp`}
-      ORDER BY us.session_id, us.utm_params->>'utm_content', us.entry_timestamp ASC
-    )
-    SELECT * FROM deduplicated_utm
-    ORDER BY entry_timestamp ASC
-  `;
-
-  // FIX (2026-02-10): $5가 SQL에서 참조될 때만 params에 포함
-  const needsPurchaseTimestamp = hasAttributionFilter || !removeUpperBound;
-  const params = needsPurchaseTimestamp
-    ? [ipAddress, deviceType, os, currentVisitorId, purchaseTimestamp]
-    : [ipAddress, deviceType, os, currentVisitorId];
-
-  const result = await db.query(query, params);
-  return result.rows;
-}
-
 module.exports = {
   getOrders,
   getOrdersCount,
   getOrderBasicInfo,
   getPurchaseJourney,
   getPreviousVisits,
-  getPreviousVisitsByIp,
+  getPreviousVisitsByFingerprint,
   getPreviousVisitsByMemberId,
   getUtmHistory,
-  getUtmHistoryByIp,
-  getUtmHistoryByIpDeviceOs,
+  getUtmHistoryByFingerprint,
   getUtmHistoryByMemberId,
   getSameIpVisits,
   getPastPurchases,
-  getPastPurchasesByIp,
+  getPastPurchasesByFingerprint,
   getPastPurchasesByMemberId,
   buildOrderFilters,
   SORT_FIELD_MAP

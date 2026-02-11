@@ -19,20 +19,29 @@ const DEFAULT_ATTRIBUTION_WINDOW_DAYS = 30;
  * - 기존: utm_content(광고명) 기준 → 광고명 변경 시 매칭 실패
  * - 변경: utm_id(ad_id) 기준 → 광고명 변경해도 정확한 기여도 계산
  * FIX (2026-02-10): IP+기기+OS 기반 여정 연결 옵션 추가
- * - matching_mode='extended' 시 동일 IP + device_type + OS의 다른 visitor_id UTM도 포함
+ * FIX (2026-02-11): IP+기기+OS → 브라우저 핑거프린트 기반으로 전면 교체
+ * - matching_mode='fingerprint' 시 동일 브라우저 핑거프린트의 다른 visitor_id UTM도 포함
  * - 인앱 브라우저 간 쿠키 분리로 누락되던 광고 기여도 보충
  * 
  * @param {Array} creatives - 광고 소재 목록 [{ ad_id, creative_name, utm_source, utm_medium, utm_campaign, _variant_names, ... }]
  * @param {String} startDate - 시작일
  * @param {String} endDate - 종료일
  * @param {number|null} attributionWindowDays - Attribution Window 일수 (30, 60, 90, null=전체)
- * @param {string} matchingMode - 매칭 방식 ('default' = 방문자ID+회원ID, 'extended' = +IP+기기+OS)
+ * @param {string} matchingMode - 매칭 방식 ('default' = 방문자ID+회원ID, 'fingerprint' = +브라우저핑거프린트)
  * @returns {Object} - 광고별 기여도 데이터 { creative_name: { contributed_orders, attributed_revenue, total_revenue } }
  */
-async function calculateCreativeAttribution(creatives, startDate, endDate, attributionWindowDays = DEFAULT_ATTRIBUTION_WINDOW_DAYS, matchingMode = 'extended') {
+async function calculateCreativeAttribution(creatives, startDate, endDate, attributionWindowDays = DEFAULT_ATTRIBUTION_WINDOW_DAYS, matchingMode = 'fingerprint') {
   // FIX (2026-02-05): ad_id 기반 unique key 생성
   // 같은 creative_name이라도 ad_id가 다르면 별도로 기여도 계산
+  // FIX (2026-02-11): utm_id 없는 플랫폼(카카오 등) 지원
+  // ad_id가 creative_name과 같으면 utm_content 폴백이므로 creative_name 기반 키 사용
+  // FIX (2026-02-11): utm_source를 키에서 제외 - 로그인 리디렉트 시 utm_source 누락으로
+  // 같은 광고가 다른 키로 분리되는 문제 해결 (ad_id 모드와 동일한 키 구조로 통일)
   const getCreativeKey = (creative) => {
+    const isUtmContentFallback = creative.ad_id === creative.creative_name;
+    if (isUtmContentFallback) {
+      return `${creative.creative_name}||${creative.utm_medium}||${creative.utm_campaign}`;
+    }
     return `${creative.ad_id}||${creative.utm_medium}||${creative.utm_campaign}`;
   };
   
@@ -104,11 +113,15 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
   )];
 
   // 3단계: 구매한 visitor들의 전체 UTM 여정 조회 (30일 필터링은 각 구매별로 적용)
-  // FIX (2026-02-05): utm_id(ad_id) 기반 - 정상 utm_id만 포함
+  // FIX (2026-02-11): utm_id 없는 플랫폼 지원 - COALESCE(utm_id, utm_content)를 ad_id로 사용
+  // {{...}} 패턴만 제외, utm_id NULL은 허용 (카카오/자사몰 등)
   const journeyQuery = `
     SELECT 
       us.visitor_id,
-      us.utm_params->>'utm_id' as ad_id,
+      COALESCE(
+        NULLIF(CASE WHEN us.utm_params->>'utm_id' LIKE '{{%' THEN NULL ELSE us.utm_params->>'utm_id' END, ''),
+        us.utm_params->>'utm_content'
+      ) as ad_id,
       us.utm_params->>'utm_content' as utm_content,
       COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') as utm_source,
       COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') as utm_medium,
@@ -119,10 +132,8 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
     JOIN visitors v ON us.visitor_id = v.visitor_id
     WHERE us.visitor_id = ANY($1)
       AND us.utm_params->>'utm_content' IS NOT NULL
+      AND us.utm_params->>'utm_content' NOT LIKE '{{%'
       AND v.is_bot = false
-      -- 정상 utm_id만 포함 (빈 값, {{ad.id}} 등 제외)
-      AND NULLIF(us.utm_params->>'utm_id', '') IS NOT NULL
-      AND us.utm_params->>'utm_id' NOT LIKE '{{%'
     ORDER BY us.visitor_id, us.sequence_order
   `;
 
@@ -138,12 +149,15 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
   });
   
   // member_id 기반 UTM 여정 조회 (회원 기반 연결)
-  // FIX (2026-02-05): utm_id(ad_id) 기반 - 정상 utm_id만 포함
+  // FIX (2026-02-11): utm_id 없는 플랫폼 지원 - COALESCE(utm_id, utm_content)
   const memberJourneyQuery = `
     SELECT 
       c2.member_id,
       us.visitor_id,
-      us.utm_params->>'utm_id' as ad_id,
+      COALESCE(
+        NULLIF(CASE WHEN us.utm_params->>'utm_id' LIKE '{{%' THEN NULL ELSE us.utm_params->>'utm_id' END, ''),
+        us.utm_params->>'utm_content'
+      ) as ad_id,
       us.utm_params->>'utm_content' as utm_content,
       COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') as utm_source,
       COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') as utm_medium,
@@ -156,10 +170,8 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
     WHERE c2.member_id = ANY($1)
       AND us.visitor_id != ALL($2)
       AND us.utm_params->>'utm_content' IS NOT NULL
+      AND us.utm_params->>'utm_content' NOT LIKE '{{%'
       AND v.is_bot = false
-      -- 정상 utm_id만 포함
-      AND NULLIF(us.utm_params->>'utm_id', '') IS NOT NULL
-      AND us.utm_params->>'utm_id' NOT LIKE '{{%'
     ORDER BY c2.member_id, us.entry_timestamp
   `;
   
@@ -176,50 +188,49 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
     memberJourneys[row.member_id].push(row);
   });
 
-  // FIX (2026-02-10): IP+기기+OS 기반 여정 연결 (extended 모드)
-  // 동일 IP + device_type + OS를 가진 다른 visitor_id의 UTM 여정도 포함
-  let ipDeviceJourneys = {}; // visitor_id → UTM 여정 배열
+  // FIX (2026-02-11): browser_fingerprint 기반 여정 연결 (fingerprint 모드)
+  // 동일 browser_fingerprint를 가진 다른 visitor_id의 UTM 여정도 포함
+  let fpJourneys = {}; // visitor_id → UTM 여정 배열
   
-  if (matchingMode === 'extended') {
-    // 구매자들의 IP, device_type, OS 정보 일괄 조회
+  if (matchingMode === 'fingerprint') {
+    // 구매자들의 browser_fingerprint 조회
     const visitorInfoQuery = `
-      SELECT visitor_id, ip_address, device_type, os
+      SELECT visitor_id, browser_fingerprint
       FROM visitors
       WHERE visitor_id = ANY($1)
-        AND ip_address IS NOT NULL
-        AND ip_address != 'unknown'
-        AND device_type IS NOT NULL
-        AND os IS NOT NULL
+        AND browser_fingerprint IS NOT NULL
+        AND browser_fingerprint != ''
     `;
     const visitorInfoResult = await db.query(visitorInfoQuery, [purchaserIds]);
     
-    // IP+device_type+OS 조합별로 구매자 그룹화
+    // browser_fingerprint별로 구매자 그룹화
     const fingerprintGroups = {};
     visitorInfoResult.rows.forEach(row => {
-      const fingerprint = `${row.ip_address}||${row.device_type}||${row.os}`;
-      if (!fingerprintGroups[fingerprint]) {
-        fingerprintGroups[fingerprint] = [];
+      const fp = row.browser_fingerprint;
+      if (!fingerprintGroups[fp]) {
+        fingerprintGroups[fp] = [];
       }
-      fingerprintGroups[fingerprint].push(row.visitor_id);
+      fingerprintGroups[fp].push(row.visitor_id);
     });
     
     // 이미 찾은 visitor_id 목록 (중복 제외용)
     const alreadyFoundIds = new Set([...purchaserIds, ...purchaserMemberIds.length > 0 
       ? memberJourneyResult.rows.map(r => r.visitor_id) : []]);
     
-    // 각 fingerprint 그룹에 대해 동일 조건의 다른 visitor_id 찾기
     const uniqueFingerprints = Object.keys(fingerprintGroups);
     
     if (uniqueFingerprints.length > 0) {
-      // 일괄 조회: IP+device_type+OS가 같은 다른 visitor_id들의 UTM 여정
-      const ipDeviceJourneyQuery = `
+      // 일괄 조회: browser_fingerprint가 같은 다른 visitor_id들의 UTM 여정
+      // 동시 활동 필터 유지 (안전장치)
+      const fpJourneyQuery = `
         SELECT 
           match_v.visitor_id as match_visitor_id,
-          match_v.ip_address,
-          match_v.device_type,
-          match_v.os,
+          match_v.browser_fingerprint,
           us.visitor_id,
-          us.utm_params->>'utm_id' as ad_id,
+          COALESCE(
+            NULLIF(CASE WHEN us.utm_params->>'utm_id' LIKE '{{%' THEN NULL ELSE us.utm_params->>'utm_id' END, ''),
+            us.utm_params->>'utm_content'
+          ) as ad_id,
           us.utm_params->>'utm_content' as utm_content,
           COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') as utm_source,
           COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') as utm_medium,
@@ -232,39 +243,38 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
         WHERE match_v.visitor_id != ALL($1)
           AND match_v.is_bot = false
           AND v.is_bot = false
-          AND (match_v.ip_address, match_v.device_type, match_v.os) IN (
-            SELECT unnest($2::text[]), unnest($3::text[]), unnest($4::text[])
-          )
+          AND match_v.browser_fingerprint = ANY($2)
           AND us.utm_params->>'utm_content' IS NOT NULL
-          AND NULLIF(us.utm_params->>'utm_id', '') IS NOT NULL
-          AND us.utm_params->>'utm_id' NOT LIKE '{{%'
+          AND us.utm_params->>'utm_content' NOT LIKE '{{%'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM sessions match_s
+            JOIN sessions purch_s ON purch_s.visitor_id = ANY($3)
+            WHERE match_s.visitor_id = match_v.visitor_id
+              AND match_s.start_time < COALESCE(purch_s.end_time, purch_s.start_time)
+              AND purch_s.start_time < COALESCE(match_s.end_time, match_s.start_time)
+              AND EXTRACT(EPOCH FROM (
+                LEAST(COALESCE(match_s.end_time, match_s.start_time), COALESCE(purch_s.end_time, purch_s.start_time))
+                - GREATEST(match_s.start_time, purch_s.start_time)
+              )) >= 60
+            LIMIT 1
+          )
         ORDER BY match_v.visitor_id, us.entry_timestamp
       `;
       
-      // fingerprint 분해
-      const ips = [];
-      const deviceTypes = [];
-      const oses = [];
-      uniqueFingerprints.forEach(fp => {
-        const [ip, dt, os] = fp.split('||');
-        ips.push(ip);
-        deviceTypes.push(dt);
-        oses.push(os);
-      });
-      
       const allFoundIds = Array.from(alreadyFoundIds);
-      const ipDeviceResult = await db.query(ipDeviceJourneyQuery, [allFoundIds, ips, deviceTypes, oses]);
+      const fpResult = await db.query(fpJourneyQuery, [allFoundIds, uniqueFingerprints, purchaserIds]);
       
-      // 매칭된 visitor의 IP+device+OS → 원래 구매자 visitor_id 매핑
-      ipDeviceResult.rows.forEach(row => {
-        const fingerprint = `${row.ip_address}||${row.device_type}||${row.os}`;
-        const purchaserVisitorIds = fingerprintGroups[fingerprint] || [];
+      // 매칭된 visitor의 browser_fingerprint → 원래 구매자 visitor_id 매핑
+      fpResult.rows.forEach(row => {
+        const fp = row.browser_fingerprint;
+        const purchaserVisitorIds = fingerprintGroups[fp] || [];
         
         purchaserVisitorIds.forEach(purchaserVid => {
-          if (!ipDeviceJourneys[purchaserVid]) {
-            ipDeviceJourneys[purchaserVid] = [];
+          if (!fpJourneys[purchaserVid]) {
+            fpJourneys[purchaserVid] = [];
           }
-          ipDeviceJourneys[purchaserVid].push(row);
+          fpJourneys[purchaserVid].push(row);
         });
       });
     }
@@ -297,16 +307,16 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
       }
     }
     
-    // FIX (2026-02-10): IP+기기+OS 기반 여정 병합 (extended 모드)
-    if (matchingMode === 'extended') {
+    // FIX (2026-02-11): browser_fingerprint 기반 여정 병합 (fingerprint 모드)
+    if (matchingMode === 'fingerprint') {
       const vid = purchase.visitor_id || purchase.session_visitor_id;
-      const ipJourney = ipDeviceJourneys[vid] || [];
-      if (ipJourney.length > 0) {
+      const fpJourney = fpJourneys[vid] || [];
+      if (fpJourney.length > 0) {
         const existingKeys = new Set(journey.map(j => 
           `${j.entry_timestamp}||${j.utm_content}`
         ));
         
-        const newTouches = ipJourney.filter(j => {
+        const newTouches = fpJourney.filter(j => {
           const key = `${j.entry_timestamp}||${j.utm_content}`;
           return !existingKeys.has(key);
         });
@@ -360,10 +370,21 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
 
     // FIX (2026-02-05): ad_id 기반으로 고유 광고 수집
     // 여정에 있는 고유한 광고 조합 수집 (같은 광고를 여러 번 봤어도 1개로 카운트)
+    // FIX (2026-02-11): utm_id 없는 플랫폼 지원 - ad_id가 utm_content와 같으면 creative_name 기반 키
     const uniqueCreativesMap = new Map(); // ad_id 기반 key -> touch 정보
+    
+    // 터치포인트의 키 생성 함수 (getCreativeKey와 동일한 로직)
+    // FIX (2026-02-11): utm_source를 키에서 제외 (getCreativeKey와 동일하게 통일)
+    const getTouchKey = (touch) => {
+      const isUtmContentFallback = touch.ad_id === touch.utm_content;
+      if (isUtmContentFallback) {
+        return `${touch.utm_content}||${touch.utm_medium}||${touch.utm_campaign}`;
+      }
+      return `${touch.ad_id}||${touch.utm_medium}||${touch.utm_campaign}`;
+    };
+    
     filteredJourney.forEach(touch => {
-      // ad_id 기반 키 (utm_medium, utm_campaign 포함)
-      const adIdKey = `${touch.ad_id}||${touch.utm_medium}||${touch.utm_campaign}`;
+      const adIdKey = getTouchKey(touch);
       // 가장 마지막 sequence_order를 저장 (막타 판별용)
       if (!uniqueCreativesMap.has(adIdKey) || touch.sequence_order > uniqueCreativesMap.get(adIdKey).sequence_order) {
         uniqueCreativesMap.set(adIdKey, touch);
@@ -374,7 +395,7 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
     const isSingleTouch = uniqueAdIdKeys.length === 1; // 하나의 광고만 봤는지
 
     // 막타 ad_id 키 생성
-    const lastTouchAdIdKey = `${lastTouch.ad_id}||${lastTouch.utm_medium}||${lastTouch.utm_campaign}`;
+    const lastTouchAdIdKey = getTouchKey(lastTouch);
 
     // 막타 제외한 고유 광고 목록 (어시 광고들)
     const assistAdIdKeys = uniqueAdIdKeys.filter(key => key !== lastTouchAdIdKey);

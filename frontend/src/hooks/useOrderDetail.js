@@ -14,10 +14,10 @@ const API_URL = import.meta.env.VITE_API_URL || '';
  * useOrderDetail 훅
  * @param {string} orderId - 주문 ID
  * @param {string} attributionWindow - Attribution Window (30, 60, 90, 'all')
- * @param {string} matchingMode - 매칭 방식 ('default' = 방문자ID+회원ID, 'extended' = +IP+기기+OS)
+ * @param {string} matchingMode - 매칭 방식 ('default' = 방문자ID+회원ID, 'fingerprint' = +IP+기기+OS)
  * @returns {object} 주문 상세 데이터 및 상태
  */
-export function useOrderDetail(orderId, attributionWindow = '30', matchingMode = 'extended') {
+export function useOrderDetail(orderId, attributionWindow = '30', matchingMode = 'fingerprint') {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);

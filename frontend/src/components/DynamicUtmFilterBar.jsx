@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { Button, Select, Space, Tag, Dropdown } from 'antd';
-import { PlusOutlined, CloseOutlined, FilterOutlined } from '@ant-design/icons';
+import { Button, Select, Dropdown } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
+import { X } from 'lucide-react';
 import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -207,16 +208,6 @@ function DynamicUtmFilterBar({
     setActiveFilters(prev => prev.filter(f => f.id !== filterId));
   };
 
-  // 모든 필터 초기화
-  const handleClearAllFilters = () => {
-    // utm_source 필터가 있었으면 연결 해제 알림
-    const hadSourceFilter = activeFilters.some(f => f.key === 'utm_source');
-    if (hadSourceFilter && !isSyncUpdate.current && onSourceManualChange) {
-      onSourceManualChange([]);
-    }
-    setActiveFilters([]);
-  };
-
   // UTM 키 이름 포맷팅 (utm_source -> Source)
   const formatUtmKeyName = (key) => {
     return key.replace('utm_', '').replace(/_/g, ' ').toUpperCase();
@@ -239,116 +230,133 @@ function DynamicUtmFilterBar({
   // utm_source 필터인지 확인 (멀티셀렉트 렌더링 분기용)
   const isSourceFilter = (filter) => filter.key === 'utm_source';
 
+  // 필터 칩(pill) 스타일
+  const getChipStyle = (isLinked = false) => ({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '6px',
+    height: '32px',
+    padding: '0 12px',
+    borderRadius: '16px',
+    border: isLinked ? '1px solid #adc6ff' : '1px solid #d9d9d9',
+    background: isLinked ? '#f0f5ff' : '#fff',
+    fontSize: '13px',
+    fontWeight: 600,
+    color: '#0958d9',
+    whiteSpace: 'nowrap',
+  });
+
+  const getRemoveButtonStyle = () => ({
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '20px',
+    height: '20px',
+    padding: 0,
+    border: 'none',
+    background: '#fce8e6',
+    color: '#c5221f',
+    cursor: 'pointer',
+    borderRadius: '50%',
+    transition: 'all 0.15s ease',
+    flexShrink: 0,
+  });
+
   return (
-    <div style={{ marginBottom: '16px' }}>
-      <Space wrap size="small">
-        <FilterOutlined style={{ 
-          color: activeFilters.length > 0 ? '#1890ff' : '#999', 
-          fontSize: '16px' 
-        }} />
-
-        {/* 활성화된 필터 렌더링 */}
-        {activeFilters.map(filter => (
-          <Space.Compact key={filter.id} size="small">
-            <Button 
-              size="small" 
-              style={{ 
-                pointerEvents: 'none', 
-                backgroundColor: isSourceFilter(filter) && platformLinked ? '#f0f5ff' : '#e6f7ff',
-                border: isSourceFilter(filter) && platformLinked ? '1px solid #adc6ff' : '1px solid #91d5ff',
-                color: '#0050b3'
-              }}
-            >
-              {formatUtmKeyName(filter.key)}
-              {isSourceFilter(filter) && platformLinked && (
-                <span style={{ fontSize: '10px', marginLeft: '4px', color: '#597ef7' }}>🔗</span>
-              )}
-            </Button>
-            {isSourceFilter(filter) ? (
-              // utm_source: 멀티셀렉트
-              <Select
-                mode="multiple"
-                value={Array.isArray(filter.value) ? filter.value : [filter.value]}
-                onChange={(values) => handleFilterValueChange(filter.id, values)}
-                style={{ minWidth: 200, maxWidth: 400 }}
-                size="small"
-                disabled={loading}
-                showSearch
-                optionFilterProp="label"
-                maxTagCount={3}
-                maxTagPlaceholder={(omittedValues) => `+${omittedValues.length}`}
-                options={utmValueOptions[filter.key]?.map(v => ({
-                  label: v.value,
-                  value: v.value
-                }))}
-              />
-            ) : (
-              // 기타 UTM 필터: 단일 셀렉트 (기존 동작)
-              <Select
-                value={filter.value}
-                onChange={(value) => handleFilterValueChange(filter.id, value)}
-                style={{ width: 180 }}
-                size="small"
-                disabled={loading}
-                showSearch
-                optionFilterProp="label"
-                options={utmValueOptions[filter.key]?.map(v => ({
-                  label: v.value,
-                  value: v.value
-                }))}
-              />
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+      {/* 활성화된 필터 렌더링 */}
+      {activeFilters.map(filter => (
+        <div key={filter.id} style={getChipStyle(isSourceFilter(filter) && platformLinked)}>
+          <span style={{ 
+            fontSize: '12px', 
+            fontWeight: 600, 
+            color: isSourceFilter(filter) && platformLinked ? '#597ef7' : '#0958d9',
+            letterSpacing: '0.02em'
+          }}>
+            {formatUtmKeyName(filter.key)}
+            {isSourceFilter(filter) && platformLinked && (
+              <span style={{ fontSize: '10px', marginLeft: '3px' }}>🔗</span>
             )}
-            <Button 
-              size="small" 
-              danger 
-              icon={<CloseOutlined />}
-              onClick={() => handleRemoveFilter(filter.id)}
-              disabled={loading}
-            />
-          </Space.Compact>
-        ))}
-
-        {/* 필터 추가 버튼 */}
-        {filterMenuItems.length > 0 && (
-          <Dropdown
-            menu={{ items: filterMenuItems }}
-            trigger={['click']}
-            disabled={loading || keysLoading}
-          >
-            <Button 
-              icon={<PlusOutlined />} 
-              size="small"
-              type="dashed"
-              loading={keysLoading}
-            >
-              필터 추가
-            </Button>
-          </Dropdown>
-        )}
-
-        {/* 필터 활성화 상태 표시 */}
-        {activeFilters.length > 0 && (
-          <>
-            <Tag color="blue">
-              {activeFilters.length}개 필터 적용 중
-            </Tag>
-            <Button 
-              size="small" 
-              onClick={handleClearAllFilters}
-              disabled={loading}
-            >
-              전체 초기화
-            </Button>
-          </>
-        )}
-
-        {/* 사용 가능한 필터가 없을 때 */}
-        {availableUtmKeys.length === 0 && !keysLoading && (
-          <span style={{ color: '#999', fontSize: '12px' }}>
-            수집된 UTM 데이터가 없습니다
           </span>
-        )}
-      </Space>
+          {isSourceFilter(filter) ? (
+            <Select
+              mode="multiple"
+              value={Array.isArray(filter.value) ? filter.value : [filter.value]}
+              onChange={(values) => handleFilterValueChange(filter.id, values)}
+              style={{ minWidth: 160, maxWidth: 360 }}
+              size="small"
+              variant="borderless"
+              disabled={loading}
+              showSearch
+              optionFilterProp="label"
+              maxTagCount={3}
+              maxTagPlaceholder={(omittedValues) => `+${omittedValues.length}`}
+              options={utmValueOptions[filter.key]?.map(v => ({
+                label: v.value,
+                value: v.value
+              }))}
+            />
+          ) : (
+            <Select
+              value={filter.value}
+              onChange={(value) => handleFilterValueChange(filter.id, value)}
+              style={{ width: 150 }}
+              size="small"
+              variant="borderless"
+              disabled={loading}
+              showSearch
+              optionFilterProp="label"
+              options={utmValueOptions[filter.key]?.map(v => ({
+                label: v.value,
+                value: v.value
+              }))}
+            />
+          )}
+          <button
+            style={getRemoveButtonStyle()}
+            onClick={() => handleRemoveFilter(filter.id)}
+            disabled={loading}
+            onMouseEnter={(e) => { e.currentTarget.style.background = '#f4c7c3'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = '#fce8e6'; }}
+          >
+            <X size={11} strokeWidth={2.5} />
+          </button>
+        </div>
+      ))}
+
+      {/* 필터 추가 버튼 */}
+      {filterMenuItems.length > 0 && (
+        <Dropdown
+          menu={{ items: filterMenuItems }}
+          trigger={['click']}
+          disabled={loading || keysLoading}
+        >
+          <Button
+            icon={<PlusOutlined />}
+            loading={keysLoading}
+            disabled={loading}
+            style={{
+              borderRadius: '16px',
+              padding: '4px 12px',
+              height: '32px',
+              fontSize: '13px',
+              fontWeight: 500,
+              border: '1px dashed #d9d9d9',
+              background: '#fafafa',
+              color: '#666',
+            }}
+          >
+            필터 추가
+          </Button>
+        </Dropdown>
+      )}
+
+      {/* 사용 가능한 필터가 없을 때 */}
+      {availableUtmKeys.length === 0 && !keysLoading && (
+        <span style={{ color: '#999', fontSize: '12px' }}>
+          수집된 UTM 데이터가 없습니다
+        </span>
+      )}
     </div>
   );
 }

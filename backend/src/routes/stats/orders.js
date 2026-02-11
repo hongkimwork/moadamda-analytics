@@ -42,7 +42,7 @@ router.get('/orders', async (req, res) => {
 
 // GET /api/stats/order-detail/:orderId - Detailed customer journey for a specific order
 // FIX (2026-02-04): Attribution Window 쿼리 파라미터 추가
-// FIX (2026-02-10): matching_mode 쿼리 파라미터 추가 (default/extended)
+// FIX (2026-02-10): matching_mode 쿼리 파라미터 추가 (default/fingerprint)
 router.get('/order-detail/:orderId', async (req, res) => {
   try {
     const { orderId } = req.params;
@@ -59,9 +59,9 @@ router.get('/order-detail/:orderId', async (req, res) => {
         }
       }
     }
-    // Matching Mode 파싱: 기본값 extended (쿠키 + 회원ID + IP+기기+OS 전체 매칭)
-    // FIX (2026-02-10): 기본값을 extended로 변경 (3단계 매칭 항상 적용)
-    const matchingMode = matching_mode === 'default' ? 'default' : 'extended';
+    // Matching Mode 파싱: 기본값 fingerprint (쿠키 + 회원ID + 브라우저 핑거프린트 매칭)
+    // FIX (2026-02-11): 기본값을 fingerprint로 변경 (IP+기기+OS → 핑거프린트 교체)
+    const matchingMode = matching_mode === 'default' ? 'default' : 'fingerprint';
     const result = await ordersService.getOrderDetail(orderId, attributionWindowDays, matchingMode);
     res.json(result);
 

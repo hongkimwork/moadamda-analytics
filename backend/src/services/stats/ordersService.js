@@ -290,9 +290,9 @@ function mergeVisitsByDate(visitorVisits, ipVisits) {
  * 
  * @param {string} orderId - 주문 ID
  * @param {number|null} attributionWindowDays - Attribution Window 일수 (30, 60, 90, null=전체)
- * @param {string} matchingMode - 매칭 방식 ('default' = 방문자ID+회원ID, 'extended' = +IP+기기+OS)
+ * @param {string} matchingMode - 매칭 방식 ('default' = 방문자ID+회원ID, 'fingerprint' = +브라우저핑거프린트)
  */
-async function getOrderDetail(orderId, attributionWindowDays = 30, matchingMode = 'extended') {
+async function getOrderDetail(orderId, attributionWindowDays = 30, matchingMode = 'fingerprint') {
   // 1. 주문 기본 정보 조회
   const order = await repository.getOrderBasicInfo(orderId);
 
@@ -328,60 +328,51 @@ async function getOrderDetail(orderId, attributionWindowDays = 30, matchingMode 
   const hasValidIp = order.ip_address && order.ip_address !== 'unknown';
   const hasValidMemberId = order.member_id && order.member_id !== '';
   
-  // FIX (2026-02-10): IP+기기+OS 기반 UTM 조건 확인
-  const hasValidDeviceInfo = order.device_type && order.os && order.device_type !== 'unknown' && order.os !== 'unknown';
-  const useExtendedMatching = matchingMode === 'extended' && hasValidIp && hasValidDeviceInfo;
+  // FIX (2026-02-11): IP+기기+OS 매칭 → browser_fingerprint 매칭으로 전면 교체
+  const hasValidFingerprint = order.browser_fingerprint && order.browser_fingerprint !== '';
+  const useFingerprintMatching = matchingMode === 'fingerprint' && hasValidFingerprint;
 
   const [
     purchaseJourneyRows,
     previousVisitsRows,
-    previousVisitsByIpRows,
+    previousVisitsByFingerprintRows,
     previousVisitsByMemberIdRows,
     utmHistoryRows,
-    utmHistoryByIpRows,
-    utmHistoryByIpDeviceOsRows,
+    utmHistoryByFingerprintRows,
     utmHistoryByMemberIdRows,
     sameIpVisits,
     pastPurchasesRows,
-    pastPurchasesByIpRows,
+    pastPurchasesByFingerprintRows,
     pastPurchasesByMemberIdRows
   ] = await Promise.all([
     repository.getPurchaseJourney(order.visitor_id, order.timestamp),
-    // FIX (2026-02-04): 전체 방문 기록 조회 (구매일 제한 제거)
     repository.getPreviousVisits(order.visitor_id),
-    // IP+기기+OS 기반 과거 방문 조회 (쿠키 끊김 대응)
-    // FIX (2026-02-04): 전체 방문 기록 조회 (구매일 제한 제거)
-    // FIX (2026-02-10): IP만 → IP+기기+OS 매칭으로 변경 (UTM 히스토리와 기준 통일)
-    hasValidIp
-      ? repository.getPreviousVisitsByIp(order.ip_address, order.device_type, order.os, order.visitor_id)
+    // FIX (2026-02-11): browser_fingerprint 기반 과거 방문 조회 (IP+기기+OS 대체)
+    hasValidFingerprint
+      ? repository.getPreviousVisitsByFingerprint(order.browser_fingerprint, order.visitor_id)
       : Promise.resolve([]),
-    // FIX (2026-02-03): member_id 기반 과거 방문 조회 (회원 기반 연결)
-    // FIX (2026-02-04): 전체 방문 기록 조회 (구매일 제한 제거)
+    // member_id 기반 과거 방문 조회 (회원 기반 연결)
     hasValidMemberId
       ? repository.getPreviousVisitsByMemberId(order.member_id, order.visitor_id)
       : Promise.resolve([]),
-    // FIX (2026-02-10): removeUpperBound=true → 구매 이후 UTM도 포함 (광고 클릭 카드 표시용)
-    // 어트리뷰션 분석용 필터링은 서비스 레이어에서 JS로 처리
+    // removeUpperBound=true → 구매 이후 UTM도 포함 (광고 클릭 카드 표시용)
     repository.getUtmHistory(order.visitor_id, order.session_id, localTimestamp, attributionWindowDays, true),
-    // IP 기반 UTM 히스토리 조회 (쿠키 끊김 대응) - 참고용
-    hasValidIp
-      ? repository.getUtmHistoryByIp(order.ip_address, order.visitor_id, localTimestamp, attributionWindowDays)
+    // FIX (2026-02-11): browser_fingerprint 기반 UTM 히스토리 (fingerprint 모드 시 어트리뷰션에 포함)
+    useFingerprintMatching
+      ? repository.getUtmHistoryByFingerprint(order.browser_fingerprint, order.visitor_id, localTimestamp, attributionWindowDays, true)
       : Promise.resolve([]),
-    // FIX (2026-02-10): IP+기기+OS 기반 UTM 히스토리 (extended 모드 시 어트리뷰션에 포함)
-    useExtendedMatching
-      ? repository.getUtmHistoryByIpDeviceOs(order.ip_address, order.device_type, order.os, order.visitor_id, localTimestamp, attributionWindowDays, true)
-      : Promise.resolve([]),
-    // FIX (2026-02-03): member_id 기반 UTM 히스토리 조회 (회원 기반 연결)
+    // member_id 기반 UTM 히스토리 조회 (회원 기반 연결)
     hasValidMemberId
       ? repository.getUtmHistoryByMemberId(order.member_id, order.visitor_id, localTimestamp, attributionWindowDays, true)
       : Promise.resolve([]),
+    // 동일 IP 방문은 참고 정보로만 유지
     hasValidIp
       ? repository.getSameIpVisits(order.ip_address, order.session_id)
       : Promise.resolve([]),
     repository.getPastPurchases(order.visitor_id, orderId),
-    // FIX (2026-02-04): IP/member_id 기반 과거 구매 조회 추가
-    hasValidIp
-      ? repository.getPastPurchasesByIp(order.ip_address, order.visitor_id, orderId)
+    // FIX (2026-02-11): fingerprint/member_id 기반 과거 구매 조회
+    hasValidFingerprint
+      ? repository.getPastPurchasesByFingerprint(order.browser_fingerprint, order.visitor_id, orderId)
       : Promise.resolve([]),
     hasValidMemberId
       ? repository.getPastPurchasesByMemberId(order.member_id, orderId)
@@ -403,10 +394,10 @@ async function getOrderDetail(orderId, attributionWindowDays = 30, matchingMode 
     source: 'visitor_id'
   }));
   
-  // IP 기반 과거 방문 (쿠키 끊김 대응)
-  const ipPreviousVisits = groupVisitsByDate(previousVisitsByIpRows).map(v => ({
+  // fingerprint 기반 과거 방문 (쿠키 끊김 대응)
+  const fpPreviousVisits = groupVisitsByDate(previousVisitsByFingerprintRows).map(v => ({
     ...v,
-    source: 'ip_address'
+    source: 'fingerprint'
   }));
   
   // FIX (2026-02-03): member_id 기반 과거 방문 (회원 기반 연결)
@@ -415,9 +406,9 @@ async function getOrderDetail(orderId, attributionWindowDays = 30, matchingMode 
     source: 'member_id'
   }));
   
-  // 세 소스 병합 (중복 제거): visitor_id → IP → member_id
+  // 세 소스 병합 (중복 제거): visitor_id → fingerprint → member_id
   const previousVisits = mergeVisitsByDate(
-    mergeVisitsByDate(visitorPreviousVisits, ipPreviousVisits),
+    mergeVisitsByDate(visitorPreviousVisits, fpPreviousVisits),
     memberPreviousVisits
   );
 
@@ -432,19 +423,19 @@ async function getOrderDetail(orderId, attributionWindowDays = 30, matchingMode 
     source: 'visitor_id'
   }));
   
-  // IP 기반 UTM 히스토리 (쿠키 끊김 대응)
-  const ipUtmHistory = utmHistoryByIpRows.map(row => ({
+  // FIX (2026-02-11): fingerprint 기반 UTM 히스토리 (IP 기반 대체)
+  const fpUtmHistory = utmHistoryByFingerprintRows.map(row => ({
     utm_source: row.utm_source || 'direct',
     utm_medium: row.utm_medium || null,
     utm_campaign: row.utm_campaign || null,
     utm_content: row.utm_content || null,
     entry_time: row.entry_timestamp,
     total_duration: row.duration_seconds || 0,
-    source: 'ip_address',
-    original_visitor_id: row.visitor_id // 원래 어떤 visitor_id였는지
+    source: 'fingerprint',
+    original_visitor_id: row.visitor_id
   }));
   
-  // FIX (2026-02-03): member_id 기반 UTM 히스토리 (회원 기반 연결)
+  // member_id 기반 UTM 히스토리 (회원 기반 연결)
   const memberUtmHistory = utmHistoryByMemberIdRows.map(row => ({
     utm_source: row.utm_source || 'direct',
     utm_medium: row.utm_medium || null,
@@ -453,34 +444,19 @@ async function getOrderDetail(orderId, attributionWindowDays = 30, matchingMode 
     entry_time: row.entry_timestamp,
     total_duration: row.duration_seconds || 0,
     source: 'member_id',
-    original_visitor_id: row.visitor_id // 원래 어떤 visitor_id였는지
-  }));
-  
-  // FIX (2026-02-10): IP+기기+OS 기반 UTM 히스토리 (extended 모드 시 어트리뷰션에 포함)
-  const ipDeviceOsUtmHistory = utmHistoryByIpDeviceOsRows.map(row => ({
-    utm_source: row.utm_source || 'direct',
-    utm_medium: row.utm_medium || null,
-    utm_campaign: row.utm_campaign || null,
-    utm_content: row.utm_content || null,
-    entry_time: row.entry_timestamp,
-    total_duration: row.duration_seconds || 0,
-    source: 'ip_device_os',
     original_visitor_id: row.visitor_id
   }));
 
-  // FIX (2026-02-05): UTM 히스토리 분리 - moadamda-access-log 방식 적용
-  // FIX (2026-02-10): extended 모드 시 IP+기기+OS UTM도 어트리뷰션용에 포함
-  // FIX (2026-02-10): 표시용(display_utm_history)과 분석용(utm_history) 분리
+  // FIX (2026-02-11): UTM 히스토리 병합 - fingerprint + member_id 기반
   // - display_utm_history: 광고 클릭 카드 표시용 (구매 이후 UTM 포함)
   // - utm_history: 어트리뷰션 분석용 (구매 이전 UTM만)
-  // - ip_utm_history: IP 기반 참고 정보
   
-  // visitor_id + member_id 기반 UTM 히스토리
+  // visitor_id + member_id + fingerprint 기반 UTM 히스토리
   const mainUtmHistory = [...visitorUtmHistory, ...memberUtmHistory];
   
-  // extended 모드: IP+기기+OS 기반 UTM도 메인에 포함
-  if (matchingMode === 'extended') {
-    mainUtmHistory.push(...ipDeviceOsUtmHistory);
+  // fingerprint 모드: fingerprint 기반 UTM도 메인에 포함
+  if (matchingMode === 'fingerprint') {
+    mainUtmHistory.push(...fpUtmHistory);
   }
   
   // 전체 UTM 히스토리 (구매 이후 포함 - 광고 클릭 카드 표시용)
@@ -498,13 +474,6 @@ async function getOrderDetail(orderId, attributionWindowDays = 30, matchingMode 
   const utmHistory = displayUtmHistory.filter(utm => {
     return new Date(utm.entry_time) <= purchaseTime;
   });
-  
-  // IP 기반 UTM 히스토리 (참고 정보용 - 별도 표시)
-  // 이미 display_utm_history에 포함된 것은 제외
-  const existingUtmKeys = new Set(displayUtmHistory.map(u => `${u.entry_time}||${u.utm_content}`));
-  const ipOnlyUtmHistory = ipUtmHistory
-    .filter(utm => !existingUtmKeys.has(`${utm.entry_time}||${utm.utm_content}`))
-    .sort((a, b) => new Date(a.entry_time) - new Date(b.entry_time));
 
   const sameIpVisitsMapped = sameIpVisits.map(row => ({
     session_id: row.session_id,
@@ -527,10 +496,10 @@ async function getOrderDetail(orderId, attributionWindowDays = 30, matchingMode 
     pastPurchasesMap.set(row.order_id, { ...row, source: 'visitor_id' });
   });
   
-  // IP 기반 구매 (중복 시 기존 데이터 유지)
-  pastPurchasesByIpRows.forEach(row => {
+  // fingerprint 기반 구매 (중복 시 기존 데이터 유지)
+  pastPurchasesByFingerprintRows.forEach(row => {
     if (!pastPurchasesMap.has(row.order_id)) {
-      pastPurchasesMap.set(row.order_id, { ...row, source: 'ip_address' });
+      pastPurchasesMap.set(row.order_id, { ...row, source: 'fingerprint' });
     }
   });
   
@@ -617,24 +586,20 @@ async function getOrderDetail(orderId, attributionWindowDays = 30, matchingMode 
     // - utm_history: 어트리뷰션 분석용 (구매 이전만)
     // - display_utm_history: 광고 클릭 카드 표시용 (구매 이후 포함)
     display_utm_history: displayUtmHistory,
-    // FIX (2026-02-05): IP 기반 UTM 히스토리를 별도 필드로 분리
-    // - moadamda-access-log 방식: IP 기반은 참고 정보로만 표시
-    // - utm_history에는 visitor_id + member_id 기반만 포함
-    ip_utm_history: ipOnlyUtmHistory,
     same_ip_visits: sameIpVisitsMapped,
     past_purchases: pastPurchasesMapped,
     matching_mode: matchingMode,
-    // 데이터 연결 정보 (IP + member_id 기반)
+    // 데이터 연결 정보 (fingerprint + member_id 기반)
     data_enrichment: {
-      ip_based_visits_found: ipPreviousVisits.length > 0,
-      ip_based_utm_found: ipOnlyUtmHistory.length > 0,
+      fingerprint_based_visits_found: fpPreviousVisits.length > 0,
+      fingerprint_based_utm_found: fpUtmHistory.length > 0,
       member_based_visits_found: memberPreviousVisits.length > 0,
       member_based_utm_found: memberUtmHistory.length > 0,
       visitor_visits_count: visitorPreviousVisits.length,
-      ip_visits_count: ipPreviousVisits.length,
+      fingerprint_visits_count: fpPreviousVisits.length,
       member_visits_count: memberPreviousVisits.length,
       visitor_utm_count: visitorUtmHistory.length,
-      ip_utm_count: ipOnlyUtmHistory.length,
+      fingerprint_utm_count: fpUtmHistory.length,
       member_utm_count: memberUtmHistory.length
     }
   };

@@ -46,20 +46,26 @@ async function getCreativeAggregation({
   minScrollPx = 0
 }) {
   // FIX (2026-02-05): ad_id(utm_id) 기준 그룹핑
-  // - 정상 utm_id가 있는 데이터만 포함 (utm_id 없거나 {{ad.id}} 같은 잘못된 값 제외)
+  // FIX (2026-02-11): utm_id 없는 플랫폼(카카오/자사몰 등) 지원
+  // - utm_id가 있으면 utm_id를 ad_id로 사용 (기존 Meta/네이버 등)
+  // - utm_id가 없으면 utm_content를 ad_id로 사용 (카카오/자사몰/인스타그램 등)
+  // - {{ad.id}}, {{ad.name}} 같은 잘못된 매크로 값은 제외
   // - meta_ads 테이블과 조인하여 현재 광고명 조회
   // - 수집된 광고명들은 array_agg로 variant_names에 저장
   const dataQuery = `
     WITH all_entries AS (
       -- 모든 진입 기록 (View 계산용)
-      -- 정상 utm_id만 포함 (빈 값, {{ad.id}} 등 제외)
+      -- utm_id가 있으면 utm_id, 없으면 utm_content를 ad_id로 사용
       -- FIX (2026-02-06): sessions.start_time 기간 필터 추가
       -- 세션 모달(getCreativeSessionsCount)과 동일한 기준 적용
       -- entry_timestamp는 기간 내이지만 session.start_time이 기간 외인 데이터 제외
       SELECT 
         us.session_id,
         us.visitor_id,
-        us.utm_params->>'utm_id' as ad_id,
+        COALESCE(
+          NULLIF(CASE WHEN us.utm_params->>'utm_id' LIKE '{{%' THEN NULL ELSE us.utm_params->>'utm_id' END, ''),
+          us.utm_params->>'utm_content'
+        ) as ad_id,
         us.utm_params->>'utm_content' as creative_name,
         COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') as utm_source,
         COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') as utm_medium,
@@ -73,9 +79,8 @@ async function getCreativeAggregation({
         AND s.start_time >= $1
         AND s.start_time <= $2
         AND v.is_bot = false
-        -- 정상 utm_id만 포함 (빈 값, {{ad.id}} 등 잘못된 값 제외)
-        AND NULLIF(us.utm_params->>'utm_id', '') IS NOT NULL
-        AND us.utm_params->>'utm_id' NOT LIKE '{{%'
+        -- {{...}} 패턴의 잘못된 값 제외 (utm_id와 utm_content 모두)
+        AND us.utm_params->>'utm_content' NOT LIKE '{{%'
         ${utmFilterConditions}
     ),
     unique_sessions AS (
@@ -244,10 +249,14 @@ async function getCreativeCount({
 }) {
   // FIX (2026-02-05): ad_id 기준으로 개수 조회
   // FIX (2026-02-06): utm_source 필터는 광고 단위로 적용 (대표 utm_source 기준)
+  // FIX (2026-02-11): utm_id 없는 플랫폼 지원 - COALESCE(utm_id, utm_content)
   const countQuery = `
     WITH ad_summary AS (
       SELECT 
-        us.utm_params->>'utm_id' as ad_id,
+        COALESCE(
+          NULLIF(CASE WHEN us.utm_params->>'utm_id' LIKE '{{%' THEN NULL ELSE us.utm_params->>'utm_id' END, ''),
+          us.utm_params->>'utm_content'
+        ) as ad_id,
         MODE() WITHIN GROUP (ORDER BY COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-')) as utm_source
       FROM utm_sessions us
       JOIN visitors v ON us.visitor_id = v.visitor_id
@@ -255,10 +264,12 @@ async function getCreativeCount({
         AND us.entry_timestamp >= $1
         AND us.entry_timestamp <= $2
         AND v.is_bot = false
-        AND NULLIF(us.utm_params->>'utm_id', '') IS NOT NULL
-        AND us.utm_params->>'utm_id' NOT LIKE '{{%'
+        AND us.utm_params->>'utm_content' NOT LIKE '{{%'
         ${utmFilterConditions}
-      GROUP BY us.utm_params->>'utm_id'
+      GROUP BY COALESCE(
+        NULLIF(CASE WHEN us.utm_params->>'utm_id' LIKE '{{%' THEN NULL ELSE us.utm_params->>'utm_id' END, ''),
+        us.utm_params->>'utm_content'
+      )
     )
     SELECT COUNT(*) as total
     FROM ad_summary

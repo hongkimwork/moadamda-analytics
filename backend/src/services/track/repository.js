@@ -21,7 +21,9 @@ async function upsertVisitor({
   utm_campaign,
   utm_params,
   clientIp,
-  userAgent = ''
+  userAgent = '',
+  browser_fingerprint = null,
+  member_id_crypt = null
 }) {
   // is_bot 판단: IP 대역 + User-Agent 패턴 + Unknown 브라우저/OS (카페24 호환)
   const isBot = detectBot(clientIp, userAgent, browser, os);
@@ -30,21 +32,25 @@ async function upsertVisitor({
     INSERT INTO visitors (
       visitor_id, first_visit, last_visit, device_type, 
       browser, os, utm_source, utm_medium, utm_campaign,
-      utm_params, ip_address, last_ip, is_bot
+      utm_params, ip_address, last_ip, is_bot,
+      browser_fingerprint, member_id_crypt
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
     ON CONFLICT (visitor_id) DO UPDATE SET
       last_visit = $3,
       visit_count = visitors.visit_count + 1,
       utm_params = $10,
       last_ip = $12,
-      is_bot = $13
+      is_bot = $13,
+      browser_fingerprint = COALESCE(EXCLUDED.browser_fingerprint, visitors.browser_fingerprint),
+      member_id_crypt = COALESCE(EXCLUDED.member_id_crypt, visitors.member_id_crypt)
   `, [
     visitor_id, visitTime, visitTime, device_type,
     browser, os,
     utm_source, utm_medium, utm_campaign,
     utm_params ? JSON.stringify(utm_params) : null,
-    clientIp, clientIp, isBot
+    clientIp, clientIp, isBot,
+    browser_fingerprint || null, member_id_crypt || null
   ]);
 }
 
@@ -229,7 +235,8 @@ async function upsertConversion(conversionData) {
     mileage_used, shipping_fee, final_payment,
     utm_source, utm_campaign, paid, product_name,
     points_spent, credits_spent, order_place_name,
-    payment_method_name, cafe24_status, canceled, order_status
+    payment_method_name, cafe24_status, canceled, order_status,
+    member_id
   } = conversionData;
 
   await db.query(`
@@ -239,10 +246,10 @@ async function upsertConversion(conversionData) {
       mileage_used, shipping_fee, final_payment,
       utm_source, utm_campaign, paid, product_name, synced_at,
       points_spent, credits_spent, order_place_name, payment_method_name,
-      cafe24_status, canceled, order_status
+      cafe24_status, canceled, order_status, member_id
     )
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW(),
-            $15, $16, $17, $18, $19, $20, $21)
+            $15, $16, $17, $18, $19, $20, $21, $22)
     ON CONFLICT (order_id) DO UPDATE SET
       visitor_id = COALESCE(conversions.visitor_id, EXCLUDED.visitor_id),
       session_id = COALESCE(conversions.session_id, EXCLUDED.session_id),
@@ -262,6 +269,7 @@ async function upsertConversion(conversionData) {
       cafe24_status = EXCLUDED.cafe24_status,
       canceled = EXCLUDED.canceled,
       order_status = EXCLUDED.order_status,
+      member_id = COALESCE(EXCLUDED.member_id, conversions.member_id),
       synced_at = NOW()
   `, [
     session_id, visitor_id, order_id, total_amount,
@@ -269,7 +277,7 @@ async function upsertConversion(conversionData) {
     discount_amount, mileage_used, shipping_fee, final_payment,
     utm_source, utm_campaign, paid, product_name,
     points_spent, credits_spent, order_place_name, payment_method_name,
-    cafe24_status, canceled, order_status
+    cafe24_status, canceled, order_status, member_id || null
   ]);
 }
 

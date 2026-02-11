@@ -205,13 +205,17 @@ async function getCreativeOrders(params) {
   
   const { startDate, endDate } = parseDates(start, end);
   
-  // FIX (2026-02-05): ad_id 기반 모드 판별 (메인 테이블과 동일한 기준)
-  const useAdId = ad_id && ad_id !== '' && !ad_id.startsWith('{{');
+  // FIX (2026-02-11): ad_id 기반 모드 판별
+  // ad_id가 creative_name과 같으면 utm_content 폴백이므로 creative_name 기반 조회
+  // (카카오/자사몰 등 utm_id 없는 플랫폼 대응)
+  const useAdId = ad_id && ad_id !== '' && !ad_id.startsWith('{{') && ad_id !== creative_name;
   
   // 타겟 광고 키 생성 (ad_id 기반 또는 creative_name 기반)
+  // FIX (2026-02-11): utm_source를 키에서 제외 - 로그인 리디렉트 시 utm_source 누락으로
+  // 같은 광고가 다른 키로 분리되는 문제 해결 (creativeAttribution.js와 동일한 키 구조)
   const targetCreativeKey = useAdId
     ? `${ad_id}||${utm_medium}||${utm_campaign}`
-    : `${creative_name}||${utm_source}||${utm_medium}||${utm_campaign}`;
+    : `${creative_name}||${utm_medium}||${utm_campaign}`;
   
   // 이상치 기준 검증 (5분~2시간30분, 초 단위)
   const maxDurationSeconds = Math.min(Math.max(parseInt(max_duration) || 600, 300), 9000);
@@ -261,20 +265,20 @@ async function getCreativeOrders(params) {
     .filter(id => id && id !== '')
   )];
   
-  // FIX (2026-02-10): matching_mode 기본값을 extended로 변경 (3단계 매칭 항상 적용)
-  const validMatchingMode = ['default', 'extended'].includes(matching_mode) ? matching_mode : 'extended';
+  // FIX (2026-02-11): matching_mode 기본값을 fingerprint로 변경 (IP 매칭 → 핑거프린트 매칭)
+  const validMatchingMode = ['default', 'fingerprint'].includes(matching_mode) ? matching_mode : 'fingerprint';
   
   // visitor_id 기반 여정 + member_id 기반 여정 병렬 조회
   // FIX (2026-02-05): ad_id 모드일 때 정상 utm_id만 포함 (메인 테이블과 동일)
   // FIX (2026-02-05): IP 기반 여정 병합 제거 - moadamda-access-log 방식 적용
   // - IP 기반은 다른 사용자의 행동이 병합될 수 있어 정확도 문제 발생
   // - member_id 기반만 유지 (동일 회원의 다른 기기)
-  // FIX (2026-02-10): extended 모드 시 IP+기기+OS 기반 여정도 조회
-  const [journeyRows, memberJourneyRows, ipDeviceOsResult] = await Promise.all([
+  // FIX (2026-02-11): fingerprint 모드 시 browser_fingerprint 기반 여정 조회
+  const [journeyRows, memberJourneyRows, fingerprintResult] = await Promise.all([
     repository.getVisitorJourneys({ visitorIds: purchaserIds, onlyValidAdId: useAdId }),
     repository.getVisitorJourneysByMemberId({ purchaserMemberIds, purchaserIds, onlyValidAdId: useAdId }),
-    validMatchingMode === 'extended'
-      ? repository.getVisitorJourneysByIpDeviceOs({ purchaserIds, onlyValidAdId: useAdId })
+    validMatchingMode === 'fingerprint'
+      ? repository.getVisitorJourneysByFingerprint({ purchaserIds, onlyValidAdId: useAdId })
       : Promise.resolve({ visitorInfoRows: [], journeyRows: [], fingerprintGroups: {} })
   ]);
   
@@ -290,20 +294,20 @@ async function getCreativeOrders(params) {
     memberJourneys[row.member_id].push(row);
   });
   
-  // FIX (2026-02-10): IP+기기+OS 기반 여정 매핑 (extended 모드)
-  const ipDeviceJourneys = {};
-  if (validMatchingMode === 'extended' && ipDeviceOsResult.fingerprintGroups) {
-    const { journeyRows: ipJourneyRows, fingerprintGroups } = ipDeviceOsResult;
+  // FIX (2026-02-11): browser_fingerprint 기반 여정 매핑 (fingerprint 모드)
+  const fpJourneys = {};
+  if (validMatchingMode === 'fingerprint' && fingerprintResult.fingerprintGroups) {
+    const { journeyRows: fpJourneyRows, fingerprintGroups } = fingerprintResult;
     
-    ipJourneyRows.forEach(row => {
-      const fingerprint = `${row.ip_address}||${row.device_type}||${row.os}`;
-      const purchaserVisitorIds = fingerprintGroups[fingerprint] || [];
+    fpJourneyRows.forEach(row => {
+      const fp = row.browser_fingerprint;
+      const purchaserVisitorIds = fingerprintGroups[fp] || [];
       
       purchaserVisitorIds.forEach(purchaserVid => {
-        if (!ipDeviceJourneys[purchaserVid]) {
-          ipDeviceJourneys[purchaserVid] = [];
+        if (!fpJourneys[purchaserVid]) {
+          fpJourneys[purchaserVid] = [];
         }
-        ipDeviceJourneys[purchaserVid].push(row);
+        fpJourneys[purchaserVid].push(row);
       });
     });
   }
@@ -345,15 +349,15 @@ async function getCreativeOrders(params) {
       }
     }
     
-    // FIX (2026-02-10): IP+기기+OS 기반 여정 병합 (extended 모드)
-    if (validMatchingMode === 'extended') {
+    // FIX (2026-02-11): browser_fingerprint 기반 여정 병합 (fingerprint 모드)
+    if (validMatchingMode === 'fingerprint') {
       const vid = order.visitor_id || order.session_visitor_id;
-      const ipJourney = ipDeviceJourneys[vid] || [];
-      if (ipJourney.length > 0) {
+      const fpJourney = fpJourneys[vid] || [];
+      if (fpJourney.length > 0) {
         const existingKeys = new Set(fullJourney.map(j => 
           `${j.entry_timestamp}||${j.utm_content}`
         ));
-        const newTouches = ipJourney.filter(j => {
+        const newTouches = fpJourney.filter(j => {
           const key = `${j.entry_timestamp}||${j.utm_content}`;
           return !existingKeys.has(key);
         });
@@ -374,12 +378,21 @@ async function getCreativeOrders(params) {
     if (journey.length === 0) return;
     
     // 고유한 광고 조합 수집
-    // FIX (2026-02-05): ad_id 기반일 때 ad_id를 키로 사용 (메인 테이블과 동일)
+    // FIX (2026-02-11): 터치포인트별로 ad_id가 utm_content 폴백인지 판별하여 키 생성
+    // (카카오 등 utm_id 없는 플랫폼과 Meta 등 utm_id 있는 플랫폼이 혼재할 수 있음)
+    // FIX (2026-02-11): utm_source를 키에서 제외 - 로그인 리디렉트 시 utm_source 누락으로
+    // 같은 광고가 다른 키로 분리되는 문제 해결 (creativeAttribution.js와 동일한 키 구조)
+    const getTouchKey = (touch) => {
+      const isUtmContentFallback = touch.ad_id === touch.utm_content;
+      if (isUtmContentFallback) {
+        return `${touch.utm_content}||${touch.utm_medium}||${touch.utm_campaign}`;
+      }
+      return `${touch.ad_id}||${touch.utm_medium}||${touch.utm_campaign}`;
+    };
+    
     const uniqueCreativesMap = new Map();
     journey.forEach(touch => {
-      const touchKey = useAdId
-        ? `${touch.ad_id}||${touch.utm_medium}||${touch.utm_campaign}`
-        : `${touch.utm_content}||${touch.utm_source}||${touch.utm_medium}||${touch.utm_campaign}`;
+      const touchKey = getTouchKey(touch);
       if (!uniqueCreativesMap.has(touchKey) || touch.sequence_order > uniqueCreativesMap.get(touchKey).sequence_order) {
         uniqueCreativesMap.set(touchKey, touch);
       }
@@ -396,10 +409,8 @@ async function getCreativeOrders(params) {
     const lastTouch = journey.reduce((max, current) => 
       current.sequence_order > max.sequence_order ? current : max
     );
-    // FIX (2026-02-05): ad_id 기반일 때 ad_id를 키로 사용
-    const lastTouchKey = useAdId
-      ? `${lastTouch.ad_id}||${lastTouch.utm_medium}||${lastTouch.utm_campaign}`
-      : `${lastTouch.utm_content}||${lastTouch.utm_source}||${lastTouch.utm_medium}||${lastTouch.utm_campaign}`;
+    // FIX (2026-02-11): 터치포인트별 동적 키 생성
+    const lastTouchKey = getTouchKey(lastTouch);
     const isLastTouch = lastTouchKey === targetCreativeKey;
     const isSingleTouch = uniqueCreativeKeys.length === 1;
     
@@ -483,7 +494,7 @@ async function getCreativeOrders(params) {
   const [sessionInfoMap, visitCountMap] = await Promise.all([
     repository.getVisitorSessionInfoForCreative({
       visitorIds: contributedVisitorArray,
-      ad_id,
+      ad_id: useAdId ? ad_id : null,
       creative_name,
       utm_source,
       utm_medium,
@@ -599,20 +610,23 @@ async function getCreativeSessions(params) {
   
   const { startDate, endDate } = parseDates(start, end);
   
-  // ad_id가 있으면 ad_id 기반 조회, 없으면 광고명 변형 찾아서 조회
-  const useAdId = ad_id && ad_id !== '' && !ad_id.startsWith('{{');
+  // FIX (2026-02-11): ad_id === creative_name이면 utm_content 폴백 (카카오 등)
+  const useAdId = ad_id && ad_id !== '' && !ad_id.startsWith('{{') && ad_id !== creative_name;
   
   // 광고명 변형들 찾기 (ad_id 없을 때 fallback용)
   const creativeVariants = useAdId ? [creative_name] : await getCreativeVariants(creative_name, startDate, endDate);
   
+  // FIX (2026-02-11): useAdId=false일 때 ad_id를 null로 전달하여 repository에서도 creative_name 기반 조회
+  const effectiveAdId = useAdId ? ad_id : null;
+  
   // 세션 목록 및 총 개수/UV 조회
   const [sessions, countResult] = await Promise.all([
     repository.getCreativeSessions({
-      ad_id, creative_name: creativeVariants, utm_source, utm_medium, utm_campaign,
+      ad_id: effectiveAdId, creative_name: creativeVariants, utm_source, utm_medium, utm_campaign,
       startDate, endDate, page, limit, sortField, sortOrder
     }),
     repository.getCreativeSessionsCount({
-      ad_id, creative_name: creativeVariants, utm_source, utm_medium, utm_campaign,
+      ad_id: effectiveAdId, creative_name: creativeVariants, utm_source, utm_medium, utm_campaign,
       startDate, endDate
     })
   ]);
@@ -687,20 +701,23 @@ async function getCreativeEntries(params) {
   
   const { startDate, endDate } = parseDates(start, end);
   
-  // ad_id가 있으면 ad_id 기반 조회, 없으면 광고명 변형 찾아서 조회
-  const useAdId = ad_id && ad_id !== '' && !ad_id.startsWith('{{');
+  // FIX (2026-02-11): ad_id === creative_name이면 utm_content 폴백 (카카오 등)
+  const useAdId = ad_id && ad_id !== '' && !ad_id.startsWith('{{') && ad_id !== creative_name;
   
   // 광고명 변형들 찾기 (ad_id 없을 때 fallback용)
   const creativeVariants = useAdId ? [creative_name] : await getCreativeVariants(creative_name, startDate, endDate);
   
+  // FIX (2026-02-11): useAdId=false일 때 ad_id를 null로 전달하여 repository에서도 creative_name 기반 조회
+  const effectiveAdId = useAdId ? ad_id : null;
+  
   // 진입 목록 및 총 개수 조회
   const [entries, totalCount] = await Promise.all([
     repository.getCreativeEntries({
-      ad_id, creative_name: creativeVariants, utm_source, utm_medium, utm_campaign,
+      ad_id: effectiveAdId, creative_name: creativeVariants, utm_source, utm_medium, utm_campaign,
       startDate, endDate, page, limit
     }),
     repository.getCreativeEntriesCount({
-      ad_id, creative_name: creativeVariants, utm_source, utm_medium, utm_campaign,
+      ad_id: effectiveAdId, creative_name: creativeVariants, utm_source, utm_medium, utm_campaign,
       startDate, endDate
     })
   ]);
@@ -843,13 +860,16 @@ async function getCreativeSessionsChart(params) {
   
   const { startDate, endDate } = parseDates(start, end);
   
-  // ad_id가 있으면 ad_id 기반, 없으면 광고명 변형 찾기
-  const useAdId = ad_id && ad_id !== '' && !ad_id.startsWith('{{');
+  // FIX (2026-02-11): ad_id === creative_name이면 utm_content 폴백 (카카오 등)
+  const useAdId = ad_id && ad_id !== '' && !ad_id.startsWith('{{') && ad_id !== creative_name;
   const creativeVariants = useAdId ? [creative_name] : await getCreativeVariants(creative_name, startDate, endDate);
+  
+  // FIX (2026-02-11): useAdId=false일 때 ad_id를 null로 전달하여 repository에서도 creative_name 기반 조회
+  const effectiveAdId = useAdId ? ad_id : null;
   
   // DB에서 전체 세션의 raw 집계 데이터 조회
   const rows = await repository.getCreativeSessionsChartData({
-    ad_id, creative_name: creativeVariants, utm_source, utm_medium, utm_campaign,
+    ad_id: effectiveAdId, creative_name: creativeVariants, utm_source, utm_medium, utm_campaign,
     startDate, endDate
   });
   

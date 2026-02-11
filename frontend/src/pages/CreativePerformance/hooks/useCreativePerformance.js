@@ -115,8 +115,8 @@ export const useCreativePerformance = () => {
   // FIX (2026-02-04): Attribution Window 선택 (30, 60, 90, 'all')
   const [attributionWindow, setAttributionWindow] = useState(() => savedFilters?.attributionWindow ?? '30');
 
-  // FIX (2026-02-10): 매칭 방식 extended 고정 (쿠키 + 회원ID + IP+기기+OS 3단계 매칭)
-  const matchingMode = 'extended';
+  // FIX (2026-02-10): 매칭 방식 fingerprint 고정 (쿠키 + 회원ID + IP+기기+OS 3단계 매칭)
+  const matchingMode = 'fingerprint';
 
   // 모달 state
   const [ordersModalVisible, setOrdersModalVisible] = useState(false);

@@ -43,7 +43,7 @@ function getExposureInfo(order, dateRange) {
  * CreativeOrdersModal - 광고 소재별 기여 주문 목록 모달
  * FIX (2026-02-04): Attribution Window 선택 기능 추가
  */
-function CreativeOrdersModal({ visible, onClose, creative, dateRange, attributionWindow = '30', matchingMode = 'extended' }) {
+function CreativeOrdersModal({ visible, onClose, creative, dateRange, attributionWindow = '30', matchingMode = 'fingerprint' }) {
   const [loading, setLoading] = useState(false);
   const [orders, setOrders] = useState([]);
   const [summary, setSummary] = useState({
@@ -605,6 +605,7 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange, attributio
           <OrderDetailPageContent
             orderId={selectedOrderId}
             userMappings={userMappings}
+            matchingMode={matchingMode}
             onClose={() => {
               setJourneyModalVisible(false);
               setSelectedOrderId(null);

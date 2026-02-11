@@ -1,6 +1,6 @@
 /**
- * Moadamda Analytics Tracker v27.0 (v054)
- * Updated: 2026-02-03
+ * Moadamda Analytics Tracker v29.0 (v056)
+ * Updated: 2026-02-11
  * 
  * DEPLOYMENT INFO:
  * - Production Domain: marketingzon.com
@@ -8,7 +8,22 @@
  * - Dashboard: https://dashboard.marketingzon.com
  * - SSL: Let's Encrypt (Trusted Certificate)
  * 
- * LATEST UPDATE (v27.0):
+ * LATEST UPDATE (v29.0):
+ * - ADDED: 브라우저 핑거프린트 수집 (FingerprintJS v5 CDN 비동기 로드)
+ *   - CDN 실패 시 경량 fallback (canvas + screen + hardware 기반)
+ *   - 공유 네트워크에서 다른 PC를 정확히 구별
+ *   - 같은 브라우저에서 쿠키가 끊어진 경우 동일 방문자 복구
+ * - ADDED: Cafe24 회원 ID(member_id_crypt) 수집
+ *   - 매 페이지뷰마다 CAFE24.FRONT_EXTERNAL_SCRIPT_VARIABLE_DATA.common_member_id_crypt 수집
+ *   - 다른 브라우저 간 동일 회원 연결 (인스타 인앱 → 사파리 교차 연결)
+ *   - 로그인 회원만 해당 (전체 주문의 약 70%)
+ * - ADDED: 구매 이벤트에도 member_id_crypt 포함
+ * 
+ * PREVIOUS (v28.0):
+ * - FIX: 세션 쿠키 만료 안정성 개선 (Android Chrome 대응)
+ *   - max-age 속성 추가, Secure 플래그 추가
+ * 
+ * PREVIOUS (v27.0):
  * - FIX: 스크롤 뎁스 0px 수집 문제 해결 (iOS Safari/인앱 브라우저 대응)
  *   - requestAnimationFrame 폴링 추가 (모멘텀 스크롤 중에도 위치 추적)
  *   - touchmove 이벤트 추가 (터치 스크롤 감지)
@@ -62,6 +77,8 @@
  * - ADDED: 세션 스토리지 기반 UTM 파라미터 유지 로직
  * 
  * Current features:
+ * - Browser fingerprint collection (FingerprintJS v5 + fallback)
+ * - Cafe24 member_id_crypt collection (cross-browser matching)
  * - Pageview tracking with UTM parameters
  * - Purchase tracking (order completion page only)
  * - Cart add tracking
@@ -104,6 +121,9 @@
   let sessionEndSent = false;  // prevent duplicate session_end
   let retryTimer = null;  // retry timer for failed events
   
+  // Browser fingerprint for visitor matching (loaded async from FingerprintJS CDN)
+  let browserFingerprint = null;
+  
   // Scroll depth tracking variables
   let maxScrollY = 0;  // Maximum scroll position reached (px)
   let scrollDepthSent = false;  // Prevent duplicate scroll_depth events
@@ -120,7 +140,67 @@
   
   const IS_IN_APP = isInAppBrowser();
   
-  console.log('[MA] Initializing Moadamda Analytics v27.0 (v054)...');
+  // =====================================================
+  // BROWSER FINGERPRINT (FingerprintJS v5 CDN async load)
+  // - Primary: FingerprintJS open-source (80~90% accuracy)
+  // - Fallback: Canvas + screen + hardware based hash
+  // =====================================================
+  
+  async function loadFingerprint() {
+    try {
+      const FingerprintJS = await import('https://openfpcdn.io/fingerprintjs/v5');
+      const fp = await FingerprintJS.load({ monitoring: false });
+      const result = await fp.get();
+      browserFingerprint = result.visitorId; // 32-char hash
+      console.log('[MA] Fingerprint loaded:', browserFingerprint);
+    } catch (e) {
+      console.warn('[MA] FingerprintJS CDN failed, using fallback');
+      browserFingerprint = generateFallbackFingerprint();
+    }
+  }
+  
+  // CDN failure fallback: lightweight fingerprint from canvas + screen + hardware
+  function generateFallbackFingerprint() {
+    const components = [];
+    try {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = 200; canvas.height = 50;
+      ctx.font = '14px Arial'; ctx.fillStyle = '#f60';
+      ctx.fillRect(125, 1, 62, 20); ctx.fillStyle = '#069';
+      ctx.fillText('FP', 2, 15);
+      components.push(canvas.toDataURL());
+    } catch(e) {}
+    components.push(
+      screen.width + 'x' + screen.height,
+      screen.colorDepth,
+      window.devicePixelRatio || 1,
+      new Date().getTimezoneOffset(),
+      navigator.language,
+      navigator.platform,
+      navigator.hardwareConcurrency || 0
+    );
+    return btoa(components.join('|')).replace(/[^a-zA-Z0-9]/g, '').substring(0, 32);
+  }
+  
+  // =====================================================
+  // CAFE24 MEMBER ID (common_member_id_crypt)
+  // - Available on all pages when user is logged in
+  // - SHA-256 hash, same value across all browsers for same member
+  // - Enables cross-browser matching (InApp → Safari)
+  // =====================================================
+  
+  function getMemberIdCrypt() {
+    try {
+      const cafe24 = window.CAFE24;
+      if (cafe24 && cafe24.FRONT_EXTERNAL_SCRIPT_VARIABLE_DATA) {
+        return cafe24.FRONT_EXTERNAL_SCRIPT_VARIABLE_DATA.common_member_id_crypt || null;
+      }
+    } catch(e) {}
+    return null;
+  }
+  
+  console.log('[MA] Initializing Moadamda Analytics v29.0 (v056)...');
   console.log('[MA] In-app browser detected:', IS_IN_APP);
   console.log('[MA] API URL:', CONFIG.apiUrl);
   console.log('[MA] Visitor ID:', visitorId);
@@ -487,6 +567,13 @@
       user_agent: navigator.userAgent
     };
     
+    // Add browser fingerprint (may be null on first pageview while CDN loads)
+    if (browserFingerprint) data.browser_fingerprint = browserFingerprint;
+    
+    // Add Cafe24 member_id_crypt (available on all pages when logged in)
+    const memberCrypt = getMemberIdCrypt();
+    if (memberCrypt) data.member_id_crypt = memberCrypt;
+    
     // Extract ALL UTM parameters (utm_*) from current URL
     const urlParams = new URLSearchParams(window.location.search);
     let utmParams = {};
@@ -685,6 +772,11 @@
           url: window.location.href
         };
         
+        // Add fingerprint and member_id_crypt to purchase event
+        if (browserFingerprint) purchaseEvent.browser_fingerprint = browserFingerprint;
+        const purchaseMemberCrypt = getMemberIdCrypt();
+        if (purchaseMemberCrypt) purchaseEvent.member_id_crypt = purchaseMemberCrypt;
+        
         sendImmediately(purchaseEvent);
         console.log('[MA] Purchase event sent (Cafe24 object)');
         
@@ -713,6 +805,11 @@
             shipping_fee: 0,
             url: window.location.href
           };
+          
+          // Add fingerprint and member_id_crypt to purchase event
+          if (browserFingerprint) purchaseEvent.browser_fingerprint = browserFingerprint;
+          const domMemberCrypt = getMemberIdCrypt();
+          if (domMemberCrypt) purchaseEvent.member_id_crypt = domMemberCrypt;
           
           sendImmediately(purchaseEvent);
           console.log('[MA] Purchase event sent (DOM fallback)');
@@ -1077,6 +1174,10 @@
     
     // NEW: Retry any failed events from previous page loads
     retryFailedEvents();
+    
+    // Load browser fingerprint asynchronously (non-blocking)
+    // First pageview may not have fingerprint yet; second pageview onwards will include it
+    loadFingerprint();
     
     // Track initial pageview
     trackPageView();

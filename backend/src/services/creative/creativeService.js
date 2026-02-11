@@ -35,7 +35,7 @@ async function getCreativePerformance(params) {
     min_scroll = 0,
     min_uv = 0,
     attribution_window = '30',
-    matching_mode = 'extended'
+    matching_mode = 'fingerprint'
   } = params;
   
   // Attribution Window 파싱
@@ -172,14 +172,20 @@ async function getCreativePerformance(params) {
 
   // 8. 기여도 계산
   // FIX (2026-02-05): ad_id 기반으로 기여도 계산
-  // FIX (2026-02-10): matching_mode 전달 (extended = IP+기기+OS 포함)
-  const validMatchingMode = ['default', 'extended'].includes(matching_mode) ? matching_mode : 'default';
+  // FIX (2026-02-11): matching_mode 전달 (fingerprint = 브라우저 핑거프린트 포함)
+  const validMatchingMode = ['default', 'fingerprint'].includes(matching_mode) ? matching_mode : 'fingerprint';
   const attributionData = await calculateCreativeAttribution(filteredData, startDate, endDate, attributionWindowDays, validMatchingMode);
 
   // 9. 기여도 데이터 병합
-  // FIX (2026-02-05): ad_id 기반 키로 기여도 매칭
+  // FIX (2026-02-11): ad_id 기반 키로 기여도 매칭
+  // ad_id가 creative_name과 같으면 utm_content 폴백이므로 creative_name 기반 키 사용
+  // FIX (2026-02-11): utm_source를 키에서 제외 - 로그인 리디렉트 시 utm_source 누락으로
+  // 같은 광고가 다른 키로 분리되는 문제 해결 (creativeAttribution.js와 동일한 키 구조)
   let finalData = filteredData.map(row => {
-    const creativeKey = `${row.ad_id}||${row.utm_medium}||${row.utm_campaign}`;
+    const isUtmContentFallback = row.ad_id === row.creative_name;
+    const creativeKey = isUtmContentFallback
+      ? `${row.creative_name}||${row.utm_medium}||${row.utm_campaign}`
+      : `${row.ad_id}||${row.utm_medium}||${row.utm_campaign}`;
     const attr = attributionData[creativeKey] || {};
     
     return {

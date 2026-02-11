@@ -1,9 +1,20 @@
-v28.0 (v055)
-Updated: 2026-02-05
+v29.0 (v056)
+Updated: 2026-02-11
 
-🔧 세션 쿠키 만료 안정성 개선 (Android Chrome 비정상 세션 방지)
+🔑 방문자 식별 체계 강화 (브라우저 핑거프린트 + Cafe24 회원 ID)
 
-NEW IN v28.0 (v055):
+NEW IN v29.0 (v056):
+✅ 브라우저 핑거프린트 수집 (FingerprintJS v5 CDN 비동기 로드)
+  - CDN 실패 시 경량 fallback (canvas + screen + hardware 기반)
+  - 공유 네트워크에서 다른 PC를 정확히 구별
+  - 같은 브라우저에서 쿠키가 끊어진 경우 동일 방문자 복구
+✅ Cafe24 회원 ID(member_id_crypt) 수집
+  - 매 페이지뷰마다 common_member_id_crypt 수집
+  - 다른 브라우저 간 동일 회원 연결 (인스타 인앱 → 사파리 교차 연결)
+  - 로그인 회원만 해당 (전체 주문의 약 70%)
+✅ 구매 이벤트에도 browser_fingerprint, member_id_crypt 포함
+
+PREVIOUS v28.0 (v055):
 ✅ setCookie() 함수 개선
   - max-age 속성 추가 (expires보다 신뢰성 높음, 일부 모바일 브라우저 호환성 개선)
   - Secure 플래그 추가 (HTTPS 환경에서 보안 강화)

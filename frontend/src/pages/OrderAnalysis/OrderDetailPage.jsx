@@ -77,9 +77,9 @@ export function OrderDetailPageContent({ orderId, userMappings = {}, onClose = n
     );
   }
 
-  // FIX (2026-02-05): IP 기반 UTM 히스토리를 별도로 받음 (참고 정보용)
   // FIX (2026-02-10): display_utm_history = 광고 클릭 카드 표시용 (구매 이후 UTM 포함)
-  const { order, purchase_journey, previous_visits, page_path, utm_history, display_utm_history, ip_utm_history, past_purchases } = data;
+  // FIX (2026-02-11): ip_utm_history 제거 (IP+기기+OS → 핑거프린트 매칭으로 교체)
+  const { order, purchase_journey, previous_visits, page_path, utm_history, display_utm_history, past_purchases } = data;
 
   // 구매 직전 경로 (광고 클릭 후 ~ 구매까지)
   const journeyPages = purchase_journey?.pages || page_path || [];

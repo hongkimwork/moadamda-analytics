@@ -79,7 +79,9 @@ async function handlePageview(event, clientIp) {
     utm_source,
     utm_medium,
     utm_campaign,
-    utm_params
+    utm_params,
+    browser_fingerprint,
+    member_id_crypt
   } = event;
 
   // 중복 요청 체크 (인앱 브라우저 dual send 문제 대응)
@@ -90,7 +92,7 @@ async function handlePageview(event, clientIp) {
 
   const visitTime = new Date(timestamp);
 
-  // 1. Upsert visitor (with IP tracking + dynamic UTM support + bot detection)
+  // 1. Upsert visitor (with IP tracking + dynamic UTM support + bot detection + fingerprint)
   const browserInfo = parseBrowserInfo(event);
   
   await repository.upsertVisitor({
@@ -104,7 +106,9 @@ async function handlePageview(event, clientIp) {
     utm_campaign,
     utm_params,
     clientIp,
-    userAgent: event.user_agent || ''
+    userAgent: event.user_agent || '',
+    browser_fingerprint: browser_fingerprint || null,
+    member_id_crypt: member_id_crypt || null
   });
 
   // 2. Upsert session (with IP tracking + auto-calculate duration_seconds + dynamic UTM)
@@ -200,7 +204,8 @@ async function handleEcommerceEvent(event, clientIp) {
       mileage_used,
       shipping_fee,
       final_payment,
-      product_name
+      product_name,
+      member_id_crypt: event.member_id_crypt || null
     });
   }
 
@@ -233,7 +238,8 @@ async function handlePurchaseEvent(purchaseData) {
     mileage_used,
     shipping_fee,
     final_payment,
-    product_name
+    product_name,
+    member_id_crypt
   } = purchaseData;
 
   // Get visitor's UTM information for attribution
@@ -255,6 +261,7 @@ async function handlePurchaseEvent(purchaseData) {
   let actualCafe24Status = null;
   let actualCanceled = 'F';
   let actualOrderStatus = 'confirmed';
+  let actualMemberId = null;
 
   if (cafe24) {
     try {
@@ -296,7 +303,10 @@ async function handlePurchaseEvent(purchaseData) {
           actualOrderStatus = 'cancelled';
         }
         
-        console.log(`[Track] Cafe24 API verified order ${order_id}: paid=${actualPaid}, final_payment=${actualFinalPayment}, points=${actualPointsSpent}`);
+        // Extract member_id from Cafe24 API response
+        actualMemberId = cafe24Order.member_id || null;
+        
+        console.log(`[Track] Cafe24 API verified order ${order_id}: paid=${actualPaid}, final_payment=${actualFinalPayment}, points=${actualPointsSpent}, member_id=${actualMemberId}`);
       }
     } catch (cafe24Error) {
       console.warn(`[Track] Cafe24 API error for order ${order_id}:`, cafe24Error.message);
@@ -338,7 +348,8 @@ async function handlePurchaseEvent(purchaseData) {
     payment_method_name: actualPaymentMethodName,
     cafe24_status: actualCafe24Status,
     canceled: actualCanceled,
-    order_status: actualOrderStatus
+    order_status: actualOrderStatus,
+    member_id: actualMemberId
   });
 
   // Mark session as converted

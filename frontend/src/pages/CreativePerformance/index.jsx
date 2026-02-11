@@ -2,20 +2,19 @@
 // 광고 소재 퍼포먼스 페이지 (리팩토링)
 // ============================================================================
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Alert, Modal, message, Spin } from 'antd';
 import dayjs from 'dayjs';
 import { useCreativePerformance } from './hooks/useCreativePerformance';
 import { fetchCreativeOriginalUrl } from './services/creativePerformanceApi';
-import { getRowKey } from './utils/helpers';
 import PerformanceHeader from './components/PerformanceHeader';
-import InsightCards from './components/InsightCards';
 import PerformanceFilters from './components/PerformanceFilters';
 import PerformanceTable from './components/PerformanceTable';
 import CreativeOrdersModal from '../../components/CreativeOrdersModal';
 import CreativeSessionsModal from '../../components/CreativeSessionsModal';
 import CreativeEntriesModal from '../../components/CreativeEntriesModal';
 import ScoreSettingsModal from './components/ScoreSettingsModal';
+import EvaluationSettingsModal from './components/EvaluationSettingsModal';
 import CreativeMediaPreviewModal from './components/CreativeMediaPreviewModal';
 
 /**
@@ -27,6 +26,9 @@ function CreativePerformance() {
 
   // 점수 설정 모달 state
   const [scoreSettingsModalVisible, setScoreSettingsModalVisible] = useState(false);
+
+  // 평가 설정 통합 모달 state
+  const [evaluationSettingsVisible, setEvaluationSettingsVisible] = useState(false);
 
   // 세션 상세 모달 state (UV 클릭)
   const [sessionsModalVisible, setSessionsModalVisible] = useState(false);
@@ -44,20 +46,6 @@ function CreativePerformance() {
   // 미디어 프리뷰 모달 state
   const [mediaPreviewModalVisible, setMediaPreviewModalVisible] = useState(false);
   const [mediaPreviewCreativeName, setMediaPreviewCreativeName] = useState(null);
-
-  // 인사이트 패널 토글 state (기본: 숨김)
-  const [showInsight, setShowInsight] = useState(false);
-
-  // 인사이트 카드 클릭 → 테이블 행 하이라이트 state
-  const [highlightRowKey, setHighlightRowKey] = useState(null);
-
-  // 인사이트 카드 항목 클릭 핸들러
-  const handleInsightItemClick = useCallback((item) => {
-    const key = getRowKey(item);
-    // 동일 키 재클릭 시에도 다시 트리거되도록 한번 null로 리셋
-    setHighlightRowKey(null);
-    setTimeout(() => setHighlightRowKey(key), 0);
-  }, []);
 
   const {
     // 데이터
@@ -220,6 +208,18 @@ function CreativePerformance() {
     setMediaPreviewModalVisible(true);
   };
 
+  // 평가 설정 통합 모달 저장 핸들러
+  const handleEvaluationSettingsSave = (settings) => {
+    setAttributionWindow(settings.attributionWindow);
+    setMaxDuration(settings.maxDuration);
+    setMaxPv(settings.maxPv);
+    setMaxScroll(settings.maxScroll);
+    setMinDuration(settings.minDuration);
+    setMinPv(settings.minPv);
+    setMinScroll(settings.minScroll);
+    setMinUv(settings.minUv);
+  };
+
   // 메타 필터 적용 여부 계산 (meta, instagram, ig 소스 필터링 중인지)
   const isMetaFiltered = quickFilterSources.some(source =>
     ['meta', 'instagram', 'ig', 'facebook', 'fb'].includes(source.toLowerCase())
@@ -247,42 +247,16 @@ function CreativePerformance() {
         maxDuration={maxDuration}
         maxPv={maxPv}
         maxScroll={maxScroll}
-        onMaxDurationChange={setMaxDuration}
-        onMaxPvChange={setMaxPv}
-        onMaxScrollChange={setMaxScroll}
         minDuration={minDuration}
         minPv={minPv}
         minScroll={minScroll}
         minUv={minUv}
-        onMinDurationChange={setMinDuration}
-        onMinPvChange={setMinPv}
-        onMinScrollChange={setMinScroll}
-        onMinUvChange={setMinUv}
-        scoreSettings={scoreSettings}
-        onScoreSettingsClick={() => setScoreSettingsModalVisible(true)}
         quickFilterSources={quickFilterSources}
         attributionWindow={attributionWindow}
-        onAttributionWindowChange={setAttributionWindow}
-        distributionData={distributionData}
-        distributionLoading={distributionLoading}
+        onEvaluationSettingsClick={() => setEvaluationSettingsVisible(true)}
         platformLinked={platformLinked}
         onPlatformLinkedChange={setPlatformLinked}
-        showInsight={showInsight}
-        onInsightToggle={() => setShowInsight(prev => !prev)}
       />
-
-      {/* 인사이트 카드 (Top 5 랭킹) - 토글 버튼으로 표시/숨김 */}
-      {showInsight && (
-        <div style={{ marginTop: '12px', animation: 'fadeSlideIn 200ms ease' }}>
-          <InsightCards data={data} scoreSettings={scoreSettings} onItemClick={handleInsightItemClick} />
-          <style>{`
-            @keyframes fadeSlideIn {
-              from { opacity: 0; transform: translateY(-8px); }
-              to { opacity: 1; transform: translateY(0); }
-            }
-          `}</style>
-        </div>
-      )}
 
       {/* 에러 표시 */}
       {error && (
@@ -316,8 +290,6 @@ function CreativePerformance() {
         isMetaFiltered={isMetaFiltered}
         onCreativeClick={handleCreativeClick}
         minUv={minUv}
-        highlightRowKey={highlightRowKey}
-        onHighlightDone={() => setHighlightRowKey(null)}
       />
       </div>
 
@@ -335,7 +307,7 @@ function CreativePerformance() {
           end: filters.dateRange[1]
         }}
         attributionWindow={attributionWindow}
-        matchingMode="extended"
+        matchingMode="fingerprint"
       />
 
       {/* 세션 상세 모달 (UV 클릭) */}
@@ -427,7 +399,27 @@ function CreativePerformance() {
         ) : null}
       </Modal>
 
-      {/* 점수 설정 모달 */}
+      {/* 평가 설정 통합 모달 */}
+      <EvaluationSettingsModal
+        visible={evaluationSettingsVisible}
+        onClose={() => setEvaluationSettingsVisible(false)}
+        attributionWindow={attributionWindow}
+        maxDuration={maxDuration}
+        maxPv={maxPv}
+        maxScroll={maxScroll}
+        minDuration={minDuration}
+        minPv={minPv}
+        minScroll={minScroll}
+        minUv={minUv}
+        scoreSettings={scoreSettings}
+        distributionData={distributionData}
+        distributionLoading={distributionLoading}
+        onSave={handleEvaluationSettingsSave}
+        onOpenScoreSettings={() => setScoreSettingsModalVisible(true)}
+        loading={loading}
+      />
+
+      {/* 점수 설정 모달 (모수 평가 기준 상세) */}
       <ScoreSettingsModal
         visible={scoreSettingsModalVisible}
         onClose={() => setScoreSettingsModalVisible(false)}
