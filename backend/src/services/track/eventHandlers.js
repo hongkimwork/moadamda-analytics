@@ -262,6 +262,7 @@ async function handlePurchaseEvent(purchaseData) {
   let actualCanceled = 'F';
   let actualOrderStatus = 'confirmed';
   let actualMemberId = null;
+  let actualFirstOrder = null;
 
   if (cafe24) {
     try {
@@ -303,10 +304,11 @@ async function handlePurchaseEvent(purchaseData) {
           actualOrderStatus = 'cancelled';
         }
         
-        // Extract member_id from Cafe24 API response
+        // Extract member_id and first_order from Cafe24 API response
         actualMemberId = cafe24Order.member_id || null;
+        actualFirstOrder = cafe24Order.first_order || null; // T=신규, F=재구매
         
-        console.log(`[Track] Cafe24 API verified order ${order_id}: paid=${actualPaid}, final_payment=${actualFinalPayment}, points=${actualPointsSpent}, member_id=${actualMemberId}`);
+        console.log(`[Track] Cafe24 API verified order ${order_id}: paid=${actualPaid}, final_payment=${actualFinalPayment}, points=${actualPointsSpent}, member_id=${actualMemberId}, first_order=${actualFirstOrder}`);
       }
     } catch (cafe24Error) {
       console.warn(`[Track] Cafe24 API error for order ${order_id}:`, cafe24Error.message);
@@ -349,7 +351,8 @@ async function handlePurchaseEvent(purchaseData) {
     cafe24_status: actualCafe24Status,
     canceled: actualCanceled,
     order_status: actualOrderStatus,
-    member_id: actualMemberId
+    member_id: actualMemberId,
+    first_order: actualFirstOrder
   });
 
   // Mark session as converted

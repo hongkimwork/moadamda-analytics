@@ -236,7 +236,7 @@ async function upsertConversion(conversionData) {
     utm_source, utm_campaign, paid, product_name,
     points_spent, credits_spent, order_place_name,
     payment_method_name, cafe24_status, canceled, order_status,
-    member_id
+    member_id, first_order
   } = conversionData;
 
   await db.query(`
@@ -246,10 +246,10 @@ async function upsertConversion(conversionData) {
       mileage_used, shipping_fee, final_payment,
       utm_source, utm_campaign, paid, product_name, synced_at,
       points_spent, credits_spent, order_place_name, payment_method_name,
-      cafe24_status, canceled, order_status, member_id
+      cafe24_status, canceled, order_status, member_id, first_order
     )
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW(),
-            $15, $16, $17, $18, $19, $20, $21, $22)
+            $15, $16, $17, $18, $19, $20, $21, $22, $23)
     ON CONFLICT (order_id) DO UPDATE SET
       visitor_id = COALESCE(conversions.visitor_id, EXCLUDED.visitor_id),
       session_id = COALESCE(conversions.session_id, EXCLUDED.session_id),
@@ -270,6 +270,7 @@ async function upsertConversion(conversionData) {
       canceled = EXCLUDED.canceled,
       order_status = EXCLUDED.order_status,
       member_id = COALESCE(EXCLUDED.member_id, conversions.member_id),
+      first_order = COALESCE(EXCLUDED.first_order, conversions.first_order),
       synced_at = NOW()
   `, [
     session_id, visitor_id, order_id, total_amount,
@@ -277,7 +278,7 @@ async function upsertConversion(conversionData) {
     discount_amount, mileage_used, shipping_fee, final_payment,
     utm_source, utm_campaign, paid, product_name,
     points_spent, credits_spent, order_place_name, payment_method_name,
-    cafe24_status, canceled, order_status, member_id || null
+    cafe24_status, canceled, order_status, member_id || null, first_order || null
   ]);
 }
 
