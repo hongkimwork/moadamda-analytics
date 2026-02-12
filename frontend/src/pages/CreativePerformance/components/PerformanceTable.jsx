@@ -2,7 +2,7 @@
 // 광고 소재 퍼포먼스 테이블
 // ============================================================================
 
-import React, { useMemo, useRef, useCallback } from 'react';
+import React, { useMemo } from 'react';
 import { Card, Table, Tooltip, Dropdown, Button, message } from 'antd';
 import { ShoppingCart, Link, AlertTriangle } from 'lucide-react';
 import { formatDuration, formatCurrency, formatNumber, calculateTrafficScores } from '../utils/formatters';
@@ -28,15 +28,10 @@ function PerformanceTable({
   scoreSettings,
   isMetaFiltered,
   onCreativeClick,
-  minUv = 0
+  minUv = 0,
+  sortField,
+  sortOrder
 }) {
-  // 정렬 방향 추적 (클라이언트 정렬 시 UV 하단 고정 유지용)
-  const sortDirectionRef = useRef(null);
-
-  const handleTableChangeWrapped = useCallback((pagination, filters, sorter) => {
-    sortDirectionRef.current = sorter.order || null;
-    onTableChange(pagination, filters, sorter);
-  }, [onTableChange]);
 
   // 모수 평가 점수 계산 (사용자 설정 기반)
   const trafficScores = useMemo(() => calculateTrafficScores(data, scoreSettings), [data, scoreSettings]);
@@ -439,7 +434,7 @@ function PerformanceTable({
           if (aAbove !== bAbove) {
             const pin = aAbove ? -1 : 1;
             // Ant Design은 내림차순 시 결과를 반전하므로, 미리 반전하여 상쇄
-            return sortDirectionRef.current === 'descend' ? -pin : pin;
+            return sortOrder === 'desc' ? -pin : pin;
           }
         }
         if (!scoreSettings) return 0;
@@ -720,7 +715,7 @@ function PerformanceTable({
           const bAbove = (b.unique_visitors || 0) > minUv;
           if (aAbove !== bAbove) {
             const pin = aAbove ? -1 : 1;
-            return sortDirectionRef.current === 'descend' ? -pin : pin;
+            return sortOrder === 'desc' ? -pin : pin;
           }
         }
         const uvA = a.unique_visitors || 0;
@@ -771,6 +766,17 @@ function PerformanceTable({
     }
   ];
 
+  // Controlled sorting: 활성 정렬 컬럼 표시 + 2단계 토글 (내림차순 ↔ 오름차순)
+  const processedColumns = columns.map(col => {
+    if (!col.sorter) return col;
+    const colKey = col.key || col.dataIndex;
+    return {
+      ...col,
+      sortOrder: sortField === colKey ? (sortOrder === 'desc' ? 'descend' : 'ascend') : undefined,
+      sortDirections: ['descend', 'ascend'],
+    };
+  });
+
   return (
     <Card
       style={{
@@ -781,11 +787,11 @@ function PerformanceTable({
     >
       <Table
         className="creative-performance-table"
-        columns={columns}
+        columns={processedColumns}
         dataSource={data}
         rowKey={(record) => getRowKey(record)}
         loading={loading}
-        onChange={handleTableChangeWrapped}
+        onChange={onTableChange}
         pagination={{
           current: currentPage,
           pageSize: pageSize,
@@ -799,7 +805,8 @@ function PerformanceTable({
         rowClassName={(record, index) => {
           const stripe = index % 2 === 0 ? 'table-row-even' : 'table-row-odd';
           const belowUv = minUv > 0 && (record.unique_visitors || 0) <= minUv ? 'table-row-below-uv' : '';
-          return `${stripe} ${belowUv}`.trim();
+          const truncated = record.is_truncated_unmatched ? 'table-row-truncated-unmatched' : '';
+          return `${stripe} ${belowUv} ${truncated}`.trim();
         }}
         style={{
           borderRadius: '8px',
@@ -875,6 +882,19 @@ function PerformanceTable({
         .creative-performance-table .table-row-below-uv:hover td.ant-table-cell-fix-right {
           opacity: 0.8 !important;
           background-color: #ebebeb !important;
+        }
+        /* 잘린 광고명 매칭 실패 행 (투명한 토마토색 배경) */
+        .creative-performance-table .table-row-truncated-unmatched td {
+          background-color: rgba(255, 99, 71, 0.08) !important;
+        }
+        .creative-performance-table .table-row-truncated-unmatched td.ant-table-cell-fix-left,
+        .creative-performance-table .table-row-truncated-unmatched td.ant-table-cell-fix-right {
+          background-color: rgba(255, 99, 71, 0.08) !important;
+        }
+        .creative-performance-table .table-row-truncated-unmatched:hover td,
+        .creative-performance-table .table-row-truncated-unmatched:hover td.ant-table-cell-fix-left,
+        .creative-performance-table .table-row-truncated-unmatched:hover td.ant-table-cell-fix-right {
+          background-color: rgba(255, 99, 71, 0.15) !important;
         }
       `}</style>
     </Card>

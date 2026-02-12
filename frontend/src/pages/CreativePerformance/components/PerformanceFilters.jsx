@@ -156,7 +156,7 @@ const SearchInput = ({ value, onChange, onSearch, onClear, disabled, placeholder
 /**
  * 토글 패널 버튼 - 클릭 시 패널 표시/숨김
  */
-const TogglePanelButton = ({ icon: Icon, label, badge, isOpen, onClick, color = '#5f6368' }) => (
+const TogglePanelButton = ({ icon: Icon, label, badge, isOpen, onClick, color = '#5f6368', showArrow = true }) => (
   <button
     onClick={onClick}
     style={{
@@ -188,14 +188,16 @@ const TogglePanelButton = ({ icon: Icon, label, badge, isOpen, onClick, color = 
         {badge}
       </span>
     )}
-    <ChevronDown
-      size={13}
-      style={{
-        flexShrink: 0,
-        transition: 'transform 150ms ease',
-        transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)'
-      }}
-    />
+    {showArrow && (
+      <ChevronDown
+        size={13}
+        style={{
+          flexShrink: 0,
+          transition: 'transform 150ms ease',
+          transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)'
+        }}
+      />
+    )}
   </button>
 );
 
@@ -536,11 +538,12 @@ function PerformanceFilters({
           />
           <TogglePanelButton
             icon={Settings}
-            label="평가설정"
+            label="모수 평가 설정"
             badge={evaluationBadge}
             isOpen={false}
             onClick={onEvaluationSettingsClick}
             color="#fa8c16"
+            showArrow={false}
           />
         </div>
       </Card>
@@ -550,19 +553,18 @@ function PerformanceFilters({
       {/* 토글 패널 영역 (버튼 클릭 시에만 나타남) */}
       {/* ================================================================ */}
 
-      {/* UTM 필터 패널 */}
-      {openPanels.utm && (
-        <Card
-          size="small"
-          style={{
-            marginTop: '12px',
-            marginBottom: '0',
-            borderRadius: '12px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-            border: '1px solid #e8eaed',
-            animation: 'fadeSlideIn 200ms ease'
-          }}
-        >
+      {/* UTM 필터 패널 (display로 토글 — 재마운트/재조회 방지) */}
+      <Card
+        size="small"
+        style={{
+          marginTop: '12px',
+          marginBottom: '0',
+          borderRadius: '12px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+          border: '1px solid #e8eaed',
+          display: openPanels.utm ? 'block' : 'none'
+        }}
+      >
           <div className="flex gap-6 flex-wrap">
             {/* 좌측: UTM Source 퀵 필터 */}
             <div
@@ -623,21 +625,6 @@ function PerformanceFilters({
             </div>
           </div>
         </Card>
-      )}
-
-      {/* 패널 등장 애니메이션 */}
-      <style>{`
-        @keyframes fadeSlideIn {
-          from {
-            opacity: 0;
-            transform: translateY(-8px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-      `}</style>
     </>
   );
 }

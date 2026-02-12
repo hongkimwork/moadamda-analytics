@@ -62,6 +62,8 @@ function CreativePerformance() {
     platformLinked,
     currentPage,
     pageSize,
+    sortField,
+    sortOrder,
     maxDuration,
     maxPv,
     maxScroll,
@@ -290,6 +292,8 @@ function CreativePerformance() {
         isMetaFiltered={isMetaFiltered}
         onCreativeClick={handleCreativeClick}
         minUv={minUv}
+        sortField={sortField}
+        sortOrder={sortOrder}
       />
       </div>
 

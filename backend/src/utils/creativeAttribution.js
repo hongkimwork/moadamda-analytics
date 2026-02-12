@@ -30,7 +30,7 @@ const DEFAULT_ATTRIBUTION_WINDOW_DAYS = 30;
  * @param {string} matchingMode - 매칭 방식 ('default' = 방문자ID+회원ID, 'fingerprint' = +브라우저핑거프린트)
  * @returns {Object} - 광고별 기여도 데이터 { creative_name: { contributed_orders, attributed_revenue, total_revenue } }
  */
-async function calculateCreativeAttribution(creatives, startDate, endDate, attributionWindowDays = DEFAULT_ATTRIBUTION_WINDOW_DAYS, matchingMode = 'fingerprint') {
+async function calculateCreativeAttribution(creatives, startDate, endDate, attributionWindowDays = DEFAULT_ATTRIBUTION_WINDOW_DAYS, matchingMode = 'fingerprint', resolutionJson = '[]') {
   // FIX (2026-02-05): ad_id 기반 unique key 생성
   // 같은 creative_name이라도 ad_id가 다르면 별도로 기여도 계산
   // FIX (2026-02-11): utm_id 없는 플랫폼(카카오 등) 지원
@@ -114,12 +114,18 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
 
   // 3단계: 구매한 visitor들의 전체 UTM 여정 조회 (30일 필터링은 각 구매별로 적용)
   // FIX (2026-02-11): utm_id 없는 플랫폼 지원 - COALESCE(utm_id, utm_content)를 ad_id로 사용
+  // FIX (2026-02-12): Meta utm_id 복원 매핑 적용 - 잘린 utm_content도 정확한 ad_id로 매칭
   // {{...}} 패턴만 제외, utm_id NULL은 허용 (카카오/자사몰 등)
   const journeyQuery = `
+    WITH utm_resolution AS (
+      SELECT * FROM jsonb_to_recordset($2::jsonb)
+      AS t(utm_content text, resolved_ad_id text)
+    )
     SELECT 
       us.visitor_id,
       COALESCE(
         NULLIF(CASE WHEN us.utm_params->>'utm_id' LIKE '{{%' THEN NULL ELSE us.utm_params->>'utm_id' END, ''),
+        ur.resolved_ad_id,
         us.utm_params->>'utm_content'
       ) as ad_id,
       us.utm_params->>'utm_content' as utm_content,
@@ -130,6 +136,7 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
       us.entry_timestamp
     FROM utm_sessions us
     JOIN visitors v ON us.visitor_id = v.visitor_id
+    LEFT JOIN utm_resolution ur ON us.utm_params->>'utm_content' = ur.utm_content
     WHERE us.visitor_id = ANY($1)
       AND us.utm_params->>'utm_content' IS NOT NULL
       AND us.utm_params->>'utm_content' NOT LIKE '{{%'
@@ -137,7 +144,7 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
     ORDER BY us.visitor_id, us.sequence_order
   `;
 
-  const journeyResult = await db.query(journeyQuery, [purchaserIds]);
+  const journeyResult = await db.query(journeyQuery, [purchaserIds, resolutionJson]);
   
   // visitor별 여정 그룹화
   const visitorJourneys = {};
@@ -150,12 +157,18 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
   
   // member_id 기반 UTM 여정 조회 (회원 기반 연결)
   // FIX (2026-02-11): utm_id 없는 플랫폼 지원 - COALESCE(utm_id, utm_content)
+  // FIX (2026-02-12): Meta utm_id 복원 매핑 적용
   const memberJourneyQuery = `
+    WITH utm_resolution AS (
+      SELECT * FROM jsonb_to_recordset($3::jsonb)
+      AS t(utm_content text, resolved_ad_id text)
+    )
     SELECT 
       c2.member_id,
       us.visitor_id,
       COALESCE(
         NULLIF(CASE WHEN us.utm_params->>'utm_id' LIKE '{{%' THEN NULL ELSE us.utm_params->>'utm_id' END, ''),
+        ur.resolved_ad_id,
         us.utm_params->>'utm_content'
       ) as ad_id,
       us.utm_params->>'utm_content' as utm_content,
@@ -167,6 +180,7 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
     FROM utm_sessions us
     JOIN visitors v ON us.visitor_id = v.visitor_id
     JOIN conversions c2 ON c2.visitor_id = us.visitor_id
+    LEFT JOIN utm_resolution ur ON us.utm_params->>'utm_content' = ur.utm_content
     WHERE c2.member_id = ANY($1)
       AND us.visitor_id != ALL($2)
       AND us.utm_params->>'utm_content' IS NOT NULL
@@ -176,7 +190,7 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
   `;
   
   const memberJourneyResult = purchaserMemberIds.length > 0 
-    ? await db.query(memberJourneyQuery, [purchaserMemberIds, purchaserIds])
+    ? await db.query(memberJourneyQuery, [purchaserMemberIds, purchaserIds, resolutionJson])
     : { rows: [] };
   
   // member_id별 여정 그룹화
@@ -222,13 +236,19 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
     if (uniqueFingerprints.length > 0) {
       // 일괄 조회: browser_fingerprint가 같은 다른 visitor_id들의 UTM 여정
       // 동시 활동 필터 유지 (안전장치)
+      // FIX (2026-02-12): Meta utm_id 복원 매핑 적용
       const fpJourneyQuery = `
+        WITH utm_resolution AS (
+          SELECT * FROM jsonb_to_recordset($4::jsonb)
+          AS t(utm_content text, resolved_ad_id text)
+        )
         SELECT 
           match_v.visitor_id as match_visitor_id,
           match_v.browser_fingerprint,
           us.visitor_id,
           COALESCE(
             NULLIF(CASE WHEN us.utm_params->>'utm_id' LIKE '{{%' THEN NULL ELSE us.utm_params->>'utm_id' END, ''),
+            ur.resolved_ad_id,
             us.utm_params->>'utm_content'
           ) as ad_id,
           us.utm_params->>'utm_content' as utm_content,
@@ -240,6 +260,7 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
         FROM visitors match_v
         JOIN utm_sessions us ON us.visitor_id = match_v.visitor_id
         JOIN visitors v ON us.visitor_id = v.visitor_id
+        LEFT JOIN utm_resolution ur ON us.utm_params->>'utm_content' = ur.utm_content
         WHERE match_v.visitor_id != ALL($1)
           AND match_v.is_bot = false
           AND v.is_bot = false
@@ -263,7 +284,7 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
       `;
       
       const allFoundIds = Array.from(alreadyFoundIds);
-      const fpResult = await db.query(fpJourneyQuery, [allFoundIds, uniqueFingerprints, purchaserIds]);
+      const fpResult = await db.query(fpJourneyQuery, [allFoundIds, uniqueFingerprints, purchaserIds, resolutionJson]);
       
       // 매칭된 visitor의 browser_fingerprint → 원래 구매자 visitor_id 매핑
       fpResult.rows.forEach(row => {

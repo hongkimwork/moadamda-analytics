@@ -347,8 +347,8 @@ const DistributionPreview = ({
         borderRadius: '10px'
       }}>
         {[
-          { key: 'pv', label: 'PV' },
           { key: 'duration', label: '체류시간' },
+          { key: 'pv', label: 'PV' },
           { key: 'scroll', label: '스크롤' }
         ].map(tab => (
           <button
@@ -656,7 +656,7 @@ function EvaluationSettingsModal({
   const [localMinUv, setLocalMinUv] = useState(minUv || 0);
 
   // 오른쪽 분포 차트 선택 지표
-  const [activeMetric, setActiveMetric] = useState('pv');
+  const [activeMetric, setActiveMetric] = useState('duration');
 
   // 모달 열릴 때 현재 설정값으로 로컬 상태 초기화
   useEffect(() => {
@@ -797,7 +797,7 @@ function EvaluationSettingsModal({
               <Settings size={20} style={{ color: '#1677ff' }} />
             </div>
             <div>
-              <div style={{ fontSize: '18px', fontWeight: 700, color: '#141414' }}>평가 설정</div>
+              <div style={{ fontSize: '18px', fontWeight: 700, color: '#141414' }}>모수 평가 설정</div>
               <div style={{ fontSize: '12px', color: '#8c8c8c', marginTop: '2px' }}>
                 데이터 정제 기준과 평가 방식을 한 곳에서 관리합니다
               </div>
@@ -811,7 +811,7 @@ function EvaluationSettingsModal({
               gap: '8px'
             }}>
               <Target size={16} style={{ color: '#1677ff' }} />
-              <span style={{ fontSize: '13px', fontWeight: 600, color: '#595959' }}>기여 기간</span>
+              <span style={{ fontSize: '13px', fontWeight: 600, color: '#595959' }}>광고 기여 인정 기간</span>
             </div>
             <AttributionWindowSelector
               value={localAttributionWindow}
@@ -952,7 +952,7 @@ function EvaluationSettingsModal({
               }}>
                 <TrendingUp size={18} style={{ color: '#722ed1' }} />
                 <span style={{ fontSize: '15px', fontWeight: 600, color: '#262626' }}>
-                  모수 평가 기준
+                  모수 평가 점수 설정
                 </span>
               </div>
 

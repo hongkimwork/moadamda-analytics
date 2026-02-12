@@ -4,7 +4,7 @@
  */
 
 const repository = require('./detailRepository');
-const { getMetaAdNames, getAllVariantNames } = require('./metaAdNameMapping');
+const { getMetaAdNames, getAllVariantNames, buildUtmResolutionMap } = require('./metaAdNameMapping');
 const db = require('../../utils/database');
 const { safeDecodeURIComponent } = require('./utils');
 
@@ -112,6 +112,21 @@ function parseDates(start, end) {
 }
 
 /**
+ * 특정 ad_id로 복원되는 utm_content 목록 조회 (resolution map 활용)
+ * URL 잘림으로 utm_id가 누락된 세션의 utm_content 중, 이 ad_id로 복원된 것들을 반환
+ * FIX (2026-02-12): 메인 테이블과 상세 모달 간 데이터 불일치 해소
+ * @param {string} ad_id - 광고 ID
+ * @returns {Promise<string[]>} - 복원 대상 utm_content 배열
+ */
+async function getResolvedUtmContents(ad_id) {
+  if (!ad_id) return [];
+  const resolutionEntries = await buildUtmResolutionMap();
+  return resolutionEntries
+    .filter(e => e.resolved_ad_id === ad_id)
+    .map(e => e.utm_content);
+}
+
+/**
  * 기본 파라미터 검증 (creative + dates)
  * FIX (2026-01-27): creative_name 빈 문자열 허용
  * - 실제로 utm_content가 빈 문자열로 저장된 데이터가 존재함
@@ -205,10 +220,12 @@ async function getCreativeOrders(params) {
   
   const { startDate, endDate } = parseDates(start, end);
   
-  // FIX (2026-02-11): ad_id 기반 모드 판별
-  // ad_id가 creative_name과 같으면 utm_content 폴백이므로 creative_name 기반 조회
-  // (카카오/자사몰 등 utm_id 없는 플랫폼 대응)
-  const useAdId = ad_id && ad_id !== '' && !ad_id.startsWith('{{') && ad_id !== creative_name;
+  // FIX (2026-02-12): ad_id 디코딩 후 비교 - URL 인코딩된 utm_content 폴백 대응
+  // 토마토색 행: ad_id = URL 인코딩된 utm_content, creative_name = 디코딩된 한글
+  // ad_id를 디코딩하지 않으면 둘이 달라서 잘못된 ad_id 분기로 진입
+  // (카카오/자사몰 등 utm_id 없는 플랫폼도 동일하게 대응)
+  const decodedAdId = ad_id ? safeDecodeURIComponent(ad_id) : ad_id;
+  const useAdId = ad_id && ad_id !== '' && !ad_id.startsWith('{{') && decodedAdId !== creative_name;
   
   // 타겟 광고 키 생성 (ad_id 기반 또는 creative_name 기반)
   // FIX (2026-02-11): utm_source를 키에서 제외 - 로그인 리디렉트 시 utm_source 누락으로
@@ -268,6 +285,13 @@ async function getCreativeOrders(params) {
   // FIX (2026-02-11): matching_mode 기본값을 fingerprint로 변경 (IP 매칭 → 핑거프린트 매칭)
   const validMatchingMode = ['default', 'fingerprint'].includes(matching_mode) ? matching_mode : 'fingerprint';
   
+  // FIX (2026-02-12): resolution map으로 여정의 ad_id 복원 (메인 테이블과 동일 기준)
+  const resolutionEntries = await buildUtmResolutionMap();
+  const resolutionJson = JSON.stringify(resolutionEntries);
+  const resolvedUtmContents = useAdId
+    ? resolutionEntries.filter(e => e.resolved_ad_id === ad_id).map(e => e.utm_content)
+    : [];
+
   // visitor_id 기반 여정 + member_id 기반 여정 병렬 조회
   // FIX (2026-02-05): ad_id 모드일 때 정상 utm_id만 포함 (메인 테이블과 동일)
   // FIX (2026-02-05): IP 기반 여정 병합 제거 - moadamda-access-log 방식 적용
@@ -275,10 +299,10 @@ async function getCreativeOrders(params) {
   // - member_id 기반만 유지 (동일 회원의 다른 기기)
   // FIX (2026-02-11): fingerprint 모드 시 browser_fingerprint 기반 여정 조회
   const [journeyRows, memberJourneyRows, fingerprintResult] = await Promise.all([
-    repository.getVisitorJourneys({ visitorIds: purchaserIds, onlyValidAdId: useAdId }),
-    repository.getVisitorJourneysByMemberId({ purchaserMemberIds, purchaserIds, onlyValidAdId: useAdId }),
+    repository.getVisitorJourneys({ visitorIds: purchaserIds, onlyValidAdId: useAdId, resolutionJson }),
+    repository.getVisitorJourneysByMemberId({ purchaserMemberIds, purchaserIds, onlyValidAdId: useAdId, resolutionJson }),
     validMatchingMode === 'fingerprint'
-      ? repository.getVisitorJourneysByFingerprint({ purchaserIds, onlyValidAdId: useAdId })
+      ? repository.getVisitorJourneysByFingerprint({ purchaserIds, onlyValidAdId: useAdId, resolutionJson })
       : Promise.resolve({ visitorInfoRows: [], journeyRows: [], fingerprintGroups: {} })
   ]);
   
@@ -501,7 +525,8 @@ async function getCreativeOrders(params) {
       utm_campaign,
       startDate,
       endDate,
-      maxDurationSeconds
+      maxDurationSeconds,
+      resolvedUtmContents
     }),
     repository.getVisitorTotalVisits({ visitorIds: contributedVisitorArray })
   ]);
@@ -610,8 +635,10 @@ async function getCreativeSessions(params) {
   
   const { startDate, endDate } = parseDates(start, end);
   
-  // FIX (2026-02-11): ad_id === creative_name이면 utm_content 폴백 (카카오 등)
-  const useAdId = ad_id && ad_id !== '' && !ad_id.startsWith('{{') && ad_id !== creative_name;
+  // FIX (2026-02-12): ad_id 디코딩 후 비교 - URL 인코딩된 utm_content 폴백 대응
+  // 토마토색 행: ad_id = URL 인코딩된 utm_content, creative_name = 디코딩된 한글
+  const decodedAdId = ad_id ? safeDecodeURIComponent(ad_id) : ad_id;
+  const useAdId = ad_id && ad_id !== '' && !ad_id.startsWith('{{') && decodedAdId !== creative_name;
   
   // 광고명 변형들 찾기 (ad_id 없을 때 fallback용)
   const creativeVariants = useAdId ? [creative_name] : await getCreativeVariants(creative_name, startDate, endDate);
@@ -619,15 +646,18 @@ async function getCreativeSessions(params) {
   // FIX (2026-02-11): useAdId=false일 때 ad_id를 null로 전달하여 repository에서도 creative_name 기반 조회
   const effectiveAdId = useAdId ? ad_id : null;
   
+  // FIX (2026-02-12): resolution map으로 복원된 utm_content도 매칭 (메인 테이블과 동일 기준)
+  const resolvedUtmContents = useAdId ? await getResolvedUtmContents(ad_id) : [];
+
   // 세션 목록 및 총 개수/UV 조회
   const [sessions, countResult] = await Promise.all([
     repository.getCreativeSessions({
       ad_id: effectiveAdId, creative_name: creativeVariants, utm_source, utm_medium, utm_campaign,
-      startDate, endDate, page, limit, sortField, sortOrder
+      startDate, endDate, page, limit, sortField, sortOrder, resolvedUtmContents
     }),
     repository.getCreativeSessionsCount({
       ad_id: effectiveAdId, creative_name: creativeVariants, utm_source, utm_medium, utm_campaign,
-      startDate, endDate
+      startDate, endDate, resolvedUtmContents
     })
   ]);
   
@@ -701,8 +731,10 @@ async function getCreativeEntries(params) {
   
   const { startDate, endDate } = parseDates(start, end);
   
-  // FIX (2026-02-11): ad_id === creative_name이면 utm_content 폴백 (카카오 등)
-  const useAdId = ad_id && ad_id !== '' && !ad_id.startsWith('{{') && ad_id !== creative_name;
+  // FIX (2026-02-12): ad_id 디코딩 후 비교 - URL 인코딩된 utm_content 폴백 대응
+  // 토마토색 행: ad_id = URL 인코딩된 utm_content, creative_name = 디코딩된 한글
+  const decodedAdId = ad_id ? safeDecodeURIComponent(ad_id) : ad_id;
+  const useAdId = ad_id && ad_id !== '' && !ad_id.startsWith('{{') && decodedAdId !== creative_name;
   
   // 광고명 변형들 찾기 (ad_id 없을 때 fallback용)
   const creativeVariants = useAdId ? [creative_name] : await getCreativeVariants(creative_name, startDate, endDate);
@@ -710,15 +742,18 @@ async function getCreativeEntries(params) {
   // FIX (2026-02-11): useAdId=false일 때 ad_id를 null로 전달하여 repository에서도 creative_name 기반 조회
   const effectiveAdId = useAdId ? ad_id : null;
   
+  // FIX (2026-02-12): resolution map으로 복원된 utm_content도 매칭 (메인 테이블과 동일 기준)
+  const resolvedUtmContents = useAdId ? await getResolvedUtmContents(ad_id) : [];
+
   // 진입 목록 및 총 개수 조회
   const [entries, totalCount] = await Promise.all([
     repository.getCreativeEntries({
       ad_id: effectiveAdId, creative_name: creativeVariants, utm_source, utm_medium, utm_campaign,
-      startDate, endDate, page, limit
+      startDate, endDate, page, limit, resolvedUtmContents
     }),
     repository.getCreativeEntriesCount({
       ad_id: effectiveAdId, creative_name: creativeVariants, utm_source, utm_medium, utm_campaign,
-      startDate, endDate
+      startDate, endDate, resolvedUtmContents
     })
   ]);
   
@@ -860,17 +895,24 @@ async function getCreativeSessionsChart(params) {
   
   const { startDate, endDate } = parseDates(start, end);
   
-  // FIX (2026-02-11): ad_id === creative_name이면 utm_content 폴백 (카카오 등)
-  const useAdId = ad_id && ad_id !== '' && !ad_id.startsWith('{{') && ad_id !== creative_name;
+  // FIX (2026-02-12): ad_id 디코딩 후 비교 - URL 인코딩된 utm_content 폴백 대응
+  // 토마토색 행: ad_id = URL 인코딩된 utm_content, creative_name = 디코딩된 한글
+  const decodedAdId = ad_id ? safeDecodeURIComponent(ad_id) : ad_id;
+  const useAdId = ad_id && ad_id !== '' && !ad_id.startsWith('{{') && decodedAdId !== creative_name;
   const creativeVariants = useAdId ? [creative_name] : await getCreativeVariants(creative_name, startDate, endDate);
   
   // FIX (2026-02-11): useAdId=false일 때 ad_id를 null로 전달하여 repository에서도 creative_name 기반 조회
   const effectiveAdId = useAdId ? ad_id : null;
-  
+
+  // FIX (2026-02-12): resolution map으로 복원된 utm_content도 매칭 (메인 테이블과 동일 기준)
+  const resolutionEntries = useAdId ? await buildUtmResolutionMap() : [];
+  const resolvedUtmContents = useAdId ? resolutionEntries.filter(e => e.resolved_ad_id === ad_id).map(e => e.utm_content) : [];
+  const resolutionJson = JSON.stringify(resolutionEntries);
+
   // DB에서 전체 세션의 raw 집계 데이터 조회
   const rows = await repository.getCreativeSessionsChartData({
     ad_id: effectiveAdId, creative_name: creativeVariants, utm_source, utm_medium, utm_campaign,
-    startDate, endDate
+    startDate, endDate, resolvedUtmContents
   });
   
   if (rows.length === 0) {
@@ -992,7 +1034,7 @@ async function getCreativeSessionsChart(params) {
   if (convertedCount > 0 && useAdId) {
     try {
       sessionPurchaseLastTouchCount = await repository.getSessionPurchaseLastTouchCount({
-        ad_id, utm_medium, utm_campaign, startDate, endDate
+        ad_id, utm_medium, utm_campaign, startDate, endDate, resolutionJson
       });
     } catch (e) {
       // 조회 실패 시 null 유지 (안내 UI에만 영향)

@@ -274,9 +274,6 @@ function DynamicUtmFilterBar({
             letterSpacing: '0.02em'
           }}>
             {formatUtmKeyName(filter.key)}
-            {isSourceFilter(filter) && platformLinked && (
-              <span style={{ fontSize: '10px', marginLeft: '3px' }}>🔗</span>
-            )}
           </span>
           {isSourceFilter(filter) ? (
             <Select

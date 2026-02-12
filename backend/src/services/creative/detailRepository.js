@@ -54,18 +54,24 @@ async function getAllOrdersInPeriod({ startDate, endDate }) {
  * @param {Array} params.visitorIds - 조회할 visitor ID 배열
  * @param {boolean} params.onlyValidAdId - true면 정상 utm_id만 포함 (메인 테이블과 동일한 기준)
  */
-async function getVisitorJourneys({ visitorIds, onlyValidAdId = false }) {
+async function getVisitorJourneys({ visitorIds, onlyValidAdId = false, resolutionJson = '[]' }) {
   // FIX (2026-02-11): onlyValidAdId일 때 {{...}} 패턴만 제외 (utm_id NULL은 허용)
   // 카카오/자사몰 등 utm_id 없는 플랫폼도 여정에 포함
   const adIdFilter = onlyValidAdId
     ? `AND us.utm_params->>'utm_content' NOT LIKE '{{%'`
     : '';
   
+  // FIX (2026-02-12): utm_resolution CTE 추가 - 잘린 URL의 ad_id를 메인 테이블과 동일하게 복원
   const query = `
+    WITH utm_resolution AS (
+      SELECT * FROM jsonb_to_recordset($2::jsonb)
+      AS t(utm_content text, resolved_ad_id text)
+    )
     SELECT 
       us.visitor_id,
       COALESCE(
         NULLIF(CASE WHEN us.utm_params->>'utm_id' LIKE '{{%' THEN NULL ELSE us.utm_params->>'utm_id' END, ''),
+        ur.resolved_ad_id,
         us.utm_params->>'utm_content'
       ) as ad_id,
       us.utm_params->>'utm_content' as utm_content,
@@ -76,6 +82,7 @@ async function getVisitorJourneys({ visitorIds, onlyValidAdId = false }) {
       us.entry_timestamp
     FROM utm_sessions us
     JOIN visitors v ON us.visitor_id = v.visitor_id
+    LEFT JOIN utm_resolution ur ON us.utm_params->>'utm_content' = ur.utm_content
     WHERE us.visitor_id = ANY($1)
       AND us.utm_params->>'utm_content' IS NOT NULL
       AND v.is_bot = false
@@ -83,7 +90,7 @@ async function getVisitorJourneys({ visitorIds, onlyValidAdId = false }) {
     ORDER BY us.visitor_id, us.sequence_order
   `;
   
-  const result = await db.query(query, [visitorIds]);
+  const result = await db.query(query, [visitorIds, resolutionJson]);
   return result.rows;
 }
 
@@ -96,7 +103,7 @@ async function getVisitorJourneys({ visitorIds, onlyValidAdId = false }) {
  * @param {Object} params
  * @param {boolean} params.onlyValidAdId - true면 정상 utm_id만 포함
  */
-async function getVisitorJourneysByMemberId({ purchaserMemberIds, purchaserIds, onlyValidAdId = false }) {
+async function getVisitorJourneysByMemberId({ purchaserMemberIds, purchaserIds, onlyValidAdId = false, resolutionJson = '[]' }) {
   if (!purchaserMemberIds || purchaserMemberIds.length === 0) {
     return [];
   }
@@ -106,12 +113,18 @@ async function getVisitorJourneysByMemberId({ purchaserMemberIds, purchaserIds, 
     ? `AND us.utm_params->>'utm_content' NOT LIKE '{{%'`
     : '';
   
+  // FIX (2026-02-12): utm_resolution CTE 추가 - 잘린 URL의 ad_id를 메인 테이블과 동일하게 복원
   const query = `
+    WITH utm_resolution AS (
+      SELECT * FROM jsonb_to_recordset($3::jsonb)
+      AS t(utm_content text, resolved_ad_id text)
+    )
     SELECT 
       c2.member_id,
       us.visitor_id,
       COALESCE(
         NULLIF(CASE WHEN us.utm_params->>'utm_id' LIKE '{{%' THEN NULL ELSE us.utm_params->>'utm_id' END, ''),
+        ur.resolved_ad_id,
         us.utm_params->>'utm_content'
       ) as ad_id,
       us.utm_params->>'utm_content' as utm_content,
@@ -123,6 +136,7 @@ async function getVisitorJourneysByMemberId({ purchaserMemberIds, purchaserIds, 
     FROM utm_sessions us
     JOIN visitors v ON us.visitor_id = v.visitor_id
     JOIN conversions c2 ON c2.visitor_id = us.visitor_id
+    LEFT JOIN utm_resolution ur ON us.utm_params->>'utm_content' = ur.utm_content
     WHERE c2.member_id = ANY($1)
       AND us.visitor_id != ALL($2)
       AND us.utm_params->>'utm_content' IS NOT NULL
@@ -131,7 +145,7 @@ async function getVisitorJourneysByMemberId({ purchaserMemberIds, purchaserIds, 
     ORDER BY c2.member_id, us.entry_timestamp
   `;
   
-  const result = await db.query(query, [purchaserMemberIds, purchaserIds]);
+  const result = await db.query(query, [purchaserMemberIds, purchaserIds, resolutionJson]);
   return result.rows;
 }
 
@@ -157,7 +171,7 @@ async function getVisitorJourneysByMemberId({ purchaserMemberIds, purchaserIds, 
  * 
  * 카페24 호환: visitors 테이블과 조인하여 봇 트래픽 제외
  */
-async function getVisitorSessionInfoForCreative({ visitorIds, ad_id, creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate, maxDurationSeconds = 600 }) {
+async function getVisitorSessionInfoForCreative({ visitorIds, ad_id, creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate, maxDurationSeconds = 600, resolvedUtmContents = [] }) {
   if (visitorIds.length === 0) return {};
   
   // FIX (2026-02-05): ad_id 기반 모드 판별 (메인 테이블과 동일한 기준)
@@ -175,7 +189,13 @@ async function getVisitorSessionInfoForCreative({ visitorIds, ad_id, creative_na
       FROM utm_sessions us
       JOIN visitors v ON us.visitor_id = v.visitor_id
       WHERE us.visitor_id = ANY($1)
-        AND us.utm_params->>'utm_id' = $2
+        AND (
+          us.utm_params->>'utm_id' = $2
+          OR (
+            (us.utm_params->>'utm_id' IS NULL OR us.utm_params->>'utm_id' = '' OR us.utm_params->>'utm_id' LIKE '{{%')
+            AND us.utm_params->>'utm_content' = ANY($7)
+          )
+        )
         AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $3
         AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $4
         AND us.entry_timestamp >= $5
@@ -184,7 +204,7 @@ async function getVisitorSessionInfoForCreative({ visitorIds, ad_id, creative_na
       GROUP BY us.visitor_id, us.session_id
       ORDER BY us.visitor_id, MIN(us.entry_timestamp) DESC
     `;
-    sessionQueryParams = [visitorIds, ad_id, utm_medium, utm_campaign, startDate, endDate];
+    sessionQueryParams = [visitorIds, ad_id, utm_medium, utm_campaign, startDate, endDate, resolvedUtmContents];
   } else {
     // creative_name 기반 조회 (fallback)
     // FIX (2026-02-11): utm_source 필터 제거 - 메인 테이블과 동일 기준
@@ -354,7 +374,7 @@ async function getVisitorTotalVisits({ visitorIds }) {
  * @param {string} ad_id - 광고 ID (utm_id)
  * @returns {Promise<Array>} 세션 목록
  */
-async function getCreativeSessions({ ad_id, creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate, page = 1, limit = 50, sortField, sortOrder }) {
+async function getCreativeSessions({ ad_id, creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate, page = 1, limit = 50, sortField, sortOrder, resolvedUtmContents = [] }) {
   const offset = (page - 1) * limit;
   
   // ad_id가 있으면 ad_id 기반 조회, 없으면 creative_name 기반 (fallback)
@@ -415,7 +435,13 @@ async function getCreativeSessions({ ad_id, creative_name, utm_source, utm_mediu
         SELECT DISTINCT us.session_id
         FROM utm_sessions us
         JOIN visitors v2 ON us.visitor_id = v2.visitor_id
-        WHERE us.utm_params->>'utm_id' = $1
+        WHERE (
+              us.utm_params->>'utm_id' = $1
+              OR (
+                (us.utm_params->>'utm_id' IS NULL OR us.utm_params->>'utm_id' = '' OR us.utm_params->>'utm_id' LIKE '{{%')
+                AND us.utm_params->>'utm_content' = ANY($8)
+              )
+            )
           AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $2
           AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $3
           AND us.entry_timestamp >= $4
@@ -428,7 +454,7 @@ async function getCreativeSessions({ ad_id, creative_name, utm_source, utm_mediu
       ${orderClause}
       LIMIT $6 OFFSET $7
     `;
-    queryParams = [ad_id, utm_medium, utm_campaign, startDate, endDate, limit, offset];
+    queryParams = [ad_id, utm_medium, utm_campaign, startDate, endDate, limit, offset, resolvedUtmContents];
   } else {
     // creative_name 기반 조회 (fallback)
     // FIX (2026-02-11): utm_source 필터 제거 - 메인 테이블과 동일 기준
@@ -539,7 +565,7 @@ function buildSessionOrderClause(sortField, sortOrder) {
  * @param {string} ad_id - 광고 ID (utm_id)
  * @param {string|string[]} creative_name - 광고명 또는 광고명 배열 (fallback용)
  */
-async function getCreativeSessionsCount({ ad_id, creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate }) {
+async function getCreativeSessionsCount({ ad_id, creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate, resolvedUtmContents = [] }) {
   // ad_id가 있으면 ad_id 기반 조회, 없으면 creative_name 기반 (fallback)
   const useAdId = ad_id && ad_id !== '' && !ad_id.startsWith('{{');
   
@@ -556,7 +582,13 @@ async function getCreativeSessionsCount({ ad_id, creative_name, utm_source, utm_
       FROM utm_sessions us
       JOIN sessions s ON us.session_id = s.session_id
       JOIN visitors v ON us.visitor_id = v.visitor_id
-      WHERE us.utm_params->>'utm_id' = $1
+      WHERE (
+            us.utm_params->>'utm_id' = $1
+            OR (
+              (us.utm_params->>'utm_id' IS NULL OR us.utm_params->>'utm_id' = '' OR us.utm_params->>'utm_id' LIKE '{{%')
+              AND us.utm_params->>'utm_content' = ANY($6)
+            )
+          )
         AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $2
         AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $3
         AND us.entry_timestamp >= $4
@@ -565,7 +597,7 @@ async function getCreativeSessionsCount({ ad_id, creative_name, utm_source, utm_
         AND s.start_time <= $5
         AND v.is_bot = false
     `;
-    queryParams = [ad_id, utm_medium, utm_campaign, startDate, endDate];
+    queryParams = [ad_id, utm_medium, utm_campaign, startDate, endDate, resolvedUtmContents];
   } else {
     // creative_name 기반 조회 (fallback)
     // FIX (2026-02-06): s.start_time 기간 필터 추가 - 잘못된 entry_timestamp로 기간 외 세션이 포함되는 문제 방지
@@ -617,7 +649,7 @@ async function getCreativeSessionsCount({ ad_id, creative_name, utm_source, utm_
  * @param {number} params.limit - 페이지 크기
  * @returns {Promise<Array>} 진입 목록
  */
-async function getCreativeEntries({ ad_id, creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate, page = 1, limit = 50 }) {
+async function getCreativeEntries({ ad_id, creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate, page = 1, limit = 50, resolvedUtmContents = [] }) {
   const offset = (page - 1) * limit;
   
   // ad_id가 있으면 ad_id 기반 조회, 없으면 creative_name 기반 (fallback)
@@ -645,7 +677,13 @@ async function getCreativeEntries({ ad_id, creative_name, utm_source, utm_medium
         FROM utm_sessions us
         JOIN visitors v ON us.visitor_id = v.visitor_id
         JOIN sessions s ON us.session_id = s.session_id
-        WHERE us.utm_params->>'utm_id' = $1
+        WHERE (
+              us.utm_params->>'utm_id' = $1
+              OR (
+                (us.utm_params->>'utm_id' IS NULL OR us.utm_params->>'utm_id' = '' OR us.utm_params->>'utm_id' LIKE '{{%')
+                AND us.utm_params->>'utm_content' = ANY($8)
+              )
+            )
           AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $2
           AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $3
           AND us.entry_timestamp >= $4
@@ -670,7 +708,7 @@ async function getCreativeEntries({ ad_id, creative_name, utm_source, utm_medium
       ORDER BY entry_timestamp DESC
       LIMIT $6 OFFSET $7
     `;
-    queryParams = [ad_id, utm_medium, utm_campaign, startDate, endDate, limit, offset];
+    queryParams = [ad_id, utm_medium, utm_campaign, startDate, endDate, limit, offset, resolvedUtmContents];
   } else {
     // creative_name 기반 조회 (fallback)
     // FIX (2026-02-06): sessions.start_time 기간 필터 추가 - 메인 테이블 View와 일치
@@ -733,7 +771,7 @@ async function getCreativeEntries({ ad_id, creative_name, utm_source, utm_medium
  * @param {string} ad_id - 광고 ID (utm_id)
  * @param {string|string[]} creative_name - 광고명 또는 광고명 배열 (fallback용)
  */
-async function getCreativeEntriesCount({ ad_id, creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate }) {
+async function getCreativeEntriesCount({ ad_id, creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate, resolvedUtmContents = [] }) {
   // ad_id가 있으면 ad_id 기반 조회, 없으면 creative_name 기반 (fallback)
   const useAdId = ad_id && ad_id !== '' && !ad_id.startsWith('{{');
   
@@ -748,7 +786,13 @@ async function getCreativeEntriesCount({ ad_id, creative_name, utm_source, utm_m
       FROM utm_sessions us
       JOIN visitors v ON us.visitor_id = v.visitor_id
       JOIN sessions s ON us.session_id = s.session_id
-      WHERE us.utm_params->>'utm_id' = $1
+      WHERE (
+            us.utm_params->>'utm_id' = $1
+            OR (
+              (us.utm_params->>'utm_id' IS NULL OR us.utm_params->>'utm_id' = '' OR us.utm_params->>'utm_id' LIKE '{{%')
+              AND us.utm_params->>'utm_content' = ANY($6)
+            )
+          )
         AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $2
         AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $3
         AND us.entry_timestamp >= $4
@@ -757,7 +801,7 @@ async function getCreativeEntriesCount({ ad_id, creative_name, utm_source, utm_m
         AND s.start_time <= $5
         AND v.is_bot = false
     `;
-    queryParams = [ad_id, utm_medium, utm_campaign, startDate, endDate];
+    queryParams = [ad_id, utm_medium, utm_campaign, startDate, endDate, resolvedUtmContents];
   } else {
     // creative_name 기반 조회 (fallback)
     // FIX (2026-02-06): sessions.start_time 기간 필터 추가 - 메인 테이블 View와 일치
@@ -856,7 +900,7 @@ async function getCreativeOriginalUrl({ creative_name, utm_source, utm_medium, u
  * @param {Date} params.endDate - 종료일
  * @returns {Promise<Object>} 집계 데이터
  */
-async function getCreativeSessionsChartData({ ad_id, creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate }) {
+async function getCreativeSessionsChartData({ ad_id, creative_name, utm_source, utm_medium, utm_campaign, startDate, endDate, resolvedUtmContents = [] }) {
   const useAdId = ad_id && ad_id !== '' && !ad_id.startsWith('{{');
   
   let query;
@@ -868,7 +912,13 @@ async function getCreativeSessionsChartData({ ad_id, creative_name, utm_source, 
         SELECT DISTINCT us.session_id
         FROM utm_sessions us
         JOIN visitors v2 ON us.visitor_id = v2.visitor_id
-        WHERE us.utm_params->>'utm_id' = $1
+        WHERE (
+              us.utm_params->>'utm_id' = $1
+              OR (
+                (us.utm_params->>'utm_id' IS NULL OR us.utm_params->>'utm_id' = '' OR us.utm_params->>'utm_id' LIKE '{{%')
+                AND us.utm_params->>'utm_content' = ANY($6)
+              )
+            )
           AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $2
           AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $3
           AND us.entry_timestamp >= $4
@@ -895,7 +945,7 @@ async function getCreativeSessionsChartData({ ad_id, creative_name, utm_source, 
         AND s.start_time >= $4
         AND s.start_time <= $5
     `;
-    queryParams = [ad_id, utm_medium, utm_campaign, startDate, endDate];
+    queryParams = [ad_id, utm_medium, utm_campaign, startDate, endDate, resolvedUtmContents];
   } else {
     // FIX (2026-02-11): utm_source 필터 제거 - 메인 테이블과 동일 기준
     const creativeNames = Array.isArray(creative_name) ? creative_name : [creative_name];
@@ -951,15 +1001,29 @@ async function getCreativeSessionsChartData({ ad_id, creative_name, utm_source, 
  * @param {Date} params.endDate - 종료일
  * @returns {Promise<number>} 이 광고가 막타이면서 세션 내 구매인 건수 (공통 건수)
  */
-async function getSessionPurchaseLastTouchCount({ ad_id, utm_medium, utm_campaign, startDate, endDate }) {
+async function getSessionPurchaseLastTouchCount({ ad_id, utm_medium, utm_campaign, startDate, endDate, resolutionJson = '[]' }) {
   if (!ad_id || ad_id === '' || ad_id.startsWith('{{')) return 0;
   
+  // FIX (2026-02-12): utm_resolution CTE 추가 - 잘린 URL의 ad_id를 메인 테이블과 동일하게 복원
+  // target_sessions: resolution map으로 복원된 세션도 포함
+  // last_utm_per_purchase: COALESCE(utm_id, resolved_ad_id)로 막타 ad_id 결정
   const query = `
-    WITH target_sessions AS (
+    WITH utm_resolution AS (
+      SELECT * FROM jsonb_to_recordset($6::jsonb)
+      AS t(utm_content text, resolved_ad_id text)
+    ),
+    target_sessions AS (
       SELECT DISTINCT us.session_id
       FROM utm_sessions us
       JOIN visitors v ON us.visitor_id = v.visitor_id
-      WHERE us.utm_params->>'utm_id' = $1
+      LEFT JOIN utm_resolution ur ON us.utm_params->>'utm_content' = ur.utm_content
+      WHERE (
+            us.utm_params->>'utm_id' = $1
+            OR (
+              (us.utm_params->>'utm_id' IS NULL OR us.utm_params->>'utm_id' = '' OR us.utm_params->>'utm_id' LIKE '{{%')
+              AND ur.resolved_ad_id = $1
+            )
+          )
         AND COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') = $2
         AND COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') = $3
         AND us.entry_timestamp >= $4
@@ -996,16 +1060,23 @@ async function getSessionPurchaseLastTouchCount({ ad_id, utm_medium, utm_campaig
       ) other_v ON sp.member_id = other_v.member_id AND sp.member_id IS NOT NULL
     ),
     -- 각 구매에 대해 병합된 전체 visitor의 마지막 UTM 엔트리 찾기
+    -- FIX (2026-02-12): COALESCE로 resolved_ad_id도 인정 (메인 테이블과 동일)
     last_utm_per_purchase AS (
       SELECT DISTINCT ON (mv.session_id)
         mv.session_id,
-        us.utm_params->>'utm_id' as last_ad_id
+        COALESCE(
+          NULLIF(CASE WHEN us.utm_params->>'utm_id' LIKE '{{%' THEN NULL ELSE us.utm_params->>'utm_id' END, ''),
+          ur2.resolved_ad_id
+        ) as last_ad_id
       FROM merged_visitors mv
       JOIN utm_sessions us ON us.visitor_id = mv.all_vid
       JOIN visitors v ON us.visitor_id = v.visitor_id
+      LEFT JOIN utm_resolution ur2 ON us.utm_params->>'utm_content' = ur2.utm_content
       WHERE us.entry_timestamp <= mv.purchase_time
-        AND NULLIF(us.utm_params->>'utm_id', '') IS NOT NULL
-        AND us.utm_params->>'utm_id' NOT LIKE '{{%'
+        AND (
+          (NULLIF(us.utm_params->>'utm_id', '') IS NOT NULL AND us.utm_params->>'utm_id' NOT LIKE '{{%')
+          OR ur2.resolved_ad_id IS NOT NULL
+        )
         AND us.utm_params->>'utm_content' IS NOT NULL
         AND v.is_bot = false
       ORDER BY mv.session_id, us.entry_timestamp DESC
@@ -1015,7 +1086,7 @@ async function getSessionPurchaseLastTouchCount({ ad_id, utm_medium, utm_campaig
     WHERE last_ad_id = $1
   `;
   
-  const result = await db.query(query, [ad_id, utm_medium, utm_campaign, startDate, endDate]);
+  const result = await db.query(query, [ad_id, utm_medium, utm_campaign, startDate, endDate, resolutionJson]);
   return parseInt(result.rows[0]?.count) || 0;
 }
 
@@ -1028,7 +1099,7 @@ async function getSessionPurchaseLastTouchCount({ ad_id, utm_medium, utm_campaig
  * @param {Array} purchaserIds - 이미 찾은 구매자 visitor_id 목록 (제외용)
  * @param {boolean} onlyValidAdId - true면 정상 utm_id만 포함
  */
-async function getVisitorJourneysByFingerprint({ purchaserIds, onlyValidAdId = false }) {
+async function getVisitorJourneysByFingerprint({ purchaserIds, onlyValidAdId = false, resolutionJson = '[]' }) {
   if (!purchaserIds || purchaserIds.length === 0) {
     return { visitorInfoRows: [], journeyRows: [] };
   }
@@ -1063,14 +1134,20 @@ async function getVisitorJourneysByFingerprint({ purchaserIds, onlyValidAdId = f
     ? `AND us.utm_params->>'utm_content' NOT LIKE '{{%'`
     : '';
   
+  // FIX (2026-02-12): utm_resolution CTE 추가 - 잘린 URL의 ad_id를 메인 테이블과 동일하게 복원
   // 동시 활동 필터 유지 (안전장치)
   const journeyQuery = `
+    WITH utm_resolution AS (
+      SELECT * FROM jsonb_to_recordset($4::jsonb)
+      AS t(utm_content text, resolved_ad_id text)
+    )
     SELECT 
       match_v.visitor_id as match_visitor_id,
       match_v.browser_fingerprint,
       us.visitor_id,
       COALESCE(
         NULLIF(CASE WHEN us.utm_params->>'utm_id' LIKE '{{%' THEN NULL ELSE us.utm_params->>'utm_id' END, ''),
+        ur.resolved_ad_id,
         us.utm_params->>'utm_content'
       ) as ad_id,
       us.utm_params->>'utm_content' as utm_content,
@@ -1082,6 +1159,7 @@ async function getVisitorJourneysByFingerprint({ purchaserIds, onlyValidAdId = f
     FROM visitors match_v
     JOIN utm_sessions us ON us.visitor_id = match_v.visitor_id
     JOIN visitors v ON us.visitor_id = v.visitor_id
+    LEFT JOIN utm_resolution ur ON us.utm_params->>'utm_content' = ur.utm_content
     WHERE match_v.visitor_id != ALL($1)
       AND match_v.is_bot = false
       AND v.is_bot = false
@@ -1104,7 +1182,7 @@ async function getVisitorJourneysByFingerprint({ purchaserIds, onlyValidAdId = f
     ORDER BY match_v.visitor_id, us.entry_timestamp
   `;
   
-  const journeyResult = await db.query(journeyQuery, [purchaserIds, uniqueFingerprints, purchaserIds]);
+  const journeyResult = await db.query(journeyQuery, [purchaserIds, uniqueFingerprints, purchaserIds, resolutionJson]);
   
   return { 
     visitorInfoRows: visitorInfoResult.rows, 

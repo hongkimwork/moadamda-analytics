@@ -11,6 +11,7 @@
 const { calculateCreativeAttribution } = require('../../utils/creativeAttribution');
 const repository = require('./creativeRepository');
 const { safeDecodeURIComponent, parseUtmFilters, validateSortColumn } = require('./utils');
+const { buildUtmResolutionMap, mapToMetaAdName, getMetaAdNames } = require('./metaAdNameMapping');
 
 /**
  * 광고 소재 성과 데이터 조회 및 분석
@@ -106,6 +107,13 @@ async function getCreativePerformance(params) {
     parseUtmFilters(sourceFilters.length > 0 ? sourceFilters : null, queryParams, paramIndex, { columnFormat: 'column' });
   paramIndex = ni2;
 
+  // 4.5. Meta utm_id 복원 맵 생성 및 쿼리 파라미터 추가
+  // URL 잘림으로 utm_id가 누락된 Meta 세션의 ad_id를 meta_ads 매칭으로 복원
+  const resolutionEntries = await buildUtmResolutionMap();
+  const resolutionJson = JSON.stringify(resolutionEntries);
+  queryParams.push(resolutionJson);
+  const resolutionParamIndex = queryParams.length;
+
   // 5. Repository를 통해 데이터 조회 (ad_id 기준으로 이미 병합됨)
   const [rawDataRows, totalCount] = await Promise.all([
     repository.getCreativeAggregation({
@@ -122,7 +130,8 @@ async function getCreativePerformance(params) {
       maxScrollPx,
       minDurationSeconds,
       minPvCount,
-      minScrollPx
+      minScrollPx,
+      resolutionParamIndex
     }),
     repository.getCreativeCount({
       startDate,
@@ -133,7 +142,8 @@ async function getCreativePerformance(params) {
       queryParams,
       minDurationSeconds,
       minPvCount,
-      minScrollPx
+      minScrollPx,
+      resolutionParamIndex
     })
   ]);
 
@@ -157,9 +167,24 @@ async function getCreativePerformance(params) {
       purchase_count: 0,
       total_revenue: 0,
       _variant_names: variantNames, // 수집된 광고명 이력 (상세 조회용)
-      is_meta_matched: row.is_meta_matched === true
+      is_meta_matched: row.is_meta_matched === true,
+      is_truncated_unmatched: row.is_truncated_unmatched === true
     };
   });
+
+  // 6.5. 잘린 광고명을 전체 Meta 광고명으로 대체 (미리보기 모달과 동일한 매칭 로직)
+  // buildUtmResolutionMap() → getMetaAdNames() 호출로 캐시가 이미 준비됨 (추가 API 호출 없음)
+  const metaAdNames = await getMetaAdNames();
+  if (metaAdNames.length > 0) {
+    for (const row of data) {
+      if (row.creative_name && row.creative_name !== '-') {
+        const fullName = await mapToMetaAdName(row.creative_name, metaAdNames);
+        if (fullName && fullName !== row.creative_name) {
+          row.creative_name = fullName;
+        }
+      }
+    }
+  }
 
   // 7. 검색 필터 적용 (JavaScript에서 처리)
   let filteredData = data;
@@ -174,7 +199,7 @@ async function getCreativePerformance(params) {
   // FIX (2026-02-05): ad_id 기반으로 기여도 계산
   // FIX (2026-02-11): matching_mode 전달 (fingerprint = 브라우저 핑거프린트 포함)
   const validMatchingMode = ['default', 'fingerprint'].includes(matching_mode) ? matching_mode : 'fingerprint';
-  const attributionData = await calculateCreativeAttribution(filteredData, startDate, endDate, attributionWindowDays, validMatchingMode);
+  const attributionData = await calculateCreativeAttribution(filteredData, startDate, endDate, attributionWindowDays, validMatchingMode, resolutionJson);
 
   // 9. 기여도 데이터 병합
   // FIX (2026-02-11): ad_id 기반 키로 기여도 매칭

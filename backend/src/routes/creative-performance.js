@@ -272,6 +272,9 @@ router.get('/creative-performance/distribution', async (req, res) => {
     );
 
     // PV 히스토그램 + 백분위수 쿼리
+    // FIX (2026-02-12): utm_id 없는 플랫폼(카카오/자사몰 등) 지원
+    // - 기존: utm_id 필수 → 카카오 등 utm_id 없는 데이터 전부 제외됨
+    // - 변경: utm_content 기반 필터링 (creativeRepository.js와 동일 기준)
     const pvQuery = `
       WITH filtered_sessions AS (
         SELECT DISTINCT ON (us.session_id)
@@ -287,8 +290,8 @@ router.get('/creative-performance/distribution', async (req, res) => {
           AND s.start_time <= $2
           AND v.is_bot = false
           AND s.duration_seconds > 0
-          AND NULLIF(us.utm_params->>'utm_id', '') IS NOT NULL
-          AND us.utm_params->>'utm_id' NOT LIKE '{{%'
+          AND us.utm_params->>'utm_content' IS NOT NULL
+          AND us.utm_params->>'utm_content' NOT LIKE '{{%'
           ${utmFilterConditions}
         ORDER BY us.session_id
       ),
@@ -344,8 +347,8 @@ router.get('/creative-performance/distribution', async (req, res) => {
           AND s.start_time <= $2
           AND v.is_bot = false
           AND s.duration_seconds > 0
-          AND NULLIF(us.utm_params->>'utm_id', '') IS NOT NULL
-          AND us.utm_params->>'utm_id' NOT LIKE '{{%'
+          AND us.utm_params->>'utm_content' IS NOT NULL
+          AND us.utm_params->>'utm_content' NOT LIKE '{{%'
           ${utmFilterConditions}
         ORDER BY us.session_id
       ),
@@ -400,8 +403,8 @@ router.get('/creative-performance/distribution', async (req, res) => {
           AND s.start_time <= $2
           AND v.is_bot = false
           AND s.duration_seconds > 0
-          AND NULLIF(us.utm_params->>'utm_id', '') IS NOT NULL
-          AND us.utm_params->>'utm_id' NOT LIKE '{{%'
+          AND us.utm_params->>'utm_content' IS NOT NULL
+          AND us.utm_params->>'utm_content' NOT LIKE '{{%'
           ${utmFilterConditions}
         ORDER BY us.session_id
       ),

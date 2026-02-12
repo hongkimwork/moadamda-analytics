@@ -570,11 +570,144 @@ async function getAdIdByName(adName) {
   return adNameToIdCache.get(adName) || null;
 }
 
+// utm_content → ad_id 복원 맵 캐시 (5분 TTL)
+let resolutionMapCache = null;
+let resolutionMapCacheTime = null;
+const RESOLUTION_CACHE_TTL = 5 * 60 * 1000;
+
+/**
+ * utm_id 없는 Meta 세션의 utm_content → ad_id 복원 맵 생성
+ * URL이 잘려서 utm_id가 누락된 Meta 광고 세션을 meta_ads 테이블과 매칭하여 복원
+ * 
+ * 매칭 단계:
+ * 1. utm_content와 meta_ads.name 정확 일치 (정규화 포함)
+ * 2. utm_content가 meta_ads.name의 접두사 (15자 이상, 정규화 포함)
+ * 3. URL 디코딩(이중인코딩 처리) 후 위 1-2 반복
+ * 4. URL 디코딩 후 다른 세션(utm_id 있는)의 utm_content와 접두사 매칭
+ * 
+ * @returns {Promise<Array<{utm_content: string, resolved_ad_id: string}>>}
+ */
+async function buildUtmResolutionMap() {
+  // 캐시가 유효하면 반환
+  if (resolutionMapCache && resolutionMapCacheTime && (Date.now() - resolutionMapCacheTime < RESOLUTION_CACHE_TTL)) {
+    return resolutionMapCache;
+  }
+
+  const db = require('../../utils/database');
+
+  // 1. utm_id 없는 Meta 세션의 고유 utm_content 값 조회
+  const needsResolutionResult = await db.query(`
+    SELECT DISTINCT us.utm_params->>'utm_content' as utm_content
+    FROM utm_sessions us
+    JOIN visitors v ON us.visitor_id = v.visitor_id
+    WHERE (us.utm_params->>'utm_id' IS NULL OR us.utm_params->>'utm_id' = '' OR us.utm_params->>'utm_id' LIKE '{{%')
+      AND LOWER(COALESCE(us.utm_params->>'utm_source', '')) IN ('meta', 'facebook', 'fb', 'instagram', 'ig')
+      AND us.utm_params->>'utm_content' IS NOT NULL
+      AND us.utm_params->>'utm_content' NOT LIKE '{{%'
+      AND v.is_bot = false
+  `);
+
+  if (needsResolutionResult.rows.length === 0) {
+    resolutionMapCache = [];
+    resolutionMapCacheTime = Date.now();
+    return [];
+  }
+
+  // 2. Meta API + DB에서 최신 광고명 목록 로드
+  // getMetaAdNames()는 Meta API 호출 + meta_ads DB 조회를 하며,
+  // 결과를 adNameToIdCache에 자동 저장 (10분 캐시)
+  // → 미리보기와 동일한 데이터 소스 사용으로 매칭 일관성 보장
+  // → meta_ads DB도 부수 효과로 자동 갱신
+  const adNames = await getMetaAdNames();
+
+  if (adNames.length === 0) {
+    resolutionMapCache = [];
+    resolutionMapCacheTime = Date.now();
+    return [];
+  }
+
+  // 3. utm_id 있는 Meta 세션의 utm_content → utm_id 매핑 (폴백용)
+  // mapToMetaAdName으로 매칭 실패 시, 다른 세션의 utm_content와 접두사 매칭 시도
+  const withUtmIdResult = await db.query(`
+    SELECT DISTINCT
+      us.utm_params->>'utm_content' as utm_content,
+      us.utm_params->>'utm_id' as utm_id
+    FROM utm_sessions us
+    WHERE us.utm_params->>'utm_id' IS NOT NULL
+      AND us.utm_params->>'utm_id' != ''
+      AND us.utm_params->>'utm_id' NOT LIKE '{{%'
+      AND LOWER(COALESCE(us.utm_params->>'utm_source', '')) IN ('meta', 'facebook', 'fb', 'instagram', 'ig')
+      AND us.utm_params->>'utm_content' IS NOT NULL
+  `);
+  const contentWithUtmId = withUtmIdResult.rows;
+
+  // 4. 매칭: mapToMetaAdName() 재활용 (미리보기와 동일한 로직)
+  // → 기존 4단계 자체 매칭을 미리보기와 동일한 함수로 교체
+  // → 매칭 로직 단일화: 미리보기에서 되면 테이블에서도 됨
+  const resolutionEntries = [];
+
+  for (const row of needsResolutionResult.rows) {
+    const utmContent = row.utm_content;
+    if (!utmContent) continue;
+
+    let resolvedAdId = null;
+
+    // FIX (2026-02-12): 세션 기반 매칭을 먼저 시도
+    // 같은 소재가 Meta에서 재생성되면 ad_id가 바뀌는데,
+    // meta_ads 테이블에는 이전(중지) 광고의 ad_id가 남아있어
+    // 잘린 세션이 이전 광고 ID로 잘못 연결되는 문제 해결
+    // → 실제 트래픽의 utm_id를 우선 사용하여 현재 활성 광고 ID로 복원
+
+    // Primary: 다른 세션의 utm_content와 접두사 매칭 (실제 트래픽 기반)
+    // utm_id 있는 다른 세션의 utm_content와 비교하여 utm_id 복원
+    // → 현재 활성 광고의 실제 ad_id를 사용하므로 가장 정확
+    const decoded = tryDecodeURIComponent(utmContent);
+    const target = decoded !== utmContent ? decoded : utmContent;
+    if (target.length >= 15) {
+      const sessionMatch = contentWithUtmId.find(s =>
+        s.utm_content && s.utm_content.startsWith(target)
+      );
+      if (sessionMatch) {
+        resolvedAdId = sessionMatch.utm_id;
+      }
+    }
+
+    // Fallback: mapToMetaAdName으로 Meta 광고명 매칭
+    // 세션 기반 매칭 실패 시 (해당 소재의 정상 세션이 없는 경우),
+    // meta_ads 테이블의 광고명과 매칭하여 ad_id 복원
+    if (!resolvedAdId) {
+      const metaAdName = await mapToMetaAdName(utmContent, adNames);
+      if (metaAdName) {
+        const adId = await getAdIdByName(metaAdName);
+        if (adId) {
+          resolvedAdId = adId;
+        }
+      }
+    }
+
+    if (resolvedAdId) {
+      resolutionEntries.push({
+        utm_content: utmContent,
+        resolved_ad_id: resolvedAdId
+      });
+    }
+  }
+
+  console.log(`[UtmResolution] Resolved ${resolutionEntries.length}/${needsResolutionResult.rows.length} Meta utm_content entries (API+DB)`);
+
+  // 캐시 저장
+  resolutionMapCache = resolutionEntries;
+  resolutionMapCacheTime = Date.now();
+
+  return resolutionEntries;
+}
+
 module.exports = {
   getMetaAdNames,
   mapToMetaAdName,
   getAllVariantNames,
   groupByMetaAdName,
   clearCache,
-  getAdIdByName
+  getAdIdByName,
+  buildUtmResolutionMap
 };

@@ -12,6 +12,45 @@
 const db = require('../../utils/database');
 
 /**
+ * utm_id 복원 매핑을 위한 SQL 조각 생성
+ * resolutionParamIndex가 제공되면 utm_resolution CTE, LEFT JOIN, COALESCE 조각 반환
+ * @param {number|null} resolutionParamIndex - 복원 맵 JSON 파라미터 인덱스
+ * @returns {Object} - { cte, join, coalesce, truncatedFlag, truncatedAgg, truncatedSelect }
+ */
+function buildResolutionSQL(resolutionParamIndex) {
+  if (!resolutionParamIndex) {
+    return {
+      cte: '',
+      join: '',
+      coalesce: '',
+      truncatedFlag: '',
+      truncatedAgg: '',
+      truncatedSelect: ''
+    };
+  }
+  return {
+    cte: `utm_resolution AS (
+        SELECT * FROM jsonb_to_recordset($${resolutionParamIndex}::jsonb)
+        AS t(utm_content text, resolved_ad_id text)
+      ),`,
+    join: `LEFT JOIN utm_resolution ur ON us.utm_params->>'utm_content' = ur.utm_content`,
+    coalesce: 'ur.resolved_ad_id,',
+    truncatedFlag: `,
+        CASE 
+          WHEN (us.utm_params->>'utm_id' IS NULL OR us.utm_params->>'utm_id' = '' OR us.utm_params->>'utm_id' LIKE '{{%')
+            AND LOWER(COALESCE(us.utm_params->>'utm_source', '')) IN ('meta', 'facebook', 'fb', 'instagram', 'ig')
+            AND ur.resolved_ad_id IS NULL
+          THEN true
+          ELSE false
+        END as is_truncated_unmatched`,
+    truncatedAgg: `,
+        BOOL_OR(is_truncated_unmatched) as is_truncated_unmatched`,
+    truncatedSelect: `,
+      ec.is_truncated_unmatched`
+  };
+}
+
+/**
  * 광고 소재별 집계 데이터 조회 (ad_id 기준)
  * @param {Object} params - 쿼리 파라미터
  * @param {Date} params.startDate - 시작일
@@ -43,17 +82,22 @@ async function getCreativeAggregation({
   maxScrollPx = 10000,
   minDurationSeconds = 0,
   minPvCount = 0,
-  minScrollPx = 0
+  minScrollPx = 0,
+  resolutionParamIndex = null
 }) {
   // FIX (2026-02-05): ad_id(utm_id) 기준 그룹핑
   // FIX (2026-02-11): utm_id 없는 플랫폼(카카오/자사몰 등) 지원
+  // FIX (2026-02-12): Meta utm_id 복원 - URL 잘림으로 누락된 utm_id를 meta_ads 매칭으로 복원
   // - utm_id가 있으면 utm_id를 ad_id로 사용 (기존 Meta/네이버 등)
   // - utm_id가 없으면 utm_content를 ad_id로 사용 (카카오/자사몰/인스타그램 등)
+  // - Meta 소스에서 utm_id 없는 경우: 복원 맵으로 ad_id 복원 시도
   // - {{ad.id}}, {{ad.name}} 같은 잘못된 매크로 값은 제외
   // - meta_ads 테이블과 조인하여 현재 광고명 조회
   // - 수집된 광고명들은 array_agg로 variant_names에 저장
+  const r = buildResolutionSQL(resolutionParamIndex);
   const dataQuery = `
-    WITH all_entries AS (
+    WITH ${r.cte}
+    all_entries AS (
       -- 모든 진입 기록 (View 계산용)
       -- utm_id가 있으면 utm_id, 없으면 utm_content를 ad_id로 사용
       -- FIX (2026-02-06): sessions.start_time 기간 필터 추가
@@ -64,15 +108,17 @@ async function getCreativeAggregation({
         us.visitor_id,
         COALESCE(
           NULLIF(CASE WHEN us.utm_params->>'utm_id' LIKE '{{%' THEN NULL ELSE us.utm_params->>'utm_id' END, ''),
+          ${r.coalesce}
           us.utm_params->>'utm_content'
         ) as ad_id,
         us.utm_params->>'utm_content' as creative_name,
         COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-') as utm_source,
         COALESCE(NULLIF(us.utm_params->>'utm_medium', ''), '-') as utm_medium,
-        COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') as utm_campaign
+        COALESCE(NULLIF(us.utm_params->>'utm_campaign', ''), '-') as utm_campaign${r.truncatedFlag}
       FROM utm_sessions us
       JOIN visitors v ON us.visitor_id = v.visitor_id
       JOIN sessions s ON us.session_id = s.session_id
+      ${r.join}
       WHERE us.utm_params->>'utm_content' IS NOT NULL
         AND us.entry_timestamp >= $1
         AND us.entry_timestamp <= $2
@@ -110,7 +156,7 @@ async function getCreativeAggregation({
         -- 수집된 광고명들 (중복 제거)
         array_agg(DISTINCT creative_name) as variant_names,
         -- utm_source는 가장 많이 수집된 값 사용 (대부분 동일)
-        MODE() WITHIN GROUP (ORDER BY utm_source) as utm_source
+        MODE() WITHIN GROUP (ORDER BY utm_source) as utm_source${r.truncatedAgg}
       FROM all_entries
       GROUP BY ad_id, utm_medium, utm_campaign
     ),
@@ -209,7 +255,7 @@ async function getCreativeAggregation({
       CASE 
         WHEN ma.ad_id IS NOT NULL THEN true
         ELSE false
-      END as is_meta_matched
+      END as is_meta_matched${r.truncatedSelect}
 
     FROM entry_counts ec
     LEFT JOIN session_metrics sm ON 
@@ -245,21 +291,27 @@ async function getCreativeCount({
   queryParams,
   minDurationSeconds = 0,
   minPvCount = 0,
-  minScrollPx = 0
+  minScrollPx = 0,
+  resolutionParamIndex = null
 }) {
   // FIX (2026-02-05): ad_id 기준으로 개수 조회
   // FIX (2026-02-06): utm_source 필터는 광고 단위로 적용 (대표 utm_source 기준)
   // FIX (2026-02-11): utm_id 없는 플랫폼 지원 - COALESCE(utm_id, utm_content)
+  // FIX (2026-02-12): Meta utm_id 복원 매핑 적용
+  const r = buildResolutionSQL(resolutionParamIndex);
   const countQuery = `
-    WITH ad_summary AS (
+    WITH ${r.cte}
+    ad_summary AS (
       SELECT 
         COALESCE(
           NULLIF(CASE WHEN us.utm_params->>'utm_id' LIKE '{{%' THEN NULL ELSE us.utm_params->>'utm_id' END, ''),
+          ${r.coalesce}
           us.utm_params->>'utm_content'
         ) as ad_id,
         MODE() WITHIN GROUP (ORDER BY COALESCE(NULLIF(us.utm_params->>'utm_source', ''), '-')) as utm_source
       FROM utm_sessions us
       JOIN visitors v ON us.visitor_id = v.visitor_id
+      ${r.join}
       WHERE us.utm_params->>'utm_content' IS NOT NULL
         AND us.entry_timestamp >= $1
         AND us.entry_timestamp <= $2
@@ -268,6 +320,7 @@ async function getCreativeCount({
         ${utmFilterConditions}
       GROUP BY COALESCE(
         NULLIF(CASE WHEN us.utm_params->>'utm_id' LIKE '{{%' THEN NULL ELSE us.utm_params->>'utm_id' END, ''),
+        ${r.coalesce}
         us.utm_params->>'utm_content'
       )
     )

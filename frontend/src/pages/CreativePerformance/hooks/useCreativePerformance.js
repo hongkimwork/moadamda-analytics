@@ -81,9 +81,12 @@ export const useCreativePerformance = () => {
       : { dateRange: [dayjs().subtract(29, 'day').format('YYYY-MM-DD'), dayjs().format('YYYY-MM-DD')] };
   });
 
-  // 정렬 state
-  const [sortField, setSortField] = useState('total_revenue');
+  // 정렬 state (기본값: 기여한 결제액 내림차순, scoreSettings 로드 후 모수 평가점수로 전환)
+  const [sortField, setSortField] = useState('attributed_revenue');
   const [sortOrder, setSortOrder] = useState('desc');
+
+  // 초기 정렬 적용 여부 추적 (scoreSettings 로드 후 1회만 자동 전환)
+  const initialSortAppliedRef = useRef(false);
 
   // 동적 UTM 필터 state
   const [activeUtmFilters, setActiveUtmFilters] = useState([]);
@@ -147,6 +150,18 @@ export const useCreativePerformance = () => {
     loadScoreSettings();
   }, []);
 
+  // scoreSettings 로드 완료 후 초기 정렬 설정
+  // 설정이 있으면 모수 평가점수 내림차순, 없으면 기여한 결제액 내림차순 유지
+  useEffect(() => {
+    if (scoreSettingsLoading) return;
+    if (initialSortAppliedRef.current) return;
+    initialSortAppliedRef.current = true;
+    if (scoreSettings) {
+      setSortField('traffic_score');
+      setSortOrder('desc');
+    }
+  }, [scoreSettingsLoading, scoreSettings]);
+
   // 필터 설정 로컬스토리지 저장 (변경 시 자동 저장)
   useEffect(() => {
     if (!user?.id) return;
@@ -205,6 +220,10 @@ export const useCreativePerformance = () => {
     });
   }, [data]);
 
+  // 서버 정렬 필드 계산 (클라이언트 전용 정렬 컬럼은 기여한 결제액으로 대체)
+  const CLIENT_SORT_COLUMNS = ['traffic_score', 'value_per_visitor'];
+  const serverSortField = CLIENT_SORT_COLUMNS.includes(sortField) ? 'attributed_revenue' : sortField;
+
   // 데이터 조회
   const fetchData = async (currentFetchId) => {
     setLoading(true);
@@ -218,7 +237,7 @@ export const useCreativePerformance = () => {
         page: currentPage,
         limit: pageSize,
         search: searchTerm,
-        sort_by: sortField,
+        sort_by: serverSortField,
         sort_order: sortOrder,
         max_duration: maxDuration,
         max_pv: maxPv,
@@ -284,7 +303,7 @@ export const useCreativePerformance = () => {
   useEffect(() => {
     const id = ++fetchIdRef.current;
     fetchData(id);
-  }, [currentPage, pageSize, filters, searchTerm, sortField, sortOrder, activeUtmFilters, quickFilterSources, platformLinked, maxDuration, maxPv, maxScroll, minDuration, minPv, minScroll, minUv, attributionWindow, matchingMode]);
+  }, [currentPage, pageSize, filters, searchTerm, serverSortField, sortOrder, activeUtmFilters, quickFilterSources, platformLinked, maxDuration, maxPv, maxScroll, minDuration, minPv, minScroll, minUv, attributionWindow, matchingMode]);
 
   // 분포 데이터 조회 (날짜/플랫폼 필터 변경 시만 재조회)
   const fetchDistributionData = useCallback(async () => {
@@ -368,16 +387,29 @@ export const useCreativePerformance = () => {
         dayjs().format('YYYY-MM-DD')
       ]
     });
-    setSortField('total_revenue');
+    // 정렬 초기화: scoreSettings 유무에 따라 조건부 기본값
+    if (scoreSettings) {
+      setSortField('traffic_score');
+    } else {
+      setSortField('attributed_revenue');
+    }
     setSortOrder('desc');
     setCurrentPage(1);
   };
 
-  // 테이블 정렬 핸들러
+  // 테이블 정렬 핸들러 (2단계 토글: 내림차순 ↔ 오름차순, 정렬 해제 없음)
   const handleTableChange = (pagination, filters, sorter) => {
-    if (sorter.field) {
-      setSortField(sorter.field);
+    const key = sorter.columnKey || sorter.field;
+
+    if (sorter.order) {
+      // 정상 정렬 방향 변경 (새 컬럼 클릭 또는 방향 토글)
+      if (!key) return;
+      setSortField(key);
       setSortOrder(sorter.order === 'ascend' ? 'asc' : 'desc');
+    } else {
+      // 정렬 해제 시도 → 내림차순으로 되돌림 (현재 sortField 유지)
+      // Ant Design은 취소 시 sorter.field/columnKey를 비워서 보내므로, 현재 sortField을 그대로 사용
+      setSortOrder('desc');
     }
   };
 
