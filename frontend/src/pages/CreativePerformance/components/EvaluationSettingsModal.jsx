@@ -7,7 +7,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Modal, InputNumber, Button, Tabs, Spin, Empty, message } from 'antd';
 import {
-  Settings, Target, AlertTriangle, Filter, Clock, Eye,
+  Settings, AlertTriangle, Filter, Clock, Eye,
   MousePointerClick, Users, RotateCcw, Save, BarChart2,
   TrendingUp, ChevronRight
 } from 'lucide-react';
@@ -26,42 +26,6 @@ const BAR_COLOR_CAPPED = '#fbbf24';
 const REF_LINE_MAX = '#ef4444';
 const REF_LINE_MIN = '#3b82f6';
 
-// ============================================================================
-// 기여 기간 선택 버튼
-// ============================================================================
-const AttributionWindowSelector = ({ value, onChange }) => {
-  const options = [
-    { value: '30', label: '30일' },
-    { value: '60', label: '60일' },
-    { value: '90', label: '90일' },
-    { value: 'all', label: '전체' }
-  ];
-
-  return (
-    <div style={{ display: 'flex', gap: '8px' }}>
-      {options.map(opt => (
-        <button
-          key={opt.value}
-          onClick={() => onChange(opt.value)}
-          style={{
-            height: '36px',
-            padding: '0 20px',
-            borderRadius: '8px',
-            border: value === opt.value ? '2px solid #1677ff' : '1px solid #d9d9d9',
-            background: value === opt.value ? '#e6f4ff' : '#fff',
-            color: value === opt.value ? '#1677ff' : '#595959',
-            fontSize: '14px',
-            fontWeight: value === opt.value ? 600 : 400,
-            cursor: 'pointer',
-            transition: 'all 150ms ease'
-          }}
-        >
-          {opt.label}
-        </button>
-      ))}
-    </div>
-  );
-};
 
 // ============================================================================
 // 지표별 필터 카드
@@ -627,7 +591,6 @@ function EvaluationSettingsModal({
   visible,
   onClose,
   // 현재 설정값
-  attributionWindow,
   maxDuration,
   maxPv,
   maxScroll,
@@ -646,7 +609,6 @@ function EvaluationSettingsModal({
   loading
 }) {
   // 로컬 상태 (모달 내에서만 편집, "저장 및 적용" 시 부모에 반영)
-  const [localAttributionWindow, setLocalAttributionWindow] = useState(attributionWindow || '30');
   const [localMaxDuration, setLocalMaxDuration] = useState(maxDuration ? maxDuration / 60 : 1); // 분 단위
   const [localMaxPv, setLocalMaxPv] = useState(maxPv || 15);
   const [localMaxScroll, setLocalMaxScroll] = useState(maxScroll || 10000);
@@ -661,7 +623,6 @@ function EvaluationSettingsModal({
   // 모달 열릴 때 현재 설정값으로 로컬 상태 초기화
   useEffect(() => {
     if (visible) {
-      setLocalAttributionWindow(attributionWindow || '30');
       setLocalMaxDuration(maxDuration ? maxDuration / 60 : 1);
       setLocalMaxPv(maxPv || 15);
       setLocalMaxScroll(maxScroll || 10000);
@@ -670,7 +631,7 @@ function EvaluationSettingsModal({
       setLocalMinScroll(minScroll || 0);
       setLocalMinUv(minUv || 0);
     }
-  }, [visible, attributionWindow, maxDuration, maxPv, maxScroll, minDuration, minPv, minScroll, minUv]);
+  }, [visible, maxDuration, maxPv, maxScroll, minDuration, minPv, minScroll, minUv]);
 
   // 범위 충돌 검사
   const hasConflict = useMemo(() => {
@@ -689,7 +650,6 @@ function EvaluationSettingsModal({
   // 변경 여부 확인
   const hasChanges = useMemo(() => {
     return (
-      localAttributionWindow !== (attributionWindow || '30') ||
       localMaxDuration !== (maxDuration ? maxDuration / 60 : 1) ||
       localMaxPv !== (maxPv || 15) ||
       localMaxScroll !== (maxScroll || 10000) ||
@@ -699,7 +659,6 @@ function EvaluationSettingsModal({
       localMinUv !== (minUv || 0)
     );
   }, [
-    localAttributionWindow, attributionWindow,
     localMaxDuration, maxDuration,
     localMaxPv, maxPv,
     localMaxScroll, maxScroll,
@@ -717,7 +676,6 @@ function EvaluationSettingsModal({
     }
 
     onSave({
-      attributionWindow: localAttributionWindow,
       maxDuration: localMaxDuration * 60, // 초 단위로 변환
       maxPv: localMaxPv,
       maxScroll: localMaxScroll,
@@ -731,7 +689,6 @@ function EvaluationSettingsModal({
 
   // 초기화 핸들러
   const handleReset = () => {
-    setLocalAttributionWindow('30');
     setLocalMaxDuration(1); // 1분 = 60초
     setLocalMaxPv(15);
     setLocalMaxScroll(10000);
@@ -804,20 +761,6 @@ function EvaluationSettingsModal({
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}>
-              <Target size={16} style={{ color: '#1677ff' }} />
-              <span style={{ fontSize: '13px', fontWeight: 600, color: '#595959' }}>광고 기여 인정 기간</span>
-            </div>
-            <AttributionWindowSelector
-              value={localAttributionWindow}
-              onChange={setLocalAttributionWindow}
-            />
-          </div>
         </div>
 
         {/* ============================================================ */}

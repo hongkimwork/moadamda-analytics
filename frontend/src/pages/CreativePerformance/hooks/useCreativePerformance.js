@@ -220,9 +220,9 @@ export const useCreativePerformance = () => {
     });
   }, [data]);
 
-  // 서버 정렬 필드 계산 (클라이언트 전용 정렬 컬럼은 기여한 결제액으로 대체)
-  const CLIENT_SORT_COLUMNS = ['traffic_score', 'value_per_visitor'];
-  const serverSortField = CLIENT_SORT_COLUMNS.includes(sortField) ? 'attributed_revenue' : sortField;
+  // 서버 정렬 필드 계산 (클라이언트 전용 정렬 컬럼은 막타 결제액으로 대체)
+  const CLIENT_SORT_COLUMNS = ['traffic_score', 'value_per_visitor', 'purchase_conversion_rate'];
+  const serverSortField = CLIENT_SORT_COLUMNS.includes(sortField) ? 'total_revenue' : sortField;
 
   // 데이터 조회
   const fetchData = async (currentFetchId) => {

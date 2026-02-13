@@ -295,7 +295,6 @@ function AppLayout() {
           theme="dark"
           mode="inline"
           selectedKeys={getSelectedKeys()}
-          defaultOpenKeys={['data', 'lab', 'settings']}
           items={menuItems}
           style={{ borderRight: 0 }}
         />

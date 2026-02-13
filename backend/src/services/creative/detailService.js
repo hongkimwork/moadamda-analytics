@@ -209,7 +209,7 @@ async function getCreativeOrders(params) {
       attributionWindowDays = null;
     } else {
       const parsed = parseInt(attribution_window, 10);
-      if ([30, 60, 90].includes(parsed)) {
+      if ([7, 30, 60, 90].includes(parsed)) {
         attributionWindowDays = parsed;
       }
     }

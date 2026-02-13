@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { Card, Divider, DatePicker } from 'antd';
 import {
   Search, X, RotateCcw, Calendar, Layers, Settings,
-  Package, ChevronDown
+  Package, ChevronDown, SlidersHorizontal
 } from 'lucide-react';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ko';
@@ -223,8 +223,11 @@ function PerformanceFilters({
   quickFilterSources,
   // FIX (2026-02-04): Attribution Window 선택
   attributionWindow,
+  onAttributionWindowChange,
   // 평가 설정 통합 모달 열기
   onEvaluationSettingsClick,
+  // 컬럼 설정 모달 열기
+  onColumnSettingsClick,
   // 플랫폼 ↔ UTM Source 동기화
   platformLinked,
   onPlatformLinkedChange
@@ -383,10 +386,6 @@ function PerformanceFilters({
   // 현재 표시할 날짜 범위
   const displayDateRange = customDateRange || (activeGroup !== 'custom' ? getDateRangeByGroupAndOffset(activeGroup, offset) : null);
 
-  // 평가설정 버튼 뱃지 텍스트 (접혀있어도 현재 설정값 표시)
-  const attributionLabel = attributionWindow === 'all' ? '전체' : `${attributionWindow}일`;
-  const evaluationBadge = attributionLabel;
-
   // UTM 필터 버튼 뱃지 (선택된 플랫폼 수)
   const utmBadge = quickFilterSources.length > 0 ? `(${quickFilterSources.length})` : null;
 
@@ -539,12 +538,72 @@ function PerformanceFilters({
           <TogglePanelButton
             icon={Settings}
             label="모수 평가 설정"
-            badge={evaluationBadge}
             isOpen={false}
             onClick={onEvaluationSettingsClick}
             color="#fa8c16"
             showArrow={false}
           />
+          <TogglePanelButton
+            icon={SlidersHorizontal}
+            label="컬럼 설정"
+            isOpen={false}
+            onClick={onColumnSettingsClick}
+            color="#1890ff"
+            showArrow={false}
+          />
+
+          {/* 광고 기여 인정 기간 탭 */}
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0',
+            marginLeft: '4px'
+          }}>
+            <span style={{
+              fontSize: '12px',
+              color: '#8c8c8c',
+              fontWeight: 500,
+              marginRight: '8px',
+              whiteSpace: 'nowrap'
+            }}>
+              광고 기여 인정 기간
+            </span>
+            <div style={{
+              display: 'inline-flex',
+              borderRadius: '8px',
+              border: '1px solid #d9d9d9',
+              overflow: 'hidden',
+              background: '#f5f5f5'
+            }}>
+              {[
+                { value: '7', label: '7일' },
+                { value: '30', label: '30일' },
+                { value: '60', label: '60일' },
+                { value: '90', label: '90일' },
+                { value: 'all', label: '전체' }
+              ].map((opt, idx, arr) => (
+                <button
+                  key={opt.value}
+                  onClick={() => onAttributionWindowChange?.(opt.value)}
+                  style={{
+                    height: '30px',
+                    padding: '0 12px',
+                    border: 'none',
+                    borderRight: idx < arr.length - 1 ? '1px solid #d9d9d9' : 'none',
+                    background: attributionWindow === opt.value ? '#1677ff' : 'transparent',
+                    color: attributionWindow === opt.value ? '#fff' : '#595959',
+                    fontSize: '12px',
+                    fontWeight: attributionWindow === opt.value ? 600 : 400,
+                    cursor: 'pointer',
+                    transition: 'all 150ms ease',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </Card>
 

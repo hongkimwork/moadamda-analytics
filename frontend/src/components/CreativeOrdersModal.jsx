@@ -28,7 +28,7 @@ function getExposureInfo(order, dateRange) {
   
   const exposureDate = dayjs(targetTouch.timestamp);
   const orderDate = dayjs(order.order_date);
-  const daysDiff = orderDate.diff(exposureDate, 'day');
+  const daysDiff = orderDate.startOf('day').diff(exposureDate.startOf('day'), 'day');
   
   // 조회 기간 밖 노출 여부 확인
   const rangeStart = dateRange?.start ? dayjs(dateRange.start).startOf('day') : null;
@@ -186,7 +186,7 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange, attributio
               {exposureDate.format('MM-DD HH:mm')}
             </Text>
             {isOutOfRange && (
-              <Tooltip title="조회 기간 밖에서 광고를 봤지만, 구매일 기준 30일 이내이므로 기여로 인정됨">
+              <Tooltip title={`조회 기간 밖에서 광고를 봤지만, 구매일 기준 ${attributionWindow === 'all' ? '전체 기간' : `${attributionWindow}일`} 이내이므로 기여로 인정됨`}>
                 <ExclamationCircleOutlined style={{ marginLeft: 4, color: '#1677ff', fontSize: 13 }} />
               </Tooltip>
             )}
@@ -550,7 +550,7 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange, attributio
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <ShoppingCartOutlined style={{ fontSize: 20, color: '#1890ff' }} />
-          <span>광고 소재 상세</span>
+          <span>주문 보기 상세</span>
         </div>
       }
       open={visible}
@@ -583,7 +583,7 @@ function CreativeOrdersModal({ visible, onClose, creative, dateRange, attributio
           </div>
           <div style={{ color: '#1677ff', fontSize: 13 }}>
             <ExclamationCircleOutlined style={{ marginRight: 4 }} />
-            파란색 날짜: 조회 기간 밖에서 광고를 봤지만, 구매일 기준 30일 이내이므로 기여로 인정
+            파란색 날짜: 조회 기간 밖에서 광고를 봤지만, 구매일 기준 {attributionWindow === 'all' ? '전체 기간' : `${attributionWindow}일`} 이내이므로 기여로 인정
           </div>
         </div>
       )}

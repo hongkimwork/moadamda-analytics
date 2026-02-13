@@ -30,7 +30,9 @@ function PerformanceTable({
   onCreativeClick,
   minUv = 0,
   sortField,
-  sortOrder
+  sortOrder,
+  visibleColumns,
+  columnOrder
 }) {
 
   // 모수 평가 점수 계산 (사용자 설정 기반)
@@ -548,6 +550,168 @@ function PerformanceTable({
       title: (
         <Tooltip
           title={
+            <div style={{ padding: '4px' }}>
+              <div style={{ marginBottom: '12px', fontWeight: 600, fontSize: '14px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '8px' }}>
+                구매 전환율이란?
+              </div>
+              
+              <div style={{ marginBottom: '16px', fontSize: '13px', lineHeight: '1.6' }}>
+                이 광고를 통해 유입된 방문자 중<br/>
+                <strong>구매까지 이어진 비율</strong>입니다. (막타 기준)
+              </div>
+
+              <div style={{ marginBottom: '16px', backgroundColor: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '4px' }}>
+                <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: '12px', marginBottom: '4px' }}>계산 방식</div>
+                <div style={{ fontSize: '13px', fontFamily: 'monospace' }}>막타 횟수 ÷ UV (순 방문자) × 100</div>
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: '12px', marginBottom: '6px' }}>예시</div>
+                <div style={{ fontSize: '13px', paddingLeft: '8px', borderLeft: '2px solid rgba(255,255,255,0.2)' }}>
+                  막타 횟수 5건 / 방문자 100명<br/>
+                  = <span style={{ color: '#bae7ff', fontWeight: 600 }}>전환율 5.0%</span>
+                </div>
+              </div>
+
+              <div>
+                <div style={{ color: '#d9f7be', fontWeight: 600, fontSize: '13px', marginBottom: '4px' }}>
+                  핵심 포인트
+                </div>
+                <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.9)' }}>
+                  이 숫자가 높을수록 방문자를 구매로<br/>
+                  잘 전환시키는 <strong>효과적인 광고</strong>입니다.
+                </div>
+              </div>
+            </div>
+          }
+          overlayStyle={{ maxWidth: '400px' }}
+        >
+          <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>
+            구매<br />전환율
+          </div>
+        </Tooltip>
+      ),
+      key: 'purchase_conversion_rate',
+      width: 75,
+      align: 'center',
+      render: (_, record) => {
+        const uv = record.unique_visitors || 0;
+        const lastTouch = record.last_touch_count || 0;
+        const rate = uv > 0 ? (lastTouch / uv * 100) : 0;
+        
+        return (
+          <span style={{
+            color: rate > 0 ? '#003a8c' : '#9ca3af',
+            fontWeight: rate > 0 ? 600 : 400,
+            fontSize: '13px'
+          }}>
+            {rate > 0 ? `${rate.toFixed(1)}%` : '-'}
+          </span>
+        );
+      },
+      sorter: (a, b) => {
+        if (minUv > 0) {
+          const aAbove = (a.unique_visitors || 0) > minUv;
+          const bAbove = (b.unique_visitors || 0) > minUv;
+          if (aAbove !== bAbove) {
+            const pin = aAbove ? -1 : 1;
+            return sortOrder === 'desc' ? -pin : pin;
+          }
+        }
+        const uvA = a.unique_visitors || 0;
+        const uvB = b.unique_visitors || 0;
+        const rateA = uvA > 0 ? (a.last_touch_count || 0) / uvA : 0;
+        const rateB = uvB > 0 ? (b.last_touch_count || 0) / uvB : 0;
+        return rateA - rateB;
+      },
+      showSorterTooltip: false
+    },
+    {
+      title: (
+        <Tooltip
+          title={
+            <div style={{ padding: '4px' }}>
+              <div style={{ marginBottom: '12px', fontWeight: 600, fontSize: '14px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '8px' }}>
+                1명당 유입 가치란?
+              </div>
+              
+              <div style={{ marginBottom: '16px', fontSize: '13px', lineHeight: '1.6' }}>
+                이 광고를 통해 유입된 방문자 1명당<br/>
+                발생시킨 <strong>평균 막타 결제액</strong>입니다.
+              </div>
+
+              <div style={{ marginBottom: '16px', backgroundColor: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '4px' }}>
+                <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: '12px', marginBottom: '4px' }}>계산 방식</div>
+                <div style={{ fontSize: '13px', fontFamily: 'monospace' }}>막타 결제액 ÷ UV (순 방문자)</div>
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: '12px', marginBottom: '6px' }}>예시</div>
+                <div style={{ fontSize: '13px', paddingLeft: '8px', borderLeft: '2px solid rgba(255,255,255,0.2)' }}>
+                  막타 결제액 100만원 / 방문자 100명<br/>
+                  = <span style={{ color: '#bae7ff', fontWeight: 600 }}>1명당 10,000원 가치</span>
+                </div>
+              </div>
+
+              <div>
+                <div style={{ color: '#d9f7be', fontWeight: 600, fontSize: '13px', marginBottom: '4px' }}>
+                  핵심 포인트
+                </div>
+                <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.9)' }}>
+                  이 숫자가 높을수록 적은 방문자로도<br/>
+                  높은 결제액을 만드는 <strong>효율적인 광고</strong>입니다.
+                </div>
+              </div>
+            </div>
+          }
+          overlayStyle={{ maxWidth: '400px' }}
+        >
+          <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>
+            1명당<br />유입 가치
+          </div>
+        </Tooltip>
+      ),
+      key: 'value_per_visitor',
+      width: 80,
+      align: 'center',
+      render: (_, record) => {
+        const uv = record.unique_visitors || 0;
+        const revenue = record.total_revenue || 0;
+        const valuePerVisitor = uv > 0 ? Math.round(revenue / uv) : 0;
+        
+        return (
+          <span style={{
+            color: valuePerVisitor > 0 ? '#722ed1' : '#9ca3af',
+            fontWeight: valuePerVisitor > 0 ? 600 : 400,
+            fontSize: '13px'
+          }}>
+            {formatCurrency(valuePerVisitor)}
+          </span>
+        );
+      },
+      sorter: (a, b) => {
+        if (minUv > 0) {
+          const aAbove = (a.unique_visitors || 0) > minUv;
+          const bAbove = (b.unique_visitors || 0) > minUv;
+          if (aAbove !== bAbove) {
+            const pin = aAbove ? -1 : 1;
+            return sortOrder === 'desc' ? -pin : pin;
+          }
+        }
+        const uvA = a.unique_visitors || 0;
+        const uvB = b.unique_visitors || 0;
+        const revenueA = a.total_revenue || 0;
+        const revenueB = b.total_revenue || 0;
+        const valueA = uvA > 0 ? revenueA / uvA : 0;
+        const valueB = uvB > 0 ? revenueB / uvB : 0;
+        return valueA - valueB;
+      },
+      showSorterTooltip: false
+    },
+    {
+      title: (
+        <Tooltip
+          title={
             <div style={{ whiteSpace: 'pre-line' }}>
               {`이 광고를 본 적 있는 고객이 구매한 주문 건수입니다.
 다른 광고도 함께 봤더라도 모두 카운트됩니다.
@@ -646,89 +810,6 @@ function PerformanceTable({
       showSorterTooltip: false
     },
     {
-      title: (
-        <Tooltip
-          title={
-            <div style={{ padding: '4px' }}>
-              <div style={{ marginBottom: '12px', fontWeight: 600, fontSize: '14px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '8px' }}>
-                💎 1명당 유입 가치란?
-              </div>
-              
-              <div style={{ marginBottom: '16px', fontSize: '13px', lineHeight: '1.6' }}>
-                이 광고를 통해 유입된 방문자 1명당<br/>
-                기여한 <strong>평균 결제액</strong>입니다.
-              </div>
-
-              <div style={{ marginBottom: '16px', backgroundColor: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '4px' }}>
-                <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: '12px', marginBottom: '4px' }}>계산 방식</div>
-                <div style={{ fontSize: '13px', fontFamily: 'monospace' }}>기여한 결제액 ÷ UV (순 방문자)</div>
-              </div>
-
-              <div style={{ marginBottom: '16px' }}>
-                <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: '12px', marginBottom: '6px' }}>예시</div>
-                <div style={{ fontSize: '13px', paddingLeft: '8px', borderLeft: '2px solid rgba(255,255,255,0.2)' }}>
-                  결제액 100만원 / 방문자 100명<br/>
-                  = <span style={{ color: '#bae7ff', fontWeight: 600 }}>1명당 10,000원 가치</span>
-                </div>
-              </div>
-
-              <div>
-                <div style={{ color: '#d9f7be', fontWeight: 600, fontSize: '13px', marginBottom: '4px' }}>
-                  💡 핵심 포인트
-                </div>
-                <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.9)' }}>
-                  이 숫자가 높을수록 적은 방문자로도<br/>
-                  높은 결제액을 만드는 <strong>효율적인 광고</strong>입니다.
-                </div>
-              </div>
-            </div>
-          }
-          overlayStyle={{ maxWidth: '400px' }}
-        >
-          <div style={{ whiteSpace: 'pre-line', lineHeight: '1.3' }}>
-            1명당<br />유입 가치
-          </div>
-        </Tooltip>
-      ),
-      key: 'value_per_visitor',
-      width: 80,
-      align: 'center',
-      render: (_, record) => {
-        const uv = record.unique_visitors || 0;
-        const revenue = record.attributed_revenue || 0;
-        const valuePerVisitor = uv > 0 ? Math.round(revenue / uv) : 0;
-        
-        return (
-          <span style={{
-            color: valuePerVisitor > 0 ? '#722ed1' : '#9ca3af',
-            fontWeight: valuePerVisitor > 0 ? 600 : 400,
-            fontSize: '13px'
-          }}>
-            {formatCurrency(valuePerVisitor)}
-          </span>
-        );
-      },
-      sorter: (a, b) => {
-        // UV 이하치 기준 미달 행은 하단 고정 (정렬 방향에 관계없이)
-        if (minUv > 0) {
-          const aAbove = (a.unique_visitors || 0) > minUv;
-          const bAbove = (b.unique_visitors || 0) > minUv;
-          if (aAbove !== bAbove) {
-            const pin = aAbove ? -1 : 1;
-            return sortOrder === 'desc' ? -pin : pin;
-          }
-        }
-        const uvA = a.unique_visitors || 0;
-        const uvB = b.unique_visitors || 0;
-        const revenueA = a.attributed_revenue || 0;
-        const revenueB = b.attributed_revenue || 0;
-        const valueA = uvA > 0 ? revenueA / uvA : 0;
-        const valueB = uvB > 0 ? revenueB / uvB : 0;
-        return valueA - valueB;
-      },
-      showSorterTooltip: false
-    },
-    {
       title: '상세',
       key: 'action',
       width: 65,
@@ -777,6 +858,39 @@ function PerformanceTable({
     };
   });
 
+  // 컬럼 설정 적용: visibility 필터링 + order 정렬 + fixed 위치 보정
+  // 기존 컬럼의 sorter, render, fixed 등 모든 속성이 그대로 유지됨
+  const finalColumns = useMemo(() => {
+    if (!visibleColumns || visibleColumns.length === 0) return processedColumns;
+
+    // 1) 표시할 컬럼만 필터링
+    const visible = processedColumns.filter(col => {
+      const colKey = col.key || col.dataIndex;
+      return visibleColumns.includes(colKey);
+    });
+
+    // 2) columnOrder가 있으면 순서대로 정렬
+    if (columnOrder && columnOrder.length > 0) {
+      visible.sort((a, b) => {
+        const keyA = a.key || a.dataIndex;
+        const keyB = b.key || b.dataIndex;
+        const idxA = columnOrder.indexOf(keyA);
+        const idxB = columnOrder.indexOf(keyB);
+        // columnOrder에 없는 컬럼은 맨 뒤로
+        const posA = idxA === -1 ? 9999 : idxA;
+        const posB = idxB === -1 ? 9999 : idxB;
+        return posA - posB;
+      });
+    }
+
+    // 3) fixed-right 컬럼(상세)만 항상 맨 뒤로 보정
+    //    fixed-left(광고 소재 이름)는 columnOrder 순서를 그대로 유지
+    const fixedRight = visible.filter(col => col.fixed === 'right');
+    const others = visible.filter(col => col.fixed !== 'right');
+
+    return [...others, ...fixedRight];
+  }, [processedColumns, visibleColumns, columnOrder]);
+
   return (
     <Card
       style={{
@@ -787,7 +901,7 @@ function PerformanceTable({
     >
       <Table
         className="creative-performance-table"
-        columns={processedColumns}
+        columns={finalColumns}
         dataSource={data}
         rowKey={(record) => getRowKey(record)}
         loading={loading}

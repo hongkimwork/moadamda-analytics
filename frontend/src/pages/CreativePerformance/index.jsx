@@ -16,6 +16,13 @@ import CreativeEntriesModal from '../../components/CreativeEntriesModal';
 import ScoreSettingsModal from './components/ScoreSettingsModal';
 import EvaluationSettingsModal from './components/EvaluationSettingsModal';
 import CreativeMediaPreviewModal from './components/CreativeMediaPreviewModal';
+import ColumnSettingsModal from './components/ColumnSettingsModal';
+import {
+  DEFAULT_VISIBLE_COLUMNS,
+  loadColumnSettings,
+  saveColumnSettings,
+  resetColumnSettings
+} from './utils/columnDefinitions';
 
 /**
  * 광고 소재 퍼포먼스 페이지
@@ -46,6 +53,10 @@ function CreativePerformance() {
   // 미디어 프리뷰 모달 state
   const [mediaPreviewModalVisible, setMediaPreviewModalVisible] = useState(false);
   const [mediaPreviewCreativeName, setMediaPreviewCreativeName] = useState(null);
+
+  // 컬럼 설정 모달 state
+  const [columnSettingsVisible, setColumnSettingsVisible] = useState(false);
+  const [columnSettings, setColumnSettings] = useState(() => loadColumnSettings());
 
   const {
     // 데이터
@@ -210,9 +221,24 @@ function CreativePerformance() {
     setMediaPreviewModalVisible(true);
   };
 
+  // 컬럼 설정 적용 핸들러
+  const handleColumnSettingsApply = (visibleCols, order) => {
+    const newSettings = { visibleColumns: visibleCols, columnOrder: order };
+    setColumnSettings(newSettings);
+    saveColumnSettings(newSettings);
+  };
+
+  // 컬럼 설정 초기화 핸들러
+  const handleColumnSettingsReset = () => {
+    resetColumnSettings();
+    setColumnSettings({
+      visibleColumns: [...DEFAULT_VISIBLE_COLUMNS],
+      columnOrder: [...DEFAULT_VISIBLE_COLUMNS]
+    });
+  };
+
   // 평가 설정 통합 모달 저장 핸들러
   const handleEvaluationSettingsSave = (settings) => {
-    setAttributionWindow(settings.attributionWindow);
     setMaxDuration(settings.maxDuration);
     setMaxPv(settings.maxPv);
     setMaxScroll(settings.maxScroll);
@@ -255,7 +281,9 @@ function CreativePerformance() {
         minUv={minUv}
         quickFilterSources={quickFilterSources}
         attributionWindow={attributionWindow}
+        onAttributionWindowChange={setAttributionWindow}
         onEvaluationSettingsClick={() => setEvaluationSettingsVisible(true)}
+        onColumnSettingsClick={() => setColumnSettingsVisible(true)}
         platformLinked={platformLinked}
         onPlatformLinkedChange={setPlatformLinked}
       />
@@ -294,6 +322,8 @@ function CreativePerformance() {
         minUv={minUv}
         sortField={sortField}
         sortOrder={sortOrder}
+        visibleColumns={columnSettings.visibleColumns}
+        columnOrder={columnSettings.columnOrder}
       />
       </div>
 
@@ -407,7 +437,6 @@ function CreativePerformance() {
       <EvaluationSettingsModal
         visible={evaluationSettingsVisible}
         onClose={() => setEvaluationSettingsVisible(false)}
-        attributionWindow={attributionWindow}
         maxDuration={maxDuration}
         maxPv={maxPv}
         maxScroll={maxScroll}
@@ -430,6 +459,16 @@ function CreativePerformance() {
         currentSettings={scoreSettings}
         onSaveSuccess={(newSettings) => setScoreSettings(newSettings)}
         outlierFilters={{ maxScroll, maxPv, maxDuration }}
+      />
+
+      {/* 컬럼 설정 모달 */}
+      <ColumnSettingsModal
+        open={columnSettingsVisible}
+        onClose={() => setColumnSettingsVisible(false)}
+        visibleColumns={columnSettings.visibleColumns}
+        columnOrder={columnSettings.columnOrder}
+        onApply={handleColumnSettingsApply}
+        onReset={handleColumnSettingsReset}
       />
 
       {/* 미디어 프리뷰 모달 */}
