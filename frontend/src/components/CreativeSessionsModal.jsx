@@ -331,9 +331,6 @@ function CreativeSessionsModal({ visible, onClose, creative, dateRange }) {
     fetchSessions(targetPage, newField, newOrder);
   };
 
-  // 방문자 그룹 색상 적용 여부: 기본 정렬 또는 세션 시작 정렬일 때만 적용
-  const isVisitorGrouped = !sortField || sortField === 'start_time';
-
   // 디바이스 타입 한글 변환
   const getDeviceKorean = (device) => {
     const deviceMap = {
@@ -581,11 +578,9 @@ function CreativeSessionsModal({ visible, onClose, creative, dateRange }) {
                   showSizeChanger: false
                 }}
                 rowClassName={(record) => {
-                  // 방문자 그룹 색상: 기본 정렬 또는 세션 시작 정렬일 때만 적용
-                  if (!isVisitorGrouped) return '';
                   const uniqueVisitors = [...new Set(sessions.map(s => s.visitor_id))];
                   const visitorIndex = uniqueVisitors.indexOf(record.visitor_id);
-                  const colorIndex = visitorIndex % 6; // 6가지 색상 순환
+                  const colorIndex = visitorIndex % 6;
                   return `visitor-group-${colorIndex}`;
                 }}
               />
