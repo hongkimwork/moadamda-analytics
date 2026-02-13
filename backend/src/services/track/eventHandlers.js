@@ -272,6 +272,8 @@ async function handlePurchaseEvent(purchaseData) {
         const cafe24Order = cafe24OrderResponse.order;
         
         // Use Cafe24's accurate values
+        // final_payment = payment_amount (PG결제금액) = Cafe24 관리자 "총 실결제금액"
+        // naver_point는 합산하지 않음 (orderSync.js와 동일 기준)
         actualPaid = cafe24Order.paid || 'F';
         actualFinalPayment = Math.round(parseFloat(cafe24Order.actual_order_amount?.payment_amount || 0));
         const orderPriceAmount = Math.round(parseFloat(cafe24Order.actual_order_amount?.order_price_amount || 0));

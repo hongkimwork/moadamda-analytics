@@ -5,7 +5,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { Card, Table, Button, Tag, Typography, Modal } from 'antd';
-import { ShoppingCart, RefreshCw, Clock, TrendingUp, Package, Check, X, RotateCcw } from 'lucide-react';
+import { ShoppingCart, RefreshCw, Clock, TrendingUp, Package, Check, X, RotateCcw, CreditCard } from 'lucide-react';
 import dayjs from 'dayjs';
 import { useOrderList } from '../../hooks/useOrderList';
 import { useUserMappings } from '../../hooks/useUserMappings';
@@ -102,8 +102,23 @@ export function OrderListPage() {
     }
   }, [loading]);
 
-  // 통계 계산 (입금완료된 주문만)
+  // 통계 계산: Cafe24 관리자 기준과 일치
+  // - 총 주문 금액: 취소 제외, total_amount(상품가+배송비) 합산
+  // - 총 실 결제 금액: 전체 주문의 final_payment(PG결제금액) 합산
+  // FIX (2026-02-13): Cafe24 관리자 "총 주문 금액" / "총 실 결제 금액"과 일치하도록 수정
   const stats = useMemo(() => {
+    // 총 주문 금액: 취소/환불 제외, total_amount 합산
+    const nonCancelledOrders = orders.filter(order => 
+      order.canceled !== 'T' && 
+      order.order_status !== 'cancelled' &&
+      order.order_status !== 'refunded'
+    );
+    const totalOrderAmount = nonCancelledOrders.reduce((sum, order) => sum + (order.total_amount || 0), 0);
+    
+    // 총 실 결제 금액: 전체 주문의 final_payment 합산 (취소 포함, Cafe24 기준)
+    const totalFinalPayment = orders.reduce((sum, order) => sum + (order.final_payment || 0), 0);
+    
+    // 입금완료 건수 (실결제 건)
     const paidOrders = orders.filter(order => 
       order.paid === 'T' && 
       order.canceled !== 'T' && 
@@ -111,13 +126,14 @@ export function OrderListPage() {
       order.order_status !== 'refunded'
     );
     
-    const totalRevenue = paidOrders.reduce((sum, order) => sum + (order.final_payment || 0), 0);
-    const avgOrderValue = paidOrders.length > 0 ? Math.round(totalRevenue / paidOrders.length) : 0;
+    const avgOrderValue = paidOrders.length > 0 ? Math.round(totalFinalPayment / orders.length) : 0;
     
     return {
-      totalRevenue,
+      totalOrderAmount,
+      totalFinalPayment,
       avgOrderValue,
-      paidOrderCount: paidOrders.length
+      paidOrderCount: paidOrders.length,
+      totalOrderCount: orders.length
     };
   }, [orders]);
 
@@ -413,10 +429,18 @@ export function OrderListPage() {
         <StatCard
           icon={TrendingUp}
           iconColor="#52c41a"
-          label="총 매출"
-          value={stats.totalRevenue.toLocaleString()}
+          label="총 주문 금액"
+          value={stats.totalOrderAmount.toLocaleString()}
           suffix="원"
-          subValue={`입금완료 ${stats.paidOrderCount.toLocaleString()}건 (실결제)`}
+          subValue={`취소/환불 제외 ${(totalOrders - (orders.filter(o => o.canceled === 'T' || o.order_status === 'cancelled' || o.order_status === 'refunded').length)).toLocaleString()}건`}
+        />
+        <StatCard
+          icon={CreditCard}
+          iconColor="#fa8c16"
+          label="총 실 결제 금액"
+          value={stats.totalFinalPayment.toLocaleString()}
+          suffix="원"
+          subValue={`전체 ${stats.totalOrderCount.toLocaleString()}건 (PG결제)`}
         />
         <StatCard
           icon={ShoppingCart}
