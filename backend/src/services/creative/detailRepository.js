@@ -1123,6 +1123,22 @@ async function getVisitorJourneysByFingerprint({ purchaserIds, onlyValidAdId = f
     }
     fingerprintGroups[fp].push(row.visitor_id);
   });
+
+  // FIX (2026-02-20): 핑거프린트 충돌 임계값 - 5명 이상 공유 시 매칭 제외
+  const MAX_FINGERPRINT_COLLISION = 5;
+  const fpKeys = Object.keys(fingerprintGroups);
+  if (fpKeys.length > 0) {
+    const fpCollisionQuery = `
+      SELECT browser_fingerprint
+      FROM visitors
+      WHERE browser_fingerprint = ANY($1)
+        AND is_bot = false
+      GROUP BY browser_fingerprint
+      HAVING COUNT(DISTINCT visitor_id) >= $2
+    `;
+    const fpCollisionResult = await db.query(fpCollisionQuery, [fpKeys, MAX_FINGERPRINT_COLLISION]);
+    fpCollisionResult.rows.forEach(row => delete fingerprintGroups[row.browser_fingerprint]);
+  }
   
   const uniqueFingerprints = Object.keys(fingerprintGroups);
   if (uniqueFingerprints.length === 0) {
