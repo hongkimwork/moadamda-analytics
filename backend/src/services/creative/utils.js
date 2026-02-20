@@ -85,8 +85,8 @@ function parseUtmFilters(utmFiltersJson, queryParams, startIndex, options = {}) 
         // 컬럼 참조 형식 결정
         const columnRef = columnFormat === 'column' ? key : `us.utm_params->>'${key}'`;
         
-        // IN 연산자 처리 (배열 값)
-        if (operator === 'in' && Array.isArray(value) && value.length > 0) {
+        // 배열 값은 항상 IN 연산자로 처리 (operator 불일치 방어)
+        if (Array.isArray(value) && value.length > 0) {
           const placeholders = value.map((v) => {
             queryParams.push(v);
             return `$${paramIndex++}`;
@@ -94,7 +94,7 @@ function parseUtmFilters(utmFiltersJson, queryParams, startIndex, options = {}) 
           return `${columnRef} IN (${placeholders.join(', ')})`;
         }
         
-        // 기본 equals 연산자
+        // 단일 값은 equals 연산자
         queryParams.push(value);
         const clause = `${columnRef} = $${paramIndex}`;
         paramIndex++;

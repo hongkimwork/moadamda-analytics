@@ -99,8 +99,8 @@ export const useCreativePerformance = () => {
     return ['meta', 'instagram', 'ig'];
   });
 
-  // 플랫폼 ↔ UTM Source 연결 상태 (true: 플랫폼이 주도, false: UTM Source가 독립 동작)
-  const [platformLinked, setPlatformLinked] = useState(true);
+  // quickFilterSources는 플랫폼 퀵필터 버튼 상태 관리용 (데이터 조회에 직접 사용하지 않음)
+  // 실제 데이터 조회 필터는 activeUtmFilters가 담당
 
   // 이상치 기준 state (저장된 값 우선 사용) - 상한선
   const [maxDuration, setMaxDuration] = useState(() => savedFilters?.maxDuration ?? 60);
@@ -250,28 +250,9 @@ export const useCreativePerformance = () => {
         matching_mode: matchingMode // FIX (2026-02-10): 매칭 방식
       };
 
-      // 동적 UTM 필터 + 퀵 필터 병합 (연결 상태에 따라 분기)
-      const combinedFilters = [...activeUtmFilters.filter(f => f.key !== 'utm_source')];
-      
-      if (platformLinked) {
-        // 연결 상태: 플랫폼 필터가 utm_source 담당
-        if (quickFilterSources.length > 0) {
-          combinedFilters.push({
-            key: 'utm_source',
-            operator: 'in',
-            value: quickFilterSources
-          });
-        }
-      } else {
-        // 연결 해제: activeUtmFilters의 utm_source가 담당
-        const utmSourceFilter = activeUtmFilters.find(f => f.key === 'utm_source');
-        if (utmSourceFilter) {
-          combinedFilters.push(utmSourceFilter);
-        }
-      }
-      
-      if (combinedFilters.length > 0) {
-        params.utm_filters = JSON.stringify(combinedFilters);
+      // UTM 필터가 메인: activeUtmFilters를 그대로 사용
+      if (activeUtmFilters.length > 0) {
+        params.utm_filters = JSON.stringify(activeUtmFilters);
       }
 
       const response = await fetchCreativePerformance(params);
@@ -303,7 +284,7 @@ export const useCreativePerformance = () => {
   useEffect(() => {
     const id = ++fetchIdRef.current;
     fetchData(id);
-  }, [currentPage, pageSize, filters, searchTerm, serverSortField, sortOrder, activeUtmFilters, quickFilterSources, platformLinked, maxDuration, maxPv, maxScroll, minDuration, minPv, minScroll, minUv, attributionWindow, matchingMode]);
+  }, [currentPage, pageSize, filters, searchTerm, serverSortField, sortOrder, activeUtmFilters, maxDuration, maxPv, maxScroll, minDuration, minPv, minScroll, minUv, attributionWindow, matchingMode]);
 
   // 분포 데이터 조회 (날짜/플랫폼 필터 변경 시만 재조회)
   const fetchDistributionData = useCallback(async () => {
@@ -314,26 +295,9 @@ export const useCreativePerformance = () => {
         end: filters.dateRange[1]
       };
 
-      // UTM 필터 병합 (연결 상태에 따라 분기)
-      const combinedFilters = [...activeUtmFilters.filter(f => f.key !== 'utm_source')];
-      
-      if (platformLinked) {
-        if (quickFilterSources.length > 0) {
-          combinedFilters.push({
-            key: 'utm_source',
-            operator: 'in',
-            value: quickFilterSources
-          });
-        }
-      } else {
-        const utmSourceFilter = activeUtmFilters.find(f => f.key === 'utm_source');
-        if (utmSourceFilter) {
-          combinedFilters.push(utmSourceFilter);
-        }
-      }
-      
-      if (combinedFilters.length > 0) {
-        params.utm_filters = JSON.stringify(combinedFilters);
+      // UTM 필터가 메인: activeUtmFilters를 그대로 사용
+      if (activeUtmFilters.length > 0) {
+        params.utm_filters = JSON.stringify(activeUtmFilters);
       }
 
       const response = await fetchDistribution(params);
@@ -345,7 +309,7 @@ export const useCreativePerformance = () => {
     } finally {
       setDistributionLoading(false);
     }
-  }, [filters.dateRange, activeUtmFilters, quickFilterSources, platformLinked]);
+  }, [filters.dateRange, activeUtmFilters]);
 
   // 분포 데이터 조회 (날짜/UTM 필터 변경 시)
   useEffect(() => {
@@ -436,7 +400,6 @@ export const useCreativePerformance = () => {
     pageSize,
     activeUtmFilters,
     quickFilterSources,
-    platformLinked,
     maxDuration,
     maxPv,
     maxScroll,
@@ -463,7 +426,6 @@ export const useCreativePerformance = () => {
     setSelectedCreative,
     setActiveUtmFilters,
     setQuickFilterSources,
-    setPlatformLinked,
     setMaxDuration,
     setMaxPv,
     setMaxScroll,

@@ -228,10 +228,26 @@ function PerformanceFilters({
   onEvaluationSettingsClick,
   // 컬럼 설정 모달 열기
   onColumnSettingsClick,
-  // 플랫폼 ↔ UTM Source 동기화
-  platformLinked,
-  onPlatformLinkedChange
 }) {
+  // UTM 필터의 현재 source 값 (플랫폼 버튼 역방향 동기화용)
+  // null = DynamicUtmFilterBar 초기화 전, [] = source 필터 없음(전체)
+  const [utmSourceValues, setUtmSourceValues] = useState(null);
+
+  // onUtmFilterChange를 가로채서 source 값 추출
+  const handleUtmFilterChange = (filters) => {
+    onUtmFilterChange(filters);
+    const sourceFilter = filters.find(f => f.key === 'utm_source');
+    if (sourceFilter) {
+      const values = Array.isArray(sourceFilter.value) ? sourceFilter.value : [sourceFilter.value];
+      setUtmSourceValues(values);
+    } else {
+      setUtmSourceValues([]);
+    }
+  };
+
+  // DynamicUtmFilterBar 초기화 전에는 저장된 quickFilterSources, 이후에는 실제 UTM 필터 값
+  const currentSourcesForButtons = utmSourceValues !== null ? utmSourceValues : quickFilterSources;
+
   const [searchTerm, setSearchTerm] = useState('');
   // 새로운 상태: 활성 그룹 (day, week, month, custom)
   const [activeGroup, setActiveGroup] = useState('month');
@@ -625,45 +641,25 @@ function PerformanceFilters({
         }}
       >
           <div className="flex gap-6 flex-wrap">
-            {/* 좌측: UTM Source 퀵 필터 */}
-            <div
-              className="flex-1 min-w-[300px]"
-              style={{
-                opacity: platformLinked ? 1 : 0.45,
-                transition: 'opacity 0.2s ease'
-              }}
-            >
+            {/* 좌측: 광고 플랫폼 퀵 필터 (UTM Source 빠른 선택 도우미) */}
+            <div className="flex-1 min-w-[300px]">
               <div className="mb-3 text-sm text-gray-700 font-semibold flex items-center gap-2">
-                <Layers size={18} strokeWidth={2} className={platformLinked ? 'text-blue-500' : 'text-gray-400'} />
+                <Layers size={18} strokeWidth={2} className="text-blue-500" />
                 광고 플랫폼 필터
-                {!platformLinked && (
-                  <span style={{
-                    fontSize: '11px',
-                    fontWeight: 400,
-                    color: '#999',
-                    marginLeft: '4px'
-                  }}>
-                    UTM Source를 직접 설정 중입니다
-                  </span>
-                )}
               </div>
               <UtmSourceQuickFilter
                 onFilterChange={(sources) => {
-                  // 플랫폼 버튼 클릭 시 연결 복원
-                  if (!platformLinked) {
-                    onPlatformLinkedChange(true);
-                  }
                   onQuickFilterChange(sources);
                 }}
                 loading={loading}
-                initialSources={quickFilterSources}
+                currentSources={currentSourcesForButtons}
               />
             </div>
 
             {/* 구분선 */}
             <Divider type="vertical" className="h-auto m-0" />
 
-            {/* 우측: 동적 UTM 필터 */}
+            {/* 우측: UTM 필터 (메인 필터) */}
             <div className="flex-1 min-w-[300px]">
               <div className="mb-3 text-sm text-gray-700 font-semibold flex items-center gap-2">
                 <Search size={18} strokeWidth={2} className="text-blue-500" />
@@ -671,15 +667,10 @@ function PerformanceFilters({
               </div>
               <DynamicUtmFilterBar
                 tableName="utm-sessions"
-                onFilterChange={onUtmFilterChange}
+                onFilterChange={handleUtmFilterChange}
                 loading={loading}
                 excludeValues={{ utm_source: ['viral'] }}
-                syncedSources={platformLinked ? quickFilterSources : null}
-                platformLinked={platformLinked}
-                onSourceManualChange={() => {
-                  // UTM Source 수동 변경 → 연결 해제
-                  onPlatformLinkedChange(false);
-                }}
+                syncedSources={quickFilterSources}
               />
             </div>
           </div>

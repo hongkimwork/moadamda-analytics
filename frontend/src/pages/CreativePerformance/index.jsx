@@ -70,7 +70,6 @@ function CreativePerformance() {
     filters,
     activeUtmFilters,
     quickFilterSources,
-    platformLinked,
     currentPage,
     pageSize,
     sortField,
@@ -93,7 +92,6 @@ function CreativePerformance() {
     setSelectedCreative,
     setActiveUtmFilters,
     setQuickFilterSources,
-    setPlatformLinked,
     setMaxDuration,
     setMaxPv,
     setMaxScroll,
@@ -284,8 +282,6 @@ function CreativePerformance() {
         onAttributionWindowChange={setAttributionWindow}
         onEvaluationSettingsClick={() => setEvaluationSettingsVisible(true)}
         onColumnSettingsClick={() => setColumnSettingsVisible(true)}
-        platformLinked={platformLinked}
-        onPlatformLinkedChange={setPlatformLinked}
       />
 
       {/* 에러 표시 */}
