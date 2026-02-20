@@ -544,8 +544,9 @@ async function getFingerprintVisitorCount(fingerprint) {
  * 
  * @param {string} fingerprint - 브라우저 핑거프린트
  * @param {string} currentVisitorId - 현재 visitor_id (제외용)
+ * @param {string|null} memberIdCrypt - 현재 방문자의 member_id_crypt (다른 회원 제외용)
  */
-async function getPreviousVisitsByFingerprint(fingerprint, currentVisitorId) {
+async function getPreviousVisitsByFingerprint(fingerprint, currentVisitorId, memberIdCrypt) {
   if (!fingerprint) {
     return [];
   }
@@ -553,12 +554,13 @@ async function getPreviousVisitsByFingerprint(fingerprint, currentVisitorId) {
   const query = `
     WITH fp_visitors AS (
       -- 동일 browser_fingerprint의 다른 visitor_id들 찾기
-      -- FIX (2026-02-20): 동시 활동 필터 추가 (UTM 히스토리와 일관성)
+      -- FIX (2026-02-20): 동시 활동 필터 + 다른 회원 제외 필터
       SELECT DISTINCT v.visitor_id
       FROM visitors v
       WHERE v.browser_fingerprint = $1
         AND v.visitor_id != $2
         AND v.is_bot = false
+        AND ($3 IS NULL OR v.member_id_crypt IS NULL OR v.member_id_crypt = '' OR v.member_id_crypt = $3)
         AND NOT EXISTS (
           SELECT 1
           FROM sessions match_s
@@ -602,7 +604,7 @@ async function getPreviousVisitsByFingerprint(fingerprint, currentVisitorId) {
     ORDER BY timestamp ASC
   `;
 
-  const result = await db.query(query, [fingerprint, currentVisitorId]);
+  const result = await db.query(query, [fingerprint, currentVisitorId, memberIdCrypt || null]);
   return result.rows;
 }
 
@@ -620,8 +622,9 @@ async function getPreviousVisitsByFingerprint(fingerprint, currentVisitorId) {
  * @param {Date} purchaseTimestamp - 구매일시
  * @param {number|null} attributionWindowDays - Attribution Window (30, 60, 90, null=전체)
  * @param {boolean} removeUpperBound - true면 구매 이후 UTM도 포함
+ * @param {string|null} memberIdCrypt - 현재 방문자의 member_id_crypt (다른 회원 제외용)
  */
-async function getUtmHistoryByFingerprint(fingerprint, currentVisitorId, purchaseTimestamp, attributionWindowDays = 30, removeUpperBound = false) {
+async function getUtmHistoryByFingerprint(fingerprint, currentVisitorId, purchaseTimestamp, attributionWindowDays = 30, removeUpperBound = false, memberIdCrypt = null) {
   if (!fingerprint) {
     return [];
   }
@@ -631,12 +634,13 @@ async function getUtmHistoryByFingerprint(fingerprint, currentVisitorId, purchas
   const query = `
     WITH fp_visitors AS (
       -- 동일 browser_fingerprint의 다른 visitor_id들 찾기
-      -- + 동시 활동 필터: 구매자와 세션이 60초 이상 겹치는 방문자는 다른 사람으로 제외
+      -- + 동시 활동 필터 + 다른 회원 제외 필터
       SELECT DISTINCT v.visitor_id
       FROM visitors v
       WHERE v.browser_fingerprint = $1
         AND v.visitor_id != $2
         AND v.is_bot = false
+        AND ($3 IS NULL OR v.member_id_crypt IS NULL OR v.member_id_crypt = '' OR v.member_id_crypt = $3)
         AND NOT EXISTS (
           SELECT 1
           FROM sessions match_s
@@ -665,9 +669,9 @@ async function getUtmHistoryByFingerprint(fingerprint, currentVisitorId, purchas
       FROM utm_sessions us
       WHERE us.visitor_id IN (SELECT visitor_id FROM fp_visitors)
         ${hasAttributionFilter ? `
-        AND us.entry_timestamp >= ($3::timestamp - INTERVAL '${attributionWindowDays} days')
+        AND us.entry_timestamp >= ($4::timestamp - INTERVAL '${attributionWindowDays} days')
         ` : ''}
-        ${removeUpperBound ? '' : `AND us.entry_timestamp <= $3::timestamp`}
+        ${removeUpperBound ? '' : `AND us.entry_timestamp <= $4::timestamp`}
       ORDER BY us.session_id, us.utm_params->>'utm_content', us.entry_timestamp ASC
     )
     SELECT * FROM deduplicated_utm
@@ -676,8 +680,8 @@ async function getUtmHistoryByFingerprint(fingerprint, currentVisitorId, purchas
 
   const needsPurchaseTimestamp = hasAttributionFilter || !removeUpperBound;
   const params = needsPurchaseTimestamp
-    ? [fingerprint, currentVisitorId, purchaseTimestamp]
-    : [fingerprint, currentVisitorId];
+    ? [fingerprint, currentVisitorId, memberIdCrypt || null, purchaseTimestamp]
+    : [fingerprint, currentVisitorId, memberIdCrypt || null];
 
   const result = await db.query(query, params);
   return result.rows;
@@ -850,7 +854,7 @@ async function getPastPurchases(visitorId, excludeOrderId) {
  * 브라우저 핑거프린트 기반 과거 구매 이력 조회 (쿠키 끊김 대응)
  * FIX (2026-02-11): IP 기반 → browser_fingerprint 기반으로 전면 교체
  */
-async function getPastPurchasesByFingerprint(fingerprint, currentVisitorId, excludeOrderId) {
+async function getPastPurchasesByFingerprint(fingerprint, currentVisitorId, excludeOrderId, memberIdCrypt) {
   if (!fingerprint) {
     return [];
   }
@@ -881,12 +885,13 @@ async function getPastPurchasesByFingerprint(fingerprint, currentVisitorId, excl
     JOIN visitors v ON c.visitor_id = v.visitor_id
     WHERE v.browser_fingerprint = $1
       AND c.visitor_id != $2
-      AND c.order_id != $3
+      AND ($3 IS NULL OR v.member_id_crypt IS NULL OR v.member_id_crypt = '' OR v.member_id_crypt = $3)
+      AND c.order_id != $4
     ORDER BY c.timestamp DESC
     LIMIT 20
   `;
 
-  const result = await db.query(query, [fingerprint, currentVisitorId, excludeOrderId]);
+  const result = await db.query(query, [fingerprint, currentVisitorId, memberIdCrypt || null, excludeOrderId]);
   return result.rows;
 }
 

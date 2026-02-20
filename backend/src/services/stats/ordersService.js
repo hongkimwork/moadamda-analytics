@@ -357,9 +357,9 @@ async function getOrderDetail(orderId, attributionWindowDays = 30, matchingMode 
   ] = await Promise.all([
     repository.getPurchaseJourney(order.visitor_id, order.timestamp),
     repository.getPreviousVisits(order.visitor_id),
-    // FIX (2026-02-20): fingerprint 모드 + 충돌 임계값 통과 시에만 핑거프린트 방문 조회
+    // FIX (2026-02-20): fingerprint 모드 + 충돌 임계값 + 다른 회원 제외
     useFingerprint
-      ? repository.getPreviousVisitsByFingerprint(order.browser_fingerprint, order.visitor_id)
+      ? repository.getPreviousVisitsByFingerprint(order.browser_fingerprint, order.visitor_id, order.member_id_crypt)
       : Promise.resolve([]),
     // member_id 기반 과거 방문 조회 (회원 기반 연결)
     hasValidMemberId
@@ -367,9 +367,9 @@ async function getOrderDetail(orderId, attributionWindowDays = 30, matchingMode 
       : Promise.resolve([]),
     // removeUpperBound=true → 구매 이후 UTM도 포함 (광고 클릭 카드 표시용)
     repository.getUtmHistory(order.visitor_id, order.session_id, localTimestamp, attributionWindowDays, true),
-    // FIX (2026-02-20): fingerprint 모드 + 충돌 임계값 통과 시에만 핑거프린트 UTM 조회
+    // FIX (2026-02-20): fingerprint 모드 + 충돌 임계값 + 다른 회원 제외
     useFingerprint
-      ? repository.getUtmHistoryByFingerprint(order.browser_fingerprint, order.visitor_id, localTimestamp, attributionWindowDays, true)
+      ? repository.getUtmHistoryByFingerprint(order.browser_fingerprint, order.visitor_id, localTimestamp, attributionWindowDays, true, order.member_id_crypt)
       : Promise.resolve([]),
     // member_id 기반 UTM 히스토리 조회 (회원 기반 연결)
     hasValidMemberId
@@ -380,9 +380,9 @@ async function getOrderDetail(orderId, attributionWindowDays = 30, matchingMode 
       ? repository.getSameIpVisits(order.ip_address, order.session_id)
       : Promise.resolve([]),
     repository.getPastPurchases(order.visitor_id, orderId),
-    // FIX (2026-02-20): fingerprint 모드 + 충돌 임계값 통과 시에만 핑거프린트 구매 조회
+    // FIX (2026-02-20): fingerprint 모드 + 충돌 임계값 + 다른 회원 제외
     useFingerprint
-      ? repository.getPastPurchasesByFingerprint(order.browser_fingerprint, order.visitor_id, orderId)
+      ? repository.getPastPurchasesByFingerprint(order.browser_fingerprint, order.visitor_id, orderId, order.member_id_crypt)
       : Promise.resolve([]),
     hasValidMemberId
       ? repository.getPastPurchasesByMemberId(order.member_id, orderId)

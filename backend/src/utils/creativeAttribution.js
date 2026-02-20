@@ -283,6 +283,21 @@ async function calculateCreativeAttribution(creatives, startDate, endDate, attri
           AND match_v.browser_fingerprint = ANY($2)
           AND us.utm_params->>'utm_content' IS NOT NULL
           AND us.utm_params->>'utm_content' NOT LIKE '{{%'
+          AND (
+            match_v.member_id_crypt IS NULL OR match_v.member_id_crypt = ''
+            OR NOT EXISTS (
+              SELECT 1 FROM visitors pv
+              WHERE pv.visitor_id = ANY($3)
+                AND pv.browser_fingerprint = match_v.browser_fingerprint
+                AND pv.member_id_crypt IS NOT NULL AND pv.member_id_crypt != ''
+            )
+            OR match_v.member_id_crypt IN (
+              SELECT pv.member_id_crypt FROM visitors pv
+              WHERE pv.visitor_id = ANY($3)
+                AND pv.browser_fingerprint = match_v.browser_fingerprint
+                AND pv.member_id_crypt IS NOT NULL AND pv.member_id_crypt != ''
+            )
+          )
           AND NOT EXISTS (
             SELECT 1
             FROM sessions match_s
