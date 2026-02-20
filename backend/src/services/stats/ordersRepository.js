@@ -514,6 +514,26 @@ async function getSameIpVisits(ipAddress, excludeSessionId) {
 }
 
 /**
+ * 핑거프린트 공유 방문자 수 조회 (충돌 임계값 체크용)
+ * FIX (2026-02-20): 핑거프린트 충돌이 심한 경우 매칭 제외하기 위한 사전 체크
+ * @param {string} fingerprint - 브라우저 핑거프린트
+ * @returns {number} 해당 핑거프린트를 가진 방문자 수
+ */
+async function getFingerprintVisitorCount(fingerprint) {
+  if (!fingerprint) return 0;
+
+  const query = `
+    SELECT COUNT(DISTINCT visitor_id) as count
+    FROM visitors
+    WHERE browser_fingerprint = $1
+      AND is_bot = false
+  `;
+
+  const result = await db.query(query, [fingerprint]);
+  return parseInt(result.rows[0].count);
+}
+
+/**
  * 브라우저 핑거프린트 기반 과거 방문 기록 조회 (쿠키 끊김 대응)
  * 
  * 쿠키가 끊어져서 visitor_id가 달라진 경우에도
@@ -533,11 +553,25 @@ async function getPreviousVisitsByFingerprint(fingerprint, currentVisitorId) {
   const query = `
     WITH fp_visitors AS (
       -- 동일 browser_fingerprint의 다른 visitor_id들 찾기
+      -- FIX (2026-02-20): 동시 활동 필터 추가 (UTM 히스토리와 일관성)
       SELECT DISTINCT v.visitor_id
       FROM visitors v
       WHERE v.browser_fingerprint = $1
         AND v.visitor_id != $2
         AND v.is_bot = false
+        AND NOT EXISTS (
+          SELECT 1
+          FROM sessions match_s
+          JOIN sessions purch_s ON purch_s.visitor_id = $2
+          WHERE match_s.visitor_id = v.visitor_id
+            AND match_s.start_time < COALESCE(purch_s.end_time, purch_s.start_time)
+            AND purch_s.start_time < COALESCE(match_s.end_time, match_s.start_time)
+            AND EXTRACT(EPOCH FROM (
+              LEAST(COALESCE(match_s.end_time, match_s.start_time), COALESCE(purch_s.end_time, purch_s.start_time))
+              - GREATEST(match_s.start_time, purch_s.start_time)
+            )) >= 60
+          LIMIT 1
+        )
     ),
     fp_pageviews AS (
       SELECT
@@ -914,6 +948,7 @@ module.exports = {
   getPastPurchases,
   getPastPurchasesByFingerprint,
   getPastPurchasesByMemberId,
+  getFingerprintVisitorCount,
   buildOrderFilters,
   SORT_FIELD_MAP
 };

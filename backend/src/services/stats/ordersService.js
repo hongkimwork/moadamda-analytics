@@ -332,6 +332,16 @@ async function getOrderDetail(orderId, attributionWindowDays = 30, matchingMode 
   const hasValidFingerprint = order.browser_fingerprint && order.browser_fingerprint !== '';
   const useFingerprintMatching = matchingMode === 'fingerprint' && hasValidFingerprint;
 
+  // FIX (2026-02-20): 핑거프린트 충돌 임계값 - 5명 이상 공유 시 신뢰도 부족으로 매칭 제외
+  const MAX_FINGERPRINT_COLLISION = 5;
+  let useFingerprint = useFingerprintMatching;
+  if (useFingerprint) {
+    const fpVisitorCount = await repository.getFingerprintVisitorCount(order.browser_fingerprint);
+    if (fpVisitorCount >= MAX_FINGERPRINT_COLLISION) {
+      useFingerprint = false;
+    }
+  }
+
   const [
     purchaseJourneyRows,
     previousVisitsRows,
@@ -347,8 +357,8 @@ async function getOrderDetail(orderId, attributionWindowDays = 30, matchingMode 
   ] = await Promise.all([
     repository.getPurchaseJourney(order.visitor_id, order.timestamp),
     repository.getPreviousVisits(order.visitor_id),
-    // FIX (2026-02-11): browser_fingerprint 기반 과거 방문 조회 (IP+기기+OS 대체)
-    hasValidFingerprint
+    // FIX (2026-02-20): fingerprint 모드 + 충돌 임계값 통과 시에만 핑거프린트 방문 조회
+    useFingerprint
       ? repository.getPreviousVisitsByFingerprint(order.browser_fingerprint, order.visitor_id)
       : Promise.resolve([]),
     // member_id 기반 과거 방문 조회 (회원 기반 연결)
@@ -357,8 +367,8 @@ async function getOrderDetail(orderId, attributionWindowDays = 30, matchingMode 
       : Promise.resolve([]),
     // removeUpperBound=true → 구매 이후 UTM도 포함 (광고 클릭 카드 표시용)
     repository.getUtmHistory(order.visitor_id, order.session_id, localTimestamp, attributionWindowDays, true),
-    // FIX (2026-02-11): browser_fingerprint 기반 UTM 히스토리 (fingerprint 모드 시 어트리뷰션에 포함)
-    useFingerprintMatching
+    // FIX (2026-02-20): fingerprint 모드 + 충돌 임계값 통과 시에만 핑거프린트 UTM 조회
+    useFingerprint
       ? repository.getUtmHistoryByFingerprint(order.browser_fingerprint, order.visitor_id, localTimestamp, attributionWindowDays, true)
       : Promise.resolve([]),
     // member_id 기반 UTM 히스토리 조회 (회원 기반 연결)
@@ -370,8 +380,8 @@ async function getOrderDetail(orderId, attributionWindowDays = 30, matchingMode 
       ? repository.getSameIpVisits(order.ip_address, order.session_id)
       : Promise.resolve([]),
     repository.getPastPurchases(order.visitor_id, orderId),
-    // FIX (2026-02-11): fingerprint/member_id 기반 과거 구매 조회
-    hasValidFingerprint
+    // FIX (2026-02-20): fingerprint 모드 + 충돌 임계값 통과 시에만 핑거프린트 구매 조회
+    useFingerprint
       ? repository.getPastPurchasesByFingerprint(order.browser_fingerprint, order.visitor_id, orderId)
       : Promise.resolve([]),
     hasValidMemberId
