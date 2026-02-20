@@ -560,7 +560,7 @@ async function getPreviousVisitsByFingerprint(fingerprint, currentVisitorId, mem
       WHERE v.browser_fingerprint = $1
         AND v.visitor_id != $2
         AND v.is_bot = false
-        AND ($3 IS NULL OR v.member_id_crypt IS NULL OR v.member_id_crypt = '' OR v.member_id_crypt = $3)
+        AND ($3::text IS NULL OR v.member_id_crypt IS NULL OR v.member_id_crypt = '' OR v.member_id_crypt = $3)
         AND NOT EXISTS (
           SELECT 1
           FROM sessions match_s
@@ -640,7 +640,7 @@ async function getUtmHistoryByFingerprint(fingerprint, currentVisitorId, purchas
       WHERE v.browser_fingerprint = $1
         AND v.visitor_id != $2
         AND v.is_bot = false
-        AND ($3 IS NULL OR v.member_id_crypt IS NULL OR v.member_id_crypt = '' OR v.member_id_crypt = $3)
+        AND ($3::text IS NULL OR v.member_id_crypt IS NULL OR v.member_id_crypt = '' OR v.member_id_crypt = $3)
         AND NOT EXISTS (
           SELECT 1
           FROM sessions match_s
@@ -885,7 +885,7 @@ async function getPastPurchasesByFingerprint(fingerprint, currentVisitorId, excl
     JOIN visitors v ON c.visitor_id = v.visitor_id
     WHERE v.browser_fingerprint = $1
       AND c.visitor_id != $2
-      AND ($3 IS NULL OR v.member_id_crypt IS NULL OR v.member_id_crypt = '' OR v.member_id_crypt = $3)
+      AND ($3::text IS NULL OR v.member_id_crypt IS NULL OR v.member_id_crypt = '' OR v.member_id_crypt = $3)
       AND c.order_id != $4
     ORDER BY c.timestamp DESC
     LIMIT 20
