@@ -324,7 +324,9 @@ function PerformanceTable({
           );
         }
 
-        const key = `${record.utm_source || ''}_${record.utm_campaign || ''}_${record.utm_medium || ''}_${record.creative_name || ''}`;
+        const key = record.ad_id
+          ? `${record.ad_id}||${record.utm_medium || ''}||${record.utm_campaign || ''}`
+          : `${record.utm_source || ''}_${record.utm_campaign || ''}_${record.utm_medium || ''}_${record.creative_name || ''}`;
         const scoreData = trafficScores.get(key);
         
         // 데이터 부족
@@ -440,8 +442,12 @@ function PerformanceTable({
           }
         }
         if (!scoreSettings) return 0;
-        const keyA = `${a.utm_source || ''}_${a.utm_campaign || ''}_${a.utm_medium || ''}_${a.creative_name || ''}`;
-        const keyB = `${b.utm_source || ''}_${b.utm_campaign || ''}_${b.utm_medium || ''}_${b.creative_name || ''}`;
+        const keyA = a.ad_id
+          ? `${a.ad_id}||${a.utm_medium || ''}||${a.utm_campaign || ''}`
+          : `${a.utm_source || ''}_${a.utm_campaign || ''}_${a.utm_medium || ''}_${a.creative_name || ''}`;
+        const keyB = b.ad_id
+          ? `${b.ad_id}||${b.utm_medium || ''}||${b.utm_campaign || ''}`
+          : `${b.utm_source || ''}_${b.utm_campaign || ''}_${b.utm_medium || ''}_${b.creative_name || ''}`;
         const scoreA = trafficScores.get(keyA)?.score || 0;
         const scoreB = trafficScores.get(keyB)?.score || 0;
         return scoreA - scoreB;

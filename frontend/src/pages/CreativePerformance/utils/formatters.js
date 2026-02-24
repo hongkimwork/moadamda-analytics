@@ -129,7 +129,9 @@ export const calculateTrafficScores = (data, settings = null) => {
 
   // 각 광고에 대해 점수 계산 (절대평가)
   data.forEach((item) => {
-    const key = `${item.utm_source || ''}_${item.utm_campaign || ''}_${item.utm_medium || ''}_${item.creative_name || ''}`;
+    const key = item.ad_id
+      ? `${item.ad_id}||${item.utm_medium || ''}||${item.utm_campaign || ''}`
+      : `${item.utm_source || ''}_${item.utm_campaign || ''}_${item.utm_medium || ''}_${item.creative_name || ''}`;
 
     // 각 지표별 점수 계산
     const metricScores = {};

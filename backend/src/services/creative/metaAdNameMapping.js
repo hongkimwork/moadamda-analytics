@@ -99,9 +99,14 @@ async function getMetaAdNames() {
     apiNames = apiAds.map(ad => ad.name).filter(Boolean);
     
     // 광고명 → ad_id 매핑 캐시 업데이트 + DB 저장
+    // FIX (2026-02-24): ACTIVE ad_id 우선 - 같은 이름의 PAUSED 광고가 ACTIVE를 덮어쓰지 않도록
+    const activeStatuses = new Set(['ACTIVE']);
     for (const ad of apiAds) {
       if (ad.name && ad.id) {
-        adNameToIdCache.set(ad.name, ad.id);
+        const existingId = adNameToIdCache.get(ad.name);
+        if (!existingId || activeStatuses.has(ad.status)) {
+          adNameToIdCache.set(ad.name, ad.id);
+        }
         
         // DB에 저장 (중복 시 업데이트)
         try {
@@ -124,10 +129,10 @@ async function getMetaAdNames() {
   // 2. DB의 meta_ads 테이블에서 광고명 + ad_id 가져오기 (ARCHIVED 포함)
   // FIX (2026-02-02): ad_id도 함께 가져와서 캐시에 저장
   try {
-    const dbResult = await db.query('SELECT ad_id, name FROM meta_ads WHERE name IS NOT NULL');
+    // FIX (2026-02-24): ACTIVE 우선 정렬 - 같은 이름의 여러 ad_id 중 ACTIVE를 캐시에 저장
+    const dbResult = await db.query('SELECT ad_id, name, status FROM meta_ads WHERE name IS NOT NULL ORDER BY CASE WHEN status = \'ACTIVE\' THEN 0 ELSE 1 END');
     for (const row of dbResult.rows) {
       dbNames.push(row.name);
-      // 캐시에 없으면 추가 (API 데이터 우선)
       if (row.ad_id && !adNameToIdCache.has(row.name)) {
         adNameToIdCache.set(row.name, row.ad_id);
       }
@@ -628,18 +633,29 @@ async function buildUtmResolutionMap() {
 
   // 3. utm_id 있는 Meta 세션의 utm_content → utm_id 매핑 (폴백용)
   // mapToMetaAdName으로 매칭 실패 시, 다른 세션의 utm_content와 접두사 매칭 시도
+  // FIX (2026-02-24): ACTIVE 광고 우선 정렬 - 같은 이름으로 ACTIVE/PAUSED 광고가 공존할 때
+  // Array.find()가 ACTIVE 광고의 utm_id를 먼저 반환하도록 함
   const withUtmIdResult = await db.query(`
-    SELECT DISTINCT
+    SELECT DISTINCT ON (us.utm_params->>'utm_content', us.utm_params->>'utm_id')
       us.utm_params->>'utm_content' as utm_content,
-      us.utm_params->>'utm_id' as utm_id
+      us.utm_params->>'utm_id' as utm_id,
+      COALESCE(ma.status, 'UNKNOWN') as ad_status
     FROM utm_sessions us
+    LEFT JOIN meta_ads ma ON us.utm_params->>'utm_id' = ma.ad_id
     WHERE us.utm_params->>'utm_id' IS NOT NULL
       AND us.utm_params->>'utm_id' != ''
       AND us.utm_params->>'utm_id' NOT LIKE '{{%'
       AND LOWER(COALESCE(us.utm_params->>'utm_source', '')) IN ('meta', 'facebook', 'fb', 'instagram', 'ig')
       AND us.utm_params->>'utm_content' IS NOT NULL
+    ORDER BY us.utm_params->>'utm_content', us.utm_params->>'utm_id',
+      CASE WHEN ma.status = 'ACTIVE' THEN 0 ELSE 1 END
   `);
-  const contentWithUtmId = withUtmIdResult.rows;
+  // ACTIVE 광고가 먼저 오도록 정렬
+  const contentWithUtmId = withUtmIdResult.rows.sort((a, b) => {
+    if (a.ad_status === 'ACTIVE' && b.ad_status !== 'ACTIVE') return -1;
+    if (a.ad_status !== 'ACTIVE' && b.ad_status === 'ACTIVE') return 1;
+    return 0;
+  });
 
   // 4. 매칭: mapToMetaAdName() 재활용 (미리보기와 동일한 로직)
   // → 기존 4단계 자체 매칭을 미리보기와 동일한 함수로 교체
