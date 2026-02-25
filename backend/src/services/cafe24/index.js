@@ -28,6 +28,7 @@ const {
 // Order Sync (주문 동기화 + visitor 매칭)
 const {
   findMatchingVisitor,
+  findMatchingVisitorByMemberId,
   syncOrders,
   syncOrdersForRange,
   backfillVisitorIds,
@@ -64,6 +65,7 @@ module.exports = {
   
   // Order Sync
   findMatchingVisitor,
+  findMatchingVisitorByMemberId,
   syncOrders,
   syncOrdersForRange,
   backfillVisitorIds,

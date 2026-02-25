@@ -384,14 +384,22 @@ async function backfillVisitorIds() {
         
         const productNo = orderDetail.order.items[0].product_no;
         const orderDate = orderDetail.order.order_date;
+        const memberId = orderDetail.order.member_id || null;
         
-        // visitor_id 매칭 시도
-        const match = await findMatchingVisitor(orderDate, productNo);
+        // visitor_id 매칭 시도 (syncOrdersForRange와 동일한 우선순위)
+        let match = null;
+        // 1순위: member_id 기반 매칭
+        if (memberId) {
+          match = await findMatchingVisitorByMemberId(memberId);
+        }
+        // 2순위: add_to_cart 시간+상품 기반 매칭
+        if (!match) {
+          match = await findMatchingVisitor(orderDate, productNo);
+        }
         
         if (match) {
           matchedCount++;
           
-          // UPDATE 쿼리
           const updateResult = await db.query(
             `UPDATE conversions 
              SET visitor_id = $1, session_id = $2
