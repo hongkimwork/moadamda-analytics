@@ -14,20 +14,20 @@ const PENDING_PREFIX = '[Cafe24 Pending]';
 
 /**
  * 시간 + 상품 기반 visitor_id 매칭
- * 주문 시간 ±30분 내 동일 상품 add_to_cart 이벤트 검색
+ * 주문 시간 -30분~+5분 내 동일 상품 add_to_cart 이벤트 검색
+ * FIX (2026-02-25): 주문 후 장바구니는 비정상이므로 +5분만 허용, 후보 2명 이상 시 매칭 거부
  * @param {string} orderDate - Cafe24 주문 시간 (예: "2025-12-03T07:20:54+09:00")
  * @param {number} productNo - 상품 번호
  * @returns {Object|null} { visitor_id, session_id } 또는 null
  */
 async function findMatchingVisitor(orderDate, productNo) {
   try {
-    // KST 시간을 그대로 추출하여 사용 (events 테이블도 KST로 저장됨)
     const kstTimestamp = parseKSTTimestamp(orderDate);
     
-    // SQL에서 직접 ±30분 범위 계산 (JavaScript 타임존 변환 방지)
-    // 동일 상품을 add_to_cart한 visitor 검색
+    // -30분 ~ +5분 범위로 검색 (주문 전 장바구니만 우선, 시스템 시간차 고려 +5분)
+    // DISTINCT ON으로 visitor당 가장 가까운 이벤트 1건만
     const result = await db.query(
-      `SELECT 
+      `SELECT DISTINCT ON (e.visitor_id)
         e.visitor_id,
         e.session_id,
         e.timestamp,
@@ -35,9 +35,8 @@ async function findMatchingVisitor(orderDate, productNo) {
       FROM events e
       WHERE e.event_type = 'add_to_cart'
         AND e.product_id = $2
-        AND e.timestamp BETWEEN ($1::timestamp - INTERVAL '30 minutes') AND ($1::timestamp + INTERVAL '30 minutes')
-      ORDER BY time_diff_seconds ASC
-      LIMIT 1`,
+        AND e.timestamp BETWEEN ($1::timestamp - INTERVAL '30 minutes') AND ($1::timestamp + INTERVAL '5 minutes')
+      ORDER BY e.visitor_id, time_diff_seconds ASC`,
       [kstTimestamp, String(productNo)]
     );
     
@@ -45,8 +44,14 @@ async function findMatchingVisitor(orderDate, productNo) {
       return null;
     }
     
+    // 후보가 2명 이상이면 모호하므로 매칭하지 않음
+    if (result.rows.length >= 2) {
+      console.log(`${LOG_PREFIX} Ambiguous match: ${result.rows.length} visitors found for product ${productNo} around ${kstTimestamp}, skipping`);
+      return null;
+    }
+    
     const match = result.rows[0];
-    console.log(`${LOG_PREFIX} Visitor matched: ${match.visitor_id} (time diff: ${Math.round(match.time_diff_seconds)}s)`);
+    console.log(`${LOG_PREFIX} Visitor matched by add_to_cart: ${match.visitor_id.substring(0, 8)}... (time diff: ${Math.round(match.time_diff_seconds)}s)`);
     
     return {
       visitor_id: match.visitor_id,
@@ -54,6 +59,47 @@ async function findMatchingVisitor(orderDate, productNo) {
     };
   } catch (error) {
     console.error(`${LOG_PREFIX} findMatchingVisitor error:`, error.message);
+    return null;
+  }
+}
+
+/**
+ * member_id 기반 visitor_id 매칭
+ * 동일 회원의 이전 주문에서 tracker가 수집한 visitor_id를 재사용
+ * @param {string} memberId - Cafe24 회원 ID (예: "4288525977@k")
+ * @returns {Object|null} { visitor_id, session_id } 또는 null
+ */
+async function findMatchingVisitorByMemberId(memberId) {
+  if (!memberId || memberId === '') {
+    return null;
+  }
+
+  try {
+    const result = await db.query(
+      `SELECT c.visitor_id, c.session_id
+       FROM conversions c
+       JOIN visitors v ON c.visitor_id = v.visitor_id
+       WHERE c.member_id = $1
+         AND c.visitor_id IS NOT NULL
+         AND v.is_bot = false
+       ORDER BY c.timestamp DESC
+       LIMIT 1`,
+      [memberId]
+    );
+
+    if (result.rows.length === 0) {
+      return null;
+    }
+
+    const match = result.rows[0];
+    console.log(`${LOG_PREFIX} Visitor matched by member_id: ${match.visitor_id.substring(0, 8)}... (member: ${memberId})`);
+
+    return {
+      visitor_id: match.visitor_id,
+      session_id: match.session_id
+    };
+  } catch (error) {
+    console.error(`${LOG_PREFIX} findMatchingVisitorByMemberId error:`, error.message);
     return null;
   }
 }
@@ -175,7 +221,17 @@ async function syncOrdersForRange(startDate, endDate, options = {}) {
         
         if (isNewOrder) {
           // 새 주문: visitor_id 매칭 시도
-          if (order.items && order.items.length > 0) {
+          // 1순위: member_id 기반 매칭 (동일 회원의 기존 visitor_id 재사용)
+          if (memberId) {
+            const memberMatch = await findMatchingVisitorByMemberId(memberId);
+            if (memberMatch) {
+              visitorId = memberMatch.visitor_id;
+              sessionId = memberMatch.session_id;
+              matchedCount++;
+            }
+          }
+          // 2순위: add_to_cart 시간+상품 기반 매칭 (member_id 매칭 실패 시)
+          if (!visitorId && order.items && order.items.length > 0) {
             const productNo = order.items[0].product_no;
             const match = await findMatchingVisitor(order.order_date, productNo);
             if (match) {
@@ -693,6 +749,7 @@ async function backfillMemberIds() {
 
 module.exports = {
   findMatchingVisitor,
+  findMatchingVisitorByMemberId,
   syncOrdersForRange,
   syncOrders,
   backfillVisitorIds,
