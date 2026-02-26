@@ -165,7 +165,7 @@ async function getOrders(options) {
         -- 1순위: Cafe24 first_order 필드 (T=신규, F=재구매)
         WHEN c.first_order = 'T' THEN false
         WHEN c.first_order = 'F' THEN true
-        -- 2순위: visitor_id 기반 계산 (기존 로직)
+        -- 2순위: visitor_id 기반 계산
         WHEN c.visitor_id IS NULL OR c.visitor_id = '' THEN NULL
         WHEN EXISTS (
           SELECT 1 FROM conversions c2 
@@ -174,6 +174,8 @@ async function getOrders(options) {
             AND c2.paid = 'T'
             AND (c2.final_payment > 0 OR c2.total_amount > 0)
         ) THEN true
+        -- 비회원(guest) + 과거구매 없음: Cafe24가 first_order 미제공 → 판단 불가
+        WHEN (c.member_id IS NULL OR c.member_id = '') THEN NULL
         ELSE false
       END as is_repurchase
     FROM conversions c
